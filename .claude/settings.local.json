@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python \"C:/Users/crazy/.claude/skills/skill-creator/scripts/init_skill.py\" narrative-extractor --path \"c:/Users/crazy/Desktop/OtheredGlass/.claude/skills/narrative-extractor\")",
+      "Bash(python \"C:/Users/crazy/.claude/skills/skill-creator/scripts/init_skill.py\" neo4j-helper --path \"c:/Users/crazy/Desktop/OtheredGlass/.claude/skills/neo4j-helper\")",
+      "Bash(python \"C:/Users/crazy/.claude/skills/skill-creator/scripts/init_skill.py\" creative-skill --path \"c:/Users/crazy/Desktop/OtheredGlass/.claude/skills/creative-skill\")",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/crazy/.claude/skills/skill-creator/scripts/init_skill.py\" narrative-extractor --path \"c:/Users/crazy/Desktop/OtheredGlass/.claude/skills/narrative-extractor\")",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/crazy/.claude/skills/skill-creator/scripts/init_skill.py\" neo4j-helper --path \"c:/Users/crazy/Desktop/OtheredGlass/.claude/skills/neo4j-helper\")",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:/Users/crazy/.claude/skills/skill-creator/scripts/init_skill.py\" creative-skill --path \"c:/Users/crazy/Desktop/OtheredGlass/.claude/skills/creative-skill\")",
+      "Bash(python .claude/skills/neo4j-helper/scripts/test_connection.py --password 12345678)",
+      "Bash(python .claude/skills/neo4j-helper/scripts/check_dedup.py check --password 12345678)",
+      "Bash(python .claude/skills/图片生成/scripts/ofoxai_api.py submit \"角色设计图，纯白背景，全身三视图，正面、侧面、背面并排展示。一名165cm纤细柔软的女性，身体曲线柔和流畅。圆脸大眼，瞳色浅淡透亮呈淡蓝色，表情温柔但偶尔显出茫然，嘴角天然上扬，整体面容温润亲和。浅银白色长直发垂至腰际，发尾微卷，两侧别在耳后，额前碎发轻柔飘动，发丝有通透的光泽感。身穿纯白色飘逸纱质连衣裙，裙摆呈柔和弧度垂落至脚踝，面料通透轻盈带哑光质感，领口和袖口有浅金色细边装饰，裙摆边缘缀浅金色暗纹。脚穿白色柔软平底鞋，鞋面轻盈。背后隐约浮现淡蓝色半透明光翼纹路，非实体翅膀，仅光影轮廓，发丝和裙摆有轻微浮动感。服装主体为纯白色，发丝高光和裙摆边缘为浅金色，瞳色和灵力光效为淡蓝色，整体明亮柔和中带一丝不真实感。双手自然垂于身侧，重心居中，姿态柔和不设防，头部微微歪斜。赛璐璐上色，日系二次元风格。\" --size 1024x1024 --quality low -o \"./06_角色美术/char_002/设计图.png\")",
+      "Bash(python .claude/skills/图片生成/scripts/ofoxai_api.py submit \"角色设计图，纯白背景，全身三视图，正面、侧面、背面并排展示。一名175cm极度消瘦的年轻男性，肋骨隐约可见，肩胛骨突出，四肢纤细，整体轮廓修长但虚弱。颧骨微凸，眼下有深重的黑眼圈，嘴唇干裂偏薄，肤色苍白如久未见阳光。黑色乱发过长未剪，油腻且缺乏打理，凌乱地遮住半边额头和眼睛。身穿明显偏大一号的灰黑色起球棉质旧T恤，松松垮垮挂在瘦削的身体上，面料廉价泛旧。下身暗黄色泛旧的松垮运动裤，裤腰松垮，裤脚皱缩。脚穿磨损的灰色旧拖鞋。手腕内侧有淡淡的旧伤痕。无任何点缀色，整体灰暗沉闷，暗示被忽视的生活状态。双手自然垂于身侧，含胸驼背，重心偏前，双肩微缩，整个人像是想把自己藏起来。赛璐璐上色，日系二次元风格。\" --size 1024x1024 --quality low -o \"./06_角色美术/char_003/设计图.png\")"
+    ]
+  }
+}

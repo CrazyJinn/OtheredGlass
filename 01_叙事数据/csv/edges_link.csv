@@ -1,0 +1,18 @@
+﻿from_id,to_id,type,detail,time
+char_001,info_013,涉及,陆择人设渣男,开场
+char_001,info_001,涉及,被告知试炼规则,开场
+char_002,info_001,涉及,告知试炼规则,开场
+char_001,info_002,涉及,系统能力限制,开场
+char_001,info_003,涉及,干预机制,开场
+char_003,info_004,涉及,自杀原因,Day 0
+char_004,info_004,涉及,转账收款人,Day 0
+char_003,info_005,涉及,身体严重损耗,Day 0
+char_003,info_006,涉及,生活条件极差,Day 13
+char_006,info_006,涉及,发现冰箱内容,Day 13
+char_007,info_007,涉及,家庭背景,Day 16
+char_007,info_008,涉及,暗恋,Day 16
+char_008,info_009,涉及,微信签名,Day 11
+char_006,info_010,涉及,职业背景,Day 4
+char_003,info_011,涉及,直播潜力,Day 5
+char_003,info_012,涉及,试训表现,Day 7
+char_007,info_014,涉及,代练客户,Day 2

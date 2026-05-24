@@ -1,0 +1,9 @@
+﻿from_id,to_id,type,detail
+char_001,char_002,引导,灵魂引路人
+char_001,char_003,灵魂穿越,陆择灵魂挤入陈默身体
+char_003,char_004,恋爱,已分手，前女友
+char_003,char_005,冲突,试训时团队配合冲突
+char_003,char_006,暧昧,晨跑偶遇后逐渐升温
+char_003,char_007,服务,代练客户
+char_003,char_008,暧昧,战队经理与候选人
+char_008,char_005,同事,战队经理与队长

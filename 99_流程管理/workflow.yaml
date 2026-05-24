@@ -1,0 +1,179 @@
+version: 1.0
+generated_at: "2026-05-23T00:00:00"
+source: README.md
+
+nodes:
+  neo:
+    name: Neo4j 数据就绪
+    skill: null
+    description: "Neo4j 中已有完整的叙事数据（角色、事件、场景、章节等）"
+    execution_type: input
+    predecessors: []
+    successors: [nar, char, scened, sol, audio]
+    status: completed
+    reads_neo4j: false
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  nar:
+    name: 叙事设计
+    skill: null
+    description: "叙事节奏.md、角色声线.md"
+    execution_type: skill
+    predecessors: [neo]
+    successors: [script]
+    reads_neo4j: true
+    status: ready
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  char:
+    name: 角色设计
+    skill: 角色设计
+    description: "角色美术设定.md、角色语言风格.md"
+    execution_type: skill
+    predecessors: [neo]
+    successors: [artp]
+    reads_neo4j: true
+    status: ready
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  artp:
+    name: 美术提示词
+    skill: null
+    description: "设计图提示词.md、立绘提示词.md"
+    execution_type: auto
+    predecessors: [char]
+    successors: [t2i, i2i]
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  scened:
+    name: 场景设计
+    skill: null
+    description: "游戏场景.md、对话背景.md、UI背景.md"
+    execution_type: skill
+    predecessors: [neo]
+    successors: [t2i]
+    reads_neo4j: true
+    status: ready
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  script:
+    name: 剧本组装
+    skill: null
+    description: "剧本.json"
+    execution_type: skill
+    predecessors: [nar]
+    successors: [final]
+    reads_neo4j: true
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  sol:
+    name: 解决方案设计
+    skill: null
+    description: "需求分析文档、测试用例设计"
+    execution_type: skill
+    predecessors: [neo]
+    successors: [code]
+    reads_neo4j: true
+    status: ready
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  t2i:
+    name: 文生图 (api)
+    skill: null
+    description: "角色设计图.png、场景装饰.png、对话背景.png、UI背景.png"
+    execution_type: api
+    predecessors: [artp, scened]
+    successors: [i2i, deco, xfer]
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  i2i:
+    name: 图生图 (api)
+    skill: null
+    description: "立绘.png、过场.png"
+    execution_type: api
+    predecessors: [artp, t2i]
+    successors: [xfer]
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  deco:
+    name: 装饰裁剪
+    skill: null
+    description: "装饰切片.png"
+    execution_type: auto
+    predecessors: [t2i]
+    successors: [xfer]
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  audio:
+    name: 音频实现
+    skill: null
+    description: "BGM.mp3、音效.mp3"
+    execution_type: skill
+    predecessors: [neo]
+    successors: [xfer]
+    reads_neo4j: false
+    status: ready
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  code:
+    name: 代码生成
+    skill: null
+    description: "游戏代码"
+    execution_type: auto
+    predecessors: [sol]
+    successors: [final]
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  xfer:
+    name: 资源搬运
+    skill: null
+    description: "assets目录"
+    execution_type: auto
+    predecessors: [t2i, i2i, deco, audio]
+    successors: [final]
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
+
+  final:
+    name: 游戏组装 (人工)
+    skill: null
+    description: "游戏成品"
+    execution_type: manual
+    predecessors: [xfer, code, script]
+    successors: []
+    status: pending
+    retry_count: 0
+    started_at: null
+    completed_at: null
