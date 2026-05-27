@@ -1,3 +1,6 @@
 ﻿from_id,to_id,type,detail
-char_003,loc_003,居住,陈默的住所
-char_007,loc_009,居住,大平层
+char_003,loc_003,居住,八楼出租屋
+char_006,loc_009,居住,超级大平层
+char_007,loc_005,工作,星耀电竞战队经理
+char_009,loc_005,工作,星耀电竞战队队长
+char_005,loc_004,活动,南滨路晨跑
