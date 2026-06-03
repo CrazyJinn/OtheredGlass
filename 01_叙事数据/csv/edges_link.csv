@@ -1,14 +1,25 @@
-﻿from_id,to_id,type,detail,time
-char_003,info_003,涉及,陈默跳江,Day 0
-char_003,info_004,涉及,转账记录,Day 0
-char_003,info_005,涉及,身体损耗,Day 1
-char_003,info_006,涉及,冰箱只有泡面,Day 13
-char_005,info_009,涉及,跑步知识,Day 4
-char_006,info_010,涉及,直播首秀,Day 5
-char_006,info_007,涉及,大平层,Day 16
-char_006,info_008,涉及,孤独童年,Day 16
-char_007,info_011,涉及,外冷内热,Day 11
-char_003,info_012,涉及,姐姐来电,Day 0
-info_004,info_003,因果,转账导致经济压力可能是跳江原因,Day 0
-info_006,info_005,因果,不健康饮食导致身体损耗,
-info_008,info_007,因果,家庭疏离导致大平层像酒店,
+from_id,to_id,type,detail,time
+char_001,info_001,涉及,陆择作为灵魂穿越者的能力,
+char_001,info_002,涉及,陆择只能在关键节点干预,
+char_002,info_003,涉及,伊芙告知试炼规则,
+evt_003,info_003,涉及,事件中告知规则,
+char_003,info_004,涉及,陈默转账给温蔓青,
+char_004,info_004,涉及,温蔓青收钱,
+char_003,info_005,涉及,陈默身体状况,
+evt_008,info_005,涉及,步行回家发现身体损耗,
+char_005,info_006,涉及,苏晓禾职业,
+evt_011,info_006,涉及,偶遇时得知,
+char_006,info_007,涉及,林梦被代练实力折服,
+evt_010,info_007,涉及,代练事件,
+evt_014,info_008,涉及,试训中表现,
+char_009,info_008,涉及,与男主配合问题,
+char_006,info_009,涉及,林梦家境,
+evt_023,info_009,涉及,送回家时发现,
+char_006,info_010,涉及,林梦童年,
+evt_023,info_010,涉及,送回家时得知,
+char_005,info_011,涉及,苏晓禾对男主有好感,
+evt_018,info_011,涉及,被说像老夫老妻时耳朵红了,
+evt_014,info_012,涉及,试训时冲突,
+char_003,info_012,涉及,男主与江烈,
+char_009,info_012,涉及,江烈与男主,
+info_009,info_010,因果,富裕家庭父母缺席导致童年孤独,

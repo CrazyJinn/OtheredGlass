@@ -1,6 +1,6 @@
-﻿from_id,to_id,type,detail
-char_003,loc_003,居住,八楼出租屋
-char_006,loc_009,居住,超级大平层
-char_007,loc_005,工作,星耀电竞战队经理
-char_009,loc_005,工作,星耀电竞战队队长
-char_005,loc_004,活动,南滨路晨跑
+from_id,to_id,type,detail,start_time,end_time
+char_003,scene_003,居住,陈默的住所,,
+char_005,scene_004,前往,晨跑,,
+char_006,scene_010,居住,超级大平层,,
+char_007,scene_005,工作,战队经理,,
+char_009,scene_005,工作,战队队长,,

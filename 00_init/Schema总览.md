@@ -16,10 +16,10 @@
 
 | 文件 | 内容 | 核心节点 |
 |------|------|---------|
-| [01_叙事基础.md](01_叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Scene, Info |
-| [02_角色美术.md](02_角色美术.md) | 角色如何从文字变成画面 | ArtStyle, AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
-| [03_场景美术.md](03_场景美术.md) | 场景如何渲染 | SceneType（按需） |
-| [04_剧情.md](04_剧情.md) | 剧情节奏、分支、条件 | 待补充 |
+| [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Scene, Info |
+| [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
+| [场景美术.md](Schema/场景美术.md) | 场景如何渲染 | SceneType（按需） |
+| [剧情.md](Schema/剧情.md) | 剧情节奏、分支、条件 | 待补充 |
 
 ---
 
@@ -32,7 +32,7 @@
 | Scene | `scene_NNN` | 具体地点/游戏场景 |
 | Info | `info_NNN` | 一条有意义的认知碎片 |
 | LanguageStyle | `voice_NNN` | 角色说话方式、语气、口头禅 |
-| ArtStyle | `style_NNN` | 画风/渲染参数，type 区分 global / char / scene |
+
 | AppearanceStyle | `appearance_NNN` | 角色固定外貌（脸、体型、发色） |
 | CostumeStyle | `costume_NNN` | 角色默认着装（衣物、配饰） |
 | DesignSheet | `design_NNN` | 角色三视图设计稿 |
@@ -55,8 +55,7 @@
 | link | Character/Event/Scene → Info | ❌ | 信息关联（仅 3 大实体） |
 | evt_relation | Event → Event | ❌ | 事件因果/时序 |
 | **角色美术** | | | |
-| inherits | ArtStyle[global] → ArtStyle[char] | ✅ | 角色风格继承全局 |
-| inherits | ArtStyle[char] → DesignSheet | ✅ | 设计图继承角色风格 |
+
 | has_appearance | Character → AppearanceStyle | ✅ | 角色外貌 |
 | has_costume | Character → CostumeStyle | ✅ | 角色着装 |
 | has_voice_style | Character → LanguageStyle | ✅ | 角色语言风格 |
@@ -68,8 +67,7 @@
 | ref_style | LanguageStyle → StandingIllustration | ✅ | 语言风格→立绘参考 |
 | groups | Faction → Character | ❌ | 阵营包含角色（按需） |
 | **场景美术** | | | |
-| inherits | ArtStyle[global] → ArtStyle[scene] | ✅ | 场景风格继承全局 |
-| styles | ArtStyle[scene] → Scene | ✅ | 风格应用于场景 |
+
 | categorizes | SceneType → Scene | ❌ | 类型包含场景（按需） |
 
 ---
@@ -97,12 +95,6 @@ flowchart LR
         StandingIllus["StandingIllustration"]
     end
 
-    subgraph 风格["风格"]
-        ArtGlobal["ArtStyle<br/>global"]
-        ArtChar["ArtStyle<br/>char"]
-        ArtScene["ArtStyle<br/>scene"]
-    end
-
     Character -->|"has_appearance ✅"| Appearance
     Character -->|"has_costume ✅"| Costume
     Character -->|"has_voice_style ✅"| Language
@@ -112,9 +104,4 @@ flowchart LR
     Scene -->|"context_for ❌"| IllusDesign
     IllusDesign -->|"expands_to ✅"| StandingIllus
     Language -->|"ref_style ✅"| StandingIllus
-
-    ArtGlobal -->|"inherits ✅"| ArtChar
-    ArtGlobal -->|"inherits ✅"| ArtScene
-    ArtChar -->|"inherits ✅"| DesignSheet
-    ArtScene -->|"styles ✅"| Scene
 ```
