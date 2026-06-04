@@ -1,6 +1,6 @@
 # 边创建指南
 
-10 种边类型的方向规则、属性 schema 和 Cypher 模板。
+8 种边类型的方向规则、属性 schema 和 Cypher 模板。
 
 ---
 
@@ -76,44 +76,9 @@ MERGE (a)-[:evt_relation {type: $type, detail: $detail}]->(b)
 
 ---
 
-## 美术风格边（4种）
+## 分组边（2种）
 
-### 7. HAS_STYLE — 实体—风格
-
-- **方向**：`char / Faction / LocationType / Location → ArtStyle`
-- **属性**：无
-- **含义**：实体拥有的风格节点
-
-```cypher
-// 角色
-MATCH (a:char {编号: $from}), (b:ArtStyle {编号: $to})
-MERGE (a)-[:HAS_STYLE]->(b)
-
-// 阵营
-MATCH (a:Faction {编号: $from}), (b:ArtStyle {编号: $to})
-MERGE (a)-[:HAS_STYLE]->(b)
-
-// 地点类型
-MATCH (a:LocationType {编号: $from}), (b:ArtStyle {编号: $to})
-MERGE (a)-[:HAS_STYLE]->(b)
-
-// 地点
-MATCH (a:Location {编号: $from}), (b:ArtStyle {编号: $to})
-MERGE (a)-[:HAS_STYLE]->(b)
-```
-
-### 8. INHERITS — 风格继承
-
-- **方向**：`ArtStyle → ArtStyle`（子 → 父）
-- **属性**：`override_fields`（逗号分隔的被覆盖字段名列表）
-- **含义**：子风格继承父风格，非空字段覆盖
-
-```cypher
-MATCH (child:ArtStyle {编号: $from}), (parent:ArtStyle {编号: $to})
-MERGE (child)-[:INHERITS {override_fields: $override_fields}]->(parent)
-```
-
-### 9. BELONGS_TO — 角色—阵营
+### 7. BELONGS_TO — 角色—阵营
 
 - **方向**：`char → Faction`
 - **属性**：`role`（如"战队经理""战队队长""成员"）
@@ -124,7 +89,7 @@ MATCH (a:char {编号: $from}), (b:Faction {编号: $to})
 MERGE (a)-[:BELONGS_TO {role: $role}]->(b)
 ```
 
-### 10. CATEGORIZED_AS — 地点—类型
+### 8. CATEGORIZED_AS — 地点—类型
 
 - **方向**：`Location → LocationType`
 - **属性**：无
@@ -142,11 +107,10 @@ MERGE (a)-[:CATEGORIZED_AS]->(b)
 
 | from 标签 | 允许的边类型 | to 标签 |
 |-----------|------------|---------|
-| char | relation, at, link, involved, HAS_STYLE, BELONGS_TO | → char / Location / Info / Event / ArtStyle / Faction |
+| char | relation, at, link, involved, BELONGS_TO | → char / Location / Info / Event / Faction |
 | Event | occurred_at, evt_relation, link | → Location / Event / Info |
-| Location | HAS_STYLE, CATEGORIZED_AS, link | → ArtStyle / LocationType / Info |
+| Location | CATEGORIZED_AS, link | → LocationType / Info |
 | Info | link | → Info |
-| Faction | HAS_STYLE | → ArtStyle |
-| LocationType | HAS_STYLE | → ArtStyle |
-| ArtStyle | INHERITS | → ArtStyle |
+| Faction | — | — |
+| LocationType | — | — |
 | 任意 | link | → Info |

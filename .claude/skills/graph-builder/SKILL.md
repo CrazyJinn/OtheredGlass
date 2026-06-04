@@ -43,7 +43,7 @@ NEO4J_HELPER="~/.claude/plugins/cache/game-builder/char-design/1.0.0/skills/neo4
 - 地点：名称、描述
 - 事件：标题、时间、类型、描述
 - 信息：标题、内容、知识层
-- 阵营/地点类型/美术风格（如用户提及）
+- 阵营/地点类型（如用户提及）
 
 **关系**（新边，从文本中推断）：
 - "是星耀电竞的选手" → `BELONGS_TO(char, faction_001) {role: "选手"}`
@@ -165,8 +165,6 @@ python $SCRIPT discover --type missing-relations --password 12345678
 | involved | char → Event | role, detail |
 | occurred_at | Event → Location | detail |
 | evt_relation | Event → Event | type, detail |
-| HAS_STYLE | char/Faction/LocationType/Location → ArtStyle | 无 |
-| INHERITS | ArtStyle → ArtStyle | override_fields |
 | BELONGS_TO | char → Faction | role |
 | CATEGORIZED_AS | Location → LocationType | 无 |
 

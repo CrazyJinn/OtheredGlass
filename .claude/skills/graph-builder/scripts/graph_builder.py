@@ -31,13 +31,12 @@ ID_CONFIG = {
     "Info":         {"prefix": "info_",  "label": "Info"},
     "Faction":      {"prefix": "faction_", "label": "Faction"},
     "LocationType": {"prefix": "loctype_", "label": "LocationType"},
-    "ArtStyle":     {"prefix": "style_", "label": "ArtStyle"},
 }
 
 # 显示名映射
 DISPLAY_NAME = {
     "char": "姓名", "Location": "名称", "Event": "标题",
-    "Info": "标题", "Faction": "name", "LocationType": "name", "ArtStyle": "name",
+    "Info": "标题", "Faction": "name", "LocationType": "name",
 }
 
 
@@ -68,16 +67,8 @@ def cmd_auto_ids(client, labels):
         else:
             current_max = 0
         next_num = current_max + 1
-        # ArtStyle 特殊格式: style_{scope}_{NNN}
-        if label == "ArtStyle":
-            result[label] = {
-                "current_max": current_max,
-                "next_num": next_num,
-                "hint": f"style_{{scope}}_{next_num:03d}",
-            }
-        else:
-            next_id = f"{prefix}{next_num:03d}"
-            result[label] = {"current_max": current_max, "next_id": next_id}
+        next_id = f"{prefix}{next_num:03d}"
+        result[label] = {"current_max": current_max, "next_id": next_id}
     return result
 
 
@@ -118,10 +109,7 @@ def cmd_add_nodes(client, nodes_json):
                     label_counters[label_key] = 0
             label_counters[label_key] += 1
             next_num = label_counters[label_key]
-            if label == "ArtStyle":
-                props["编号"] = f"{prefix}personal_{next_num:03d}"
-            else:
-                props["编号"] = f"{prefix}{next_num:03d}"
+            props["编号"] = f"{prefix}{next_num:03d}"
 
         # 构建 MERGE + SET
         assigned_id = props["编号"]
@@ -162,8 +150,6 @@ def cmd_add_edges(client, edges_json):
         "involved":       ("char", "Event"),
         "occurred_at":    ("Event", "Location"),
         "evt_relation":   ("Event", "Event"),
-        "HAS_STYLE":      (None, "ArtStyle"),     # from: char/Faction/LocationType/Location
-        "INHERITS":       ("ArtStyle", "ArtStyle"),
         "BELONGS_TO":     ("char", "Faction"),
         "CATEGORIZED_AS": ("Location", "LocationType"),
     }
