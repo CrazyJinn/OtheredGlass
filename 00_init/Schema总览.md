@@ -18,7 +18,6 @@
 |------|------|---------|
 | [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Scene, Info |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
-| [场景美术.md](Schema/场景美术.md) | 场景如何渲染 | SceneType（按需） |
 | [剧情.md](Schema/剧情.md) | 剧情节奏、分支、条件 | 待补充 |
 
 ---
@@ -36,39 +35,33 @@
 | AppearanceStyle | `appearance_NNN` | 角色固定外貌（脸、体型、发色） |
 | CostumeStyle | `costume_NNN` | 角色默认着装（衣物、配饰） |
 | DesignSheet | `design_NNN` | 角色三视图设计稿 |
-| IllusDesign | `illus_NNN` | 场景适配立绘设计图 |
+| IllusDesign | `illus_NNN` | 着装适配立绘设计图 |
 | StandingIllustration | `stand_NNN` | 具体表情/动作的单张立绘 |
-| Faction | `faction_NNN` | 角色分组（按需） |
-| SceneType | `scenetype_NNN` | 场景分类（按需） |
 
 ---
 
 ## 全局边速查
 
-| 边 | 从 → 到 | sync | 说明 |
-|----|---------|------|------|
-| **叙事基础** | | | |
-| relation | Character → Character | ❌ | 人物关系 |
-| involved | Character → Event | ❌ | 人物参与事件 |
-| occurred_at | Event → Scene | ❌ | 事件发生地点 |
-| at | Character → Scene | ❌ | 人物—场景 |
-| link | Character/Event/Scene → Info | ❌ | 信息关联（仅 3 大实体） |
-| evt_relation | Event → Event | ❌ | 事件因果/时序 |
-| **角色美术** | | | |
+| 边 | 从 → 到 | 基数 | sync | 说明 |
+|----|---------|------|------|------|
+| **叙事基础** | | | | |
+| relation | Character → Character | N:N | ❌ | 人物关系 |
+| involved | Character → Event | N:N | ❌ | 人物参与事件 |
+| occurred_at | Event → Scene | N:1 | ❌ | 事件发生地点 |
+| at | Character → Scene | N:N | ❌ | 人物—场景 |
+| link | Character/Event/Scene → Info | N:N | ❌ | 信息关联（仅 3 大实体） |
+| evt_relation | Event → Event | N:N | ❌ | 事件因果/时序 |
+| **角色美术** | | | | |
 
-| has_appearance | Character → AppearanceStyle | ✅ | 角色外貌 |
-| has_costume | Character → CostumeStyle | ✅ | 角色着装 |
-| has_voice_style | Character → LanguageStyle | ✅ | 角色语言风格 |
-| produces | AppearanceStyle → DesignSheet | ✅ | 外貌产出设计图 |
-| produces | DesignSheet → IllusDesign | ❌ | 设计图→立绘设计图 |
-| outfit_for | CostumeStyle → IllusDesign | ❌ | 着装→立绘设计图 |
-| context_for | Scene → IllusDesign | ❌ | 场景→立绘设计图 |
-| expands_to | IllusDesign → StandingIllustration | ✅ | 拓展表情/动作变体 |
-| ref_style | LanguageStyle → StandingIllustration | ✅ | 语言风格→立绘参考 |
-| groups | Faction → Character | ❌ | 阵营包含角色（按需） |
-| **场景美术** | | | |
-
-| categorizes | SceneType → Scene | ❌ | 类型包含场景（按需） |
+| has_appearance | Character → AppearanceStyle | 1:1 | ✅ | 角色外貌 |
+| has_costume | Character → CostumeStyle | 1:N | ✅ | 角色着装 |
+| has_voice_style | Character → LanguageStyle | 1:1 | ✅ | 角色语言风格 |
+| produces | AppearanceStyle → DesignSheet | 1:1 | ✅ | 外貌产出设计图 |
+| produces | DesignSheet → IllusDesign | 1:N | ❌ | 设计图→立绘设计图 |
+| outfit_for | CostumeStyle → IllusDesign | 1:1 | ❌ | 着装→立绘设计图 |
+| wears | Event → CostumeStyle | N:N | ❌ | 事件着装 |
+| expands_to | IllusDesign → StandingIllustration | 1:N | ✅ | 拓展表情/动作变体 |
+| ref_style | LanguageStyle → StandingIllustration | 1:N | ✅ | 语言风格→立绘参考 |
 
 ---
 
@@ -95,13 +88,13 @@ flowchart LR
         StandingIllus["StandingIllustration"]
     end
 
-    Character -->|"has_appearance ✅"| Appearance
-    Character -->|"has_costume ✅"| Costume
-    Character -->|"has_voice_style ✅"| Language
-    Appearance -->|"produces ✅"| DesignSheet
-    Costume -->|"outfit_for ❌"| IllusDesign
-    DesignSheet -->|"produces ❌"| IllusDesign
-    Scene -->|"context_for ❌"| IllusDesign
-    IllusDesign -->|"expands_to ✅"| StandingIllus
-    Language -->|"ref_style ✅"| StandingIllus
+    Character -->|"has_appearance ✅ 1:1"| Appearance
+    Character -->|"has_costume ✅ 1:N"| Costume
+    Character -->|"has_voice_style ✅ 1:1"| Language
+    Appearance -->|"produces ✅ 1:1"| DesignSheet
+    Costume -->|"outfit_for ❌ 1:1"| IllusDesign
+    DesignSheet -->|"produces ❌ 1:N"| IllusDesign
+    Event -->|"wears ❌ N:N"| Costume
+    IllusDesign -->|"expands_to ✅ 1:N"| StandingIllus
+    Language -->|"ref_style ✅ 1:N"| StandingIllus
 ```

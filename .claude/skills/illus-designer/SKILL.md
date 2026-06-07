@@ -1,0 +1,84 @@
+---
+name: illus-designer
+description: |
+  管理 IllusDesign 图节点的完整生命周期：创建节点、填充着装补充说明、组装提示词、生成着装适配设计图。
+  每组 (DesignSheet, CostumeStyle) 对应一个节点，支持一次推进多个 status（0→1→2）。
+  在需要生成立绘设计图或 IllusDesign 节点需推进时使用。
+argument-hint: <node_id> [target_status]
+arguments:
+  - node_id
+  - target_status
+allowed-tools: Read, Bash, Write, Edit
+---
+
+# 立绘设计图（IllusDesign）
+
+角色穿着特定着装的三视图设计图，由 DesignSheet（外貌基础）和 CostumeStyle（着装方案）共同决定。
+
+## 参数
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| node_id | 目标节点 ID（如 `illus_001`） | 由 agent 传入 |
+| target_status | 推进目标：`1`（仅提示词）或 `2`（到图片） | `2` |
+
+## 流程
+
+### 1. 读取前驱
+
+通过 neo4j-helper 一次性查询所有前驱节点：
+
+```cypher
+MATCH (ds:DesignSheet)-[:produces]->(illus:IllusDesign {id: 'illus_NNN'})
+MATCH (app:AppearanceStyle)-[:produces]->(ds)
+MATCH (ch:Character)-[:has_appearance]->(app)
+OPTIONAL MATCH (cos:CostumeStyle)-[:outfit_for]->(illus)
+RETURN illus, ds, app, cos, ch
+```
+
+获取：DesignSheet（设计图基础）、CostumeStyle（着装方案）、AppearanceStyle（外貌）、Character（角色信息）。
+
+### 2. 创建节点（如不存在）
+
+如果 IllusDesign 节点不存在，创建节点和边：
+
+```cypher
+MERGE (illus:IllusDesign {id: 'illus_NNN'})
+SET illus.status = 0, illus.approve = null;
+MATCH (ds:DesignSheet {id: 'design_NNN'}), (illus:IllusDesign {id: 'illus_NNN'})
+MERGE (ds)-[r:produces]->(illus) SET r.sync = false;
+MATCH (cos:CostumeStyle {id: 'costume_NNN'}), (illus:IllusDesign {id: 'illus_NNN'})
+MERGE (cos)-[r:outfit_for]->(illus) SET r.sync = false;
+```
+
+根据着装补充需求，填写 `adaptation_notes`（如"左臂夹持文件夹"，如无特殊补充可留空）。
+
+### 3. 推进状态
+
+#### 0 → 1：组装提示词
+
+调用 prompt-assembler skill（Mode B IllusDesign 模式）：
+
+使用 Skill 工具调用 `char-design:prompt-assembler`，传入参数 `<node_id> IllusDesign`。
+
+prompt-assembler 将：
+- 读取 DesignSheet + CostumeStyle 数据
+- 读取 `00_init/美术风格.md`
+- 按 `着装描述→适配说明→风格` 组装提示词（聚焦着装，不重复角色外貌）
+- 更新节点：写入 prompt 字段，status → 1
+
+#### 1 → 2：生成图片
+
+调用 image-generator skill（IllusDesign 图生图模式）：
+
+使用 Skill 工具调用 `char-design:image-generator`，传入参数 `<node_id>`。
+
+image-generator 将：
+- 读取节点 prompt 字段
+- 图生图模式：参考 DesignSheet.image_path（`produces` 边上游）
+- 输出路径：`./06_角色美术/<char_id>/立绘设计/<costume_id>/设计图.png`
+- 更新节点：写入 image_path，status → 2，approve → 'pending'
+
+### 4. 保存结果
+
+最终通过 neo4j-helper 确认节点状态已正确更新。
