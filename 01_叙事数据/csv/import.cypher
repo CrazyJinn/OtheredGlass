@@ -1,4 +1,10 @@
-// ========== 节点导入 ==========
+// ========================================
+// OtheredGlass 叙事数据导入脚本
+// 生成时间：2026-06-10
+// 数据来源：00_init/大纲.md
+// ========================================
+
+// --- 节点导入 ---
 
 // 角色
 LOAD CSV WITH HEADERS FROM 'file:///nodes_char.csv' AS row
@@ -34,7 +40,7 @@ SET n.title = row.title,
     n.knowledge_level = toInteger(row.knowledge_level)
 ;;
 
-// ========== 边导入 ==========
+// --- 边导入 ---
 
 // relation: Character → Character
 LOAD CSV WITH HEADERS FROM 'file:///edges_relation.csv' AS row

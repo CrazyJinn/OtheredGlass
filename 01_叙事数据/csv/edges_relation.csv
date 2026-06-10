@@ -1,9 +1,8 @@
-from_id,to_id,type,detail,start_time,end_time
-char_003,char_004,恋爱,陈默前女友·已分手,,
-char_002,char_001,引导,灵魂引路人与穿越者,,
-char_001,char_008,一夜情,开场前,,
-char_003,char_005,暧昧,晨跑偶遇后逐渐升温,Day 4,
-char_003,char_006,客户,代练关系·后成小迷妹,Day 2,
-char_003,char_007,职业,沈暮雪邀请男主加入战队,Day 5,
-char_009,char_007,同事,战队队长与经理,,
-char_003,char_009,冲突,试训中发生冲突,Day 7,
+﻿from_id,to_id,type,detail,start_time,end_time
+char_003,char_004,恋爱,已分手,,
+char_001,char_008,一夜情,陆择的一夜情对象,,
+char_003,char_006,客户,代练客户,,
+char_003,char_005,朋友,晨跑认识,,
+char_003,char_007,上下级,战队经理与选手,,
+char_003,char_009,冲突,试训时发生冲突,,
+char_007,char_009,同事,战队经理与队长,,

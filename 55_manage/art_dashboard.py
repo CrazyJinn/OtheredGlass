@@ -15,14 +15,13 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote
 
 # ── Import Neo4jClient ────────────────────────────────────────
-_PLUGIN_CANDIDATES = [
-    r"c:\Users\crazy\.claude\plugins\cache\game-builder\char-design\1.0.0\skills\neo4j-helper\scripts",
-    r"D:\project\GameBuilder\plugins\char-design\skills\neo4j-helper\scripts",
-]
-for _p in _PLUGIN_CANDIDATES:
-    if os.path.isdir(_p):
-        sys.path.insert(0, _p)
-        break
+# 本项目内的 neo4j-helper（已改名为 infra-neo4j-helper）
+_NEO4J_HELPER_SCRIPTS = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..",
+    ".claude", "skills", "infra-neo4j-helper", "scripts"
+))
+if os.path.isdir(_NEO4J_HELPER_SCRIPTS):
+    sys.path.insert(0, _NEO4J_HELPER_SCRIPTS)
 from neo4j_client import Neo4jClient
 
 # ── Configuration ───────────────────────────────────────────────
@@ -141,6 +140,15 @@ SET downstream.status = 0, downstream.approve = null
 RETURN labels(downstream)[0] AS type, downstream.id AS id
 """
 
+# ── Self reset: when saving an image node that already had image generated ──
+SELF_RESET_CYPHER = """
+MATCH (n {id: $node_id})
+WHERE labels(n)[0] IN ['DesignSheet', 'IllusDesign', 'StandingIllustration']
+  AND n.status >= 2
+SET n.status = 1, n.approve = null, n.image_path = null
+RETURN labels(n)[0] AS type, n.id AS id
+"""
+
 # ── Approve / Reject node ──
 APPROVE_NODE_CYPHER = "MATCH (n {id: $node_id}) SET n.approve = 'approved' RETURN n.id AS id"
 REJECT_NODE_CYPHER = "MATCH (n {id: $node_id}) SET n.status = 0, n.approve = null RETURN n.id AS id"
@@ -250,7 +258,7 @@ def _derive_todos(characters):
                 "char_id": cid, "char_name": name,
                 "node_type": "数据节点", "node_type_cn": "外貌+语言",
                 "status": "missing",
-                "action": "concept-designer", "action_cn": "概念设计",
+                "action": "char-concept-designer", "action_cn": "概念设计",
                 "prompt": f"为 {cid} ({name}) 构建美术图",
             })
             continue
@@ -267,7 +275,7 @@ def _derive_todos(characters):
                 "char_id": cid, "char_name": name,
                 "node_type": "着装", "node_type_cn": "着装",
                 "status": "pending" if has_pending else "missing",
-                "action": "costume-designer", "action_cn": "着装设计",
+                "action": "char-costume-designer", "action_cn": "着装设计",
                 "prompt": f"为 {cid} ({name}) 设计着装方案",
             })
             continue
@@ -278,12 +286,12 @@ def _derive_todos(characters):
         if ds is None or ds == 0:
             todos.append(_todo(cid, name, "DesignSheet", "设计图",
                                 "missing" if ds is None else "0",
-                                "design-sheet", "设计图",
+                                "char-design-sheet", "设计图",
                                 f"处理 {char.get('design_id', cid)}"))
             continue
         if ds == 1:
             todos.append(_todo(cid, name, "DesignSheet", "设计图", "1",
-                                "image-generator", "图片生成",
+                                "infra-image-generator", "图片生成",
                                 f"为 {char.get('design_id')} 生成图片"))
             continue
         if ds == 2 and ds_ap != "approved":
@@ -308,10 +316,10 @@ def _derive_todos(characters):
                 if il_s is None or il_s == 0:
                     todos.append(_todo(cid, name, "IllusDesign", "立绘设计",
                                         "missing" if il_s is None else "0",
-                                        "illus-designer", "立绘设计", f"处理 {il['id']}"))
+                                        "char-illus-designer", "立绘设计", f"处理 {il['id']}"))
                 elif il_s == 1:
                     todos.append(_todo(cid, name, "IllusDesign", "立绘设计", "1",
-                                        "image-generator", "图片生成", f"为 {il['id']} 生成图片"))
+                                        "infra-image-generator", "图片生成", f"为 {il['id']} 生成图片"))
                 elif il_s == 2 and il_ap != "approved":
                     todos.append(_todo(cid, name, "IllusDesign", "立绘设计", "2",
                                         "approve", "待审批", "", approve=il_ap))
@@ -321,7 +329,7 @@ def _derive_todos(characters):
         stands = char.get("stands", [])
         if not stands:
             todos.append(_todo(cid, name, "StandingIllustration", "立绘变体", "missing",
-                                "stand-designer", "创建立绘",
+                                "char-stand-designer", "创建立绘",
                                 f"为 {cid} ({name}) 处理立绘变体"))
     return todos
 
@@ -463,7 +471,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 r = client.run(REJECT_NODE_CYPHER, {"node_id": body["node_id"]})
                 self._json({"success": bool(r)})
             elif path == "/api/approve/sync":
-                r = client.run(SYNC_APPROVE_CYPHER, body)
+                params = body
+                r = client.run(SYNC_APPROVE_CYPHER, params)
                 self._json({"success": bool(r)})
             elif path.startswith("/api/drafts/") and path.endswith("/approve"):
                 draft_id = path.split("/api/drafts/")[1].rstrip("/approve")
@@ -492,8 +501,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             props = {k: v for k, v in body.get("props", {}).items() if k not in ("id", "status", "approve")}
             cascade = client.run(CASCADE_PREVIEW_CYPHER, {"node_id": node_id})
             client.run(UPDATE_NODE_CYPHER, {"node_id": node_id, "props": props})
+            self_reset = client.run(SELF_RESET_CYPHER, {"node_id": node_id})
             reset = client.run(CASCADE_RESET_CYPHER, {"node_id": node_id})
-            self._json({"success": True, "cascade_reset": reset})
+            self._json({"success": True, "self_reset": self_reset, "cascade_reset": reset})
         else:
             self.send_error(404)
 
@@ -617,7 +627,7 @@ textarea.fi{min-height:60px;resize:vertical}
 
 <!-- Costume Approvals -->
 <div class="bg-gray-800 rounded-lg p-5 mb-6 border border-gray-700">
-  <h2 class="text-lg font-semibold text-purple-300 mb-4">👔 着装审批 <span class="text-sm font-normal text-gray-400">(costume-designer 建议)</span></h2>
+  <h2 class="text-lg font-semibold text-purple-300 mb-4">👔 着装审批 <span class="text-sm font-normal text-gray-400">(char-costume-designer 建议)</span></h2>
   <div id="ca-list"></div>
   <div id="ca-e" class="hidden text-center text-gray-500 py-6">✓ 无待审批着装</div>
 </div>
@@ -931,13 +941,19 @@ async function saveNode(nodeId,type){
   let cascade=[];
   try{cascade=await api('/api/node/'+nodeId+'/cascade');}catch(e){}
   let msgH='确认保存修改？';
+  const isImgNode=SM[type]===2;
+  if(isImgNode)msgH+='<br/><br/>🔄 本节点状态将重置为 1（提示词已就绪，图片将重新生成）';
   if(cascade.length)msgH+='<br/><br/>⚠️ 级联重置: '+cascade.map(c=>`<span class="px-1.5 py-0.5 rounded bg-red-900 text-red-200 text-xs m-0.5">${esc(c.type)}:${esc(c.id)}</span>`).join('');
   if(!await cfShow(msgH)){msg.textContent='已取消';msg.className='text-xs text-gray-500';return;}
   msg.textContent='保存中...';msg.className='text-xs text-amber-400';
   try{
     const r=await api('/api/node/'+nodeId,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({props})});
+    const sr=(r.self_reset||[]).length;
     const n=(r.cascade_reset||[]).length;
-    msg.textContent='✓ 已保存'+(n?' (重置 '+n+' 个下游)':'');msg.className='text-xs text-green-400';
+    const parts=[];
+    if(sr)parts.push('本节点已重置为待生成');
+    if(n)parts.push('重置 '+n+' 个下游');
+    msg.textContent='✓ 已保存'+(parts.length?' ('+parts.join('，')+')':'');msg.className='text-xs text-green-400';
     setTimeout(load,800);
   }catch(e){msg.textContent='✗ '+e.message;msg.className='text-xs text-red-400';}
 }
@@ -994,7 +1010,7 @@ function rDrafts(drafts){
       actH=`<button onclick="doDraftAction('${d.filename}','approve',this)" class="px-3 py-1 bg-green-800 hover:bg-green-700 rounded text-white text-xs">✓ 批准</button>`;
       actH+=`<button onclick="doDraftAction('${d.filename}','reject',this)" class="px-3 py-1 bg-red-800 hover:bg-red-700 rounded text-white text-xs ml-1">✗ 驳回</button>`;
     } else if(d.status==='approved'){
-      const applyCmd=`/narrative-grower apply --draft ${d.path.replace(/\\\\/g,'/')}`;
+      const applyCmd=`/nrt-narrative-grower apply --draft ${d.path.replace(/\\\\/g,'/')}`;
       actH=`<span class="text-xs text-gray-400 mr-2">待导入：</span>`;
       actH+=`<code class="text-xs bg-gray-900 px-2 py-1 rounded border border-gray-600 select-all cursor-pointer" title="点击复制" onclick="navigator.clipboard.writeText(this.textContent)">${esc(applyCmd)}</code>`;
     }
@@ -1054,7 +1070,7 @@ async function openDraft(filename){
       html+=`<button onclick="doDraftAction('${d.filename}','reject',this);closeP();setTimeout(loadDrafts,500)" class="px-4 py-1.5 bg-red-800 hover:bg-red-700 rounded text-white text-sm font-medium">✗ 驳回</button>`;
       html+=`</div>`;
     } else if(fm.status==='approved'){
-      const applyCmd=`/narrative-grower apply --draft ${d.path.replace(/\\\\/g,'/')}`;
+      const applyCmd=`/nrt-narrative-grower apply --draft ${d.path.replace(/\\\\/g,'/')}`;
       html+=`<div class="mt-4 pt-3 border-t border-gray-700">`;
       html+=`<div class="text-xs text-gray-400 mb-2">导入命令（在 Claude Code 中执行）：</div>`;
       html+=`<code class="block text-xs bg-gray-900 px-3 py-2 rounded border border-gray-600 select-all cursor-pointer" onclick="navigator.clipboard.writeText(this.textContent)">${esc(applyCmd)}</code>`;

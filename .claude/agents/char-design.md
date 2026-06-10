@@ -26,7 +26,7 @@ Schema 文件：`00_init/Schema/角色美术.md`
 
 ### 2. 查询当前状态
 
-通过 neo4j-helper 查询角色的美术子图，了解每个节点的 status 和 approve 状态。
+通过 infra-neo4j-helper 查询角色的美术子图，了解每个节点的 status 和 approve 状态。
 
 ### 3. 决策与调度
 
@@ -36,17 +36,17 @@ Schema 文件：`00_init/Schema/角色美术.md`
 
 | 图节点 | Skill | Status 流程 | 审批 |
 |--------|-------|------------|------|
-| AppearanceStyle / LanguageStyle | concept-designer | 0→1 | 无 |
-| CostumeStyle | costume-designer | 0→1 | ✅ |
-| DesignSheet | design-sheet | 0→1→2 | ✅ |
-| IllusDesign | illus-designer | 0→1→2 | ✅ |
-| StandingIllustration | stand-designer | 0→1→2 | ✅ |
+| AppearanceStyle / LanguageStyle | char-concept-designer | 0→1 | 无 |
+| CostumeStyle | char-costume-designer | 0→1 | ✅ |
+| DesignSheet | char-design-sheet | 0→1→2 | ✅ |
+| IllusDesign | char-illus-designer | 0→1→2 | ✅ |
+| StandingIllustration | char-stand-designer | 0→1→2 | ✅ |
 
 **Status 含义**：
 - 数据节点：`0` 待设计 → `1` 已完成
 - 生产节点：`0` 待生成 → `1` 提示词完成 → `2` 图片生成完成
 
-**依赖顺序**：concept-designer → costume-designer → design-sheet → illus-designer → stand-designer
+**依赖顺序**：char-concept-designer → char-costume-designer → char-design-sheet → char-illus-designer → char-stand-designer
 
 **调度方式**：每个节点 skill 接受 `target_status` 参数（默认推到最终状态），可一次推进多个 status。
 
@@ -77,4 +77,4 @@ sync=false 的边阻断级联。
 
 ## Skills
 
-`concept-designer` · `costume-designer` · `design-sheet` · `illus-designer` · `stand-designer` · `prompt-assembler` · `image-generator` · `neo4j-helper`
+`char-concept-designer` · `char-costume-designer` · `char-design-sheet` · `char-illus-designer` · `char-stand-designer` · `char-prompt-assembler` · `infra-image-generator` · `infra-neo4j-helper`
