@@ -5,26 +5,6 @@
 
 ---
 
-## 提取映射
-
-从图节点和文件中提取着装细节，按以下维度组织：
-
-**数据来源**：
-- **CostumeStyle 节点**：default_outfit（默认着装）、material_direction（材质方向）、posture（体态气质）、accessories（配饰）
-- **IllusDesign 节点**：adaptation_notes（着装补充说明，可选）
-- **`00_init/美术风格.md`**：全局美术风格（画风、头身比、渲染风格等）
-
-| 数据来源 | 图节点字段 | 提取维度 | 细节粒度示例 |
-|---------|----------|---------|------------|
-| CostumeStyle.default_outfit | 着装 | clothing 款式 | 层次（内搭/外层）、剪裁（收腰/宽松）、开衩/下摆 |
-| CostumeStyle.default_outfit | 着装 | footwear | 鞋袜款式、颜色 |
-| CostumeStyle.material_direction | 材质方向 | clothing 材质 | 面料质感（丝绸/皮革/金属等）、缝线/刺绣细节 |
-| CostumeStyle.accessories | 配饰 | accessories | 饰品位置+样式、手持物 |
-| CostumeStyle.posture | 体态气质 | posture | 着装后的体态调整（如披风垂坠、裙摆状态） |
-| IllusDesign.adaptation_notes | 适配说明 | adaptation | 着装补充（由 illus-designer skill 在创建节点时填写，可选，如无则跳过） |
-
----
-
 ## 输出模板
 
 ```markdown
@@ -37,16 +17,13 @@
 
 ## 着装提示词
 
-[按以下顺序，用自然语言写一段完整的着装描述：]
-
 1. **开头声明**：角色立绘设计图，[从美术风格.md 读取背景色]背景，全身三视图（正面、侧面、背面）
-2. **着装款式**：[层次+剪裁+开衩/下摆等款式细节]
-3. **材质质感**：[面料质感、缝线/刺绣细节]
-4. **配色**：[着装配色：主色用在何处，辅色用在何处，点缀色用在何处]
-5. **鞋袜**：[款式+颜色]
-6. **配饰**：[饰品位置+样式，手持物]
-7. **适配补充**：[从 adaptation_notes 提取，如无则跳过]
-8. **风格标签**（放末尾）
+2. **着装款式** ← CostumeStyle.default_outfit：[层次（内搭/外层）+ 剪裁（收腰/宽松）+ 开衩/下摆等款式细节]
+3. **材质质感** ← CostumeStyle.material_direction：[面料质感（丝绸/皮革/金属等）、缝线/刺绣细节]
+4. **配色** ← CostumeStyle.default_outfit：[着装配色：主色用在何处，辅色用在何处，点缀色用在何处]
+5. **鞋袜** ← CostumeStyle.default_outfit：[款式 + 颜色]
+6. **配饰** ← CostumeStyle.accessories：[饰品位置 + 样式，手持物]
+7. **适配补充** ← IllusDesign.adaptation_notes：[着装补充，如无则跳过]
 ```
 
 ---
@@ -64,5 +41,5 @@
 ### 提取原则
 
 1. **只提取不创作**：所有着装细节从 CostumeStyle 节点字段和 `00_init/美术风格.md` 提取，不添加数据中未提及的元素
-2. **不遗漏**：对照提取映射表逐项检查，确保每个维度都有覆盖
+2. **不遗漏**：对照输出模板逐项检查，确保每个维度都有覆盖
 3. **细节转自然语言**：着装设定中的列举式描述转为连贯的自然语言句子

@@ -28,6 +28,6 @@
 
 **色彩方向**：一段话覆盖主色、辅色、点缀色及配色逻辑，不必拆成表格 → `AppearanceStyle.color_direction`
 
-**玩家第一印象**：一句话描述玩家初次看到角色时的直观感受 → `AppearanceStyle.first_impression`
+**玩家第一印象**：一句话描述玩家初次看到角色时的直观感受。禁止包含衣着描写（衣着由 CostumeStyle 节点负责） → `AppearanceStyle.first_impression`
 
-**玩家记忆点**：2-3个具体视觉元素，在低分辨率下仍可辨识，优先角色独有元素 → `AppearanceStyle.memory_points`
+**玩家记忆点**：1-2个具体视觉元素，在低分辨率下仍可辨识，优先角色独有元素。仅限体貌特征（体型、发色、面部特征等），禁止包含衣着/配饰描写（衣着由 CostumeStyle 节点负责） → `AppearanceStyle.memory_points`
