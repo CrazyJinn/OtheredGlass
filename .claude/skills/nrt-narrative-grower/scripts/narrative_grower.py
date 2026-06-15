@@ -29,6 +29,17 @@ if os.path.isdir(_NEO4J_HELPER):
 
 from neo4j_client import Neo4jClient
 
+# ── Import Snowflake ID Generator ────────────────────────────────
+_SNOWFLAKE_DIR = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "scripts"
+))
+if os.path.isdir(_SNOWFLAKE_DIR):
+    sys.path.insert(0, _SNOWFLAKE_DIR)
+
+from snowflake_base62 import SnowflakeGenerator
+
+_id_gen = SnowflakeGenerator()
+
 # ── Configuration ───────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
@@ -638,7 +649,7 @@ def cmd_analyze(client):
 
     opportunities = synthesize_opportunities(results)
 
-    analysis_id = f"analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    analysis_id = _id_gen.next_id_base62()
 
     output = {
         "analysis_id": analysis_id,
@@ -778,9 +789,9 @@ def _strip_frontmatter(content):
 
 
 def _extract_events_from_md(body):
-    """Extract events from markdown headers like '### evt_031: Title'."""
+    """Extract events from markdown headers like '### <snowflake_id>: Title'."""
     events = []
-    pattern = r'###\s+(evt_\d+)\s*:\s*(.+?)(?:\n|$)'
+    pattern = r'###\s+([0-9A-Za-z]+)\s*:\s*(.+?)(?:\n|$)'
     for m in re.finditer(pattern, body):
         evt_id = m.group(1)
         evt_title = m.group(2).strip()
@@ -848,7 +859,7 @@ def _extract_infos_from_md(body):
                 continue
             entry = dict(zip(headers, cells))
             infos.append({
-                "id": entry.get("ID", f"info_{len(infos)+1:03d}"),
+                "id": entry.get("ID", _id_gen.next_id_base62()),
                 "title": entry.get("标题", ""),
                 "content": entry.get("内容", ""),
                 "knowledge_level": entry.get("知识层", "2"),
@@ -859,8 +870,8 @@ def _extract_infos_from_md(body):
 def _extract_scenes_from_md(body):
     """Extract scene suggestions from markdown."""
     scenes = []
-    # Look for scene sections with headers like '### scene_014: Name'
-    pattern = r'###\s+(scene_\d+)\s*:\s*(.+?)(?:\n|$)'
+    # Look for scene sections with headers like '### <snowflake_id>: Name'
+    pattern = r'###\s+([0-9A-Za-z]+)\s*:\s*(.+?)(?:\n|$)'
     for m in re.finditer(pattern, body):
         scenes.append({
             "id": m.group(1),

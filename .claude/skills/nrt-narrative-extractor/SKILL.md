@@ -6,6 +6,7 @@ description: |
   触发条件：(1) 用户要求从叙事内容提取图数据
   (2) 用户提到"提取实体"、"提取事件"、"导出CSV"、"生成表格"、"实体提取"
   (3) 用户提供了叙事内容和 Schema 路径，要求结构化输出
+allowed-tools: Read, Bash
 ---
 
 # 叙事提取器
@@ -17,7 +18,7 @@ description: |
 | 输入类型 | 可能包含的节点 | 示例 |
 |----------|---------------|------|
 | 完整章节 | 全部类型（角色、事件、场景、信息） | "第一章-7号农场.md" |
-| 角色背景 | 角色、信息 | "char_003：幼时失去双亲被教会收养" |
+| 角色背景 | 角色、信息 | "角色名：幼时失去双亲被教会收养" |
 | 世界观设定 | 场景、信息 | "骑士团信奉人类至上" |
 | 对话提纲 | 信息、角色、场景 | 场景级对话笔记 |
 | 只言片语 | 信息、角色 | "老莫说南方营地被扫荡了" |
@@ -79,15 +80,7 @@ description: |
 - 完整内容：构建完整故事主线链
 - 碎片输入：信息直接用适当的边关联角色/场景
 
-### 5. 生成实体 .md 文件
-
-按节点类型生成 Markdown 文件，每文件包含表格形式的实体列表：
-
-- `01_叙事数据/角色实体.md` — id、name、gender、description、character_tags、上下文
-- `01_叙事数据/事件实体.md` — id、title、time、type、description
-- `01_叙事数据/场景实体.md` — id、name、description
-
-### 6. CSV 生成
+### 5. CSV 生成
 
 参照 [references/csv-patterns.md](references/csv-patterns.md) 生成 CSV 文件。
 
@@ -98,16 +91,6 @@ description: |
 - `01_叙事数据/_summary.md` — 提取摘要
 
 只生成有数据的文件，空类型不生成。
-
-### 7. 自检
-
-- 所有边 CSV 中的 from_id / to_id 都在节点 CSV 中存在
-- 所有边类型和方向与叙事基础一致
-- 所有必填列已填写，无空值
-- 编号唯一无重复
-- CSV 语法正确：双引号转义、无未闭合引号
-- import.cypher 中引用的文件名与实际输出文件一致
-- 边方向验证：link 边 from 仅限 Character/Event/Scene，type=因果仅限 Info→Info
 
 ## Resources
 

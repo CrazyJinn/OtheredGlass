@@ -179,7 +179,7 @@ def main():
 
     if command == "submit":
         if len(sys.argv) < 3:
-            print("用法: python ofoxai_api.py submit <prompt> [options]")
+            print("用法: python ofoxai_api.py submit <prompt|--prompt-stdin> [options]")
             print("")
             print("选项:")
             print("  --model <name>       模型 (默认: openai/gpt-image-2)")
@@ -188,10 +188,12 @@ def main():
             print("  --quality <val>      gpt-image: low/medium/high; dall-e-3: standard/hd")
             print("  --image <path>       参考图片路径 (可多次指定)")
             print("  --response-format    b64_json 或 url (默认: b64_json)")
+            print("  --prompt-stdin       从标准输入读取 prompt（管道消费，支持多行 markdown）")
             print("  -o, --output <path>  直接保存到指定路径（跳过 wait 步骤）")
             sys.exit(1)
 
-        prompt = sys.argv[2]
+        prompt = None
+        prompt_stdin = False
         model = DEFAULT_MODEL
         size = "1024x1024"
         n = 1
@@ -200,10 +202,12 @@ def main():
         response_format = "b64_json"
         output = None
 
-        i = 3
+        i = 2
         while i < len(sys.argv):
             arg = sys.argv[i]
-            if arg == "--model" and i + 1 < len(sys.argv):
+            if arg == "--prompt-stdin":
+                prompt_stdin = True; i += 1
+            elif arg == "--model" and i + 1 < len(sys.argv):
                 model = sys.argv[i + 1]; i += 2
             elif arg == "--size" and i + 1 < len(sys.argv):
                 size = sys.argv[i + 1]; i += 2
@@ -217,11 +221,20 @@ def main():
                 response_format = sys.argv[i + 1]; i += 2
             elif arg in ("-o", "--output") and i + 1 < len(sys.argv):
                 output = sys.argv[i + 1]; i += 2
+            elif prompt is None and not arg.startswith("--"):
+                prompt = arg; i += 1
             else:
                 i += 1
 
+        if prompt_stdin:
+            prompt = sys.stdin.read()
+
         # 强制质量为 low
         quality = "low"
+
+        if prompt is None:
+            print("错误：必须提供 prompt（位置参数或 --prompt-stdin）", file=sys.stderr)
+            sys.exit(1)
 
         # 校验图片文件
         for img in image:

@@ -18,7 +18,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| char_id | 角色节点 ID（如 `char_007`） | 必传 |
+| char_id | 角色节点 ID（snowflake Base62） | 必传 |
 
 ## 流程
 
@@ -28,13 +28,13 @@ allowed-tools: Read, Bash, Write, Edit
 
 ```cypher
 // 角色 + 外貌 + 已有着装
-MATCH (ch:Character {id: 'char_NNN'})
+MATCH (ch:Character {id: $char_id})
 OPTIONAL MATCH (ch)-[:has_appearance]->(app:AppearanceStyle)
 OPTIONAL MATCH (ch)-[:has_costume]->(cos:CostumeStyle)
 RETURN ch, app, collect(cos) AS costumes;
 
 // 事件 + 场景 + 已有着装绑定
-MATCH (ch:Character {id: 'char_NNN'})-[r:involved]->(e:Event)
+MATCH (ch:Character {id: $char_id})-[r:involved]->(e:Event)
 OPTIONAL MATCH (e)-[:occurred_at]->(s:Scene)
 OPTIONAL MATCH (e)-[:wears]->(cos:CostumeStyle)
 RETURN e.id AS event_id, e.title AS event_title,
@@ -65,7 +65,7 @@ ORDER BY e.id;
 对可复用已有 CostumeStyle 的事件组，直接创建 `wears` 边：
 
 ```cypher
-MATCH (e:Event {id: 'evt_NNN'}), (cos:CostumeStyle {id: 'costume_NNN'})
+MATCH (e:Event {id: '<event_id>'}), (cos:CostumeStyle {id: '<costume_id>'})
 MERGE (e)-[r:wears]->(cos) SET r.sync = false;
 ```
 
@@ -75,47 +75,54 @@ MERGE (e)-[r:wears]->(cos) SET r.sync = false;
 
 对需要新着装的事件组：
 
-#### 4.1 确定节点 ID
+#### 4.1 生成节点 ID
 
-查询已有最大编号：
-```cypher
-MATCH (n:CostumeStyle) WHERE n.id STARTS WITH 'costume_' RETURN n.id ORDER BY n.id DESC LIMIT 1
+生成 snowflake ID：
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
 ```
-
-取最大编号 + 1 作为新 ID。
 
 #### 4.2 创建节点和边
 
 ```cypher
-MERGE (cos:CostumeStyle {id: 'costume_NNN'})
+MERGE (cos:CostumeStyle {id: '<snowflake_id>'})
 SET cos.name = '角色名-着装描述',
     cos.status = 1, cos.approve = 'pending';
 
-MATCH (ch:Character {id: 'char_NNN'}), (cos:CostumeStyle {id: 'costume_NNN'})
+MATCH (ch:Character {id: $char_id}), (cos:CostumeStyle {id: '<snowflake_id>'})
 MERGE (ch)-[r:has_costume]->(cos) SET r.sync = true;
 
-MATCH (e:Event) WHERE e.id IN ['evt_NNN', 'evt_NNN', ...]
-MATCH (cos:CostumeStyle {id: 'costume_NNN'})
+MATCH (e:Event) WHERE e.id IN ['<event_id_1>', '<event_id_2>', ...]
+MATCH (cos:CostumeStyle {id: '<snowflake_id>'})
 MERGE (e)-[r:wears]->(cos) SET r.sync = false;
 ```
 
 #### 4.3 生成并填写内容
 
-基于事件上下文和角色信息，填写以下字段：
+基于事件上下文和角色信息，填写以下字段。
+
+**自由文本字段**：
 
 | 字段 | 内容来源 | 示例 |
 |------|---------|------|
 | name | 角色名 + 着装场景描述 | `沈暮雪-休闲约会着装` |
-| default_outfit | 根据事件环境设计的完整着装描述 | `米色针织开衫, 白色T恤, 浅色牛仔裤, 白色帆布鞋` |
-| material_direction | 与着装匹配的材质/质感 | `针织（柔软垂坠感）+ 纯棉（哑光透气）+ 帆布（轻便休闲）` |
-| posture | 与着装场景匹配的体态气质 | `重心居中偏放松, 肩线自然下垂, 带有随性舒适的站姿` |
-| accessories | 与着装搭配的配饰 | `银框半框眼镜, 左手腕细链玫瑰金手表, 小巧珍珠耳钉` |
+
+**设计元素标签字段**（值=分号 `;` 分隔标签，参考 `55_manage/标签库.json`）：
+
+| 维度 | 属性 | 候选 |
+|------|------|------|
+| 着装风格 | outfit_style | 休闲/正式/运动/性感/可爱/学院/街头/古风/慵懒（可多选） |
+| 服装 | garment | 合成组合：材质+颜色+服装类型（配对型，每组≤1自动合成），如 `棉白衬衫`；多件手动添加多个 `棉白衬衫;蕾丝黑内衣` |
+| 鞋类 | footwear | 运动鞋/皮鞋/靴/帆布鞋/凉鞋/高跟鞋/赤足 |
+| 配饰类型 | accessory_type | 耳饰/项链/手表/眼镜/戒指/发饰/手持物（可多选） |
 
 **内容生成规则**：
 - 参考 `00_init/世界设定.md`、`00_init/人物设定.md`、角色 tags
-- 参考 AppearanceStyle 的 `color_direction` 保持配色体系一致
-- 体态气质中的站姿必须是可用于三视图的**静态站姿**（肩线、重心、躯干状态），不包含手部动作
-- 标志性道具放在 accessories 中
+- 参考 Character 的 `color_direction` 保持配色体系一致
+- 服装款式/颜色统一用 `garment` 标签（材质+颜色+类型）表达，是服装信息的**唯一数据源**；标签未覆盖的款式细节（领型、滚边、层次、剪裁、质感氛围）用标签库的**自定义输入**补充到标签值，不另设自由文本字段
+- 标志性道具的**类型**放入 `accessory_type` 标签，具体样式用自定义标签值补充
+- 着装不再单独设计体态——IllusDesign 复用 DesignSheet 的静态站姿（角色默认体态已在外貌层）
 
 ### 5. 报告结果
 
@@ -126,4 +133,4 @@ MERGE (e)-[r:wears]->(cos) SET r.sync = false;
 
 ## 参考文档
 
-- [着装设定模板](references/template-着装设定.md) — 各字段规则 + 体态气质反例
+- [着装设定模板](references/template-着装设定.md) — 各字段规则

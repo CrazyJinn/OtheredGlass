@@ -1,8 +1,6 @@
 ﻿from_id,to_id,type,detail,start_time,end_time
-char_003,char_004,恋爱,已分手,,
-char_001,char_008,一夜情,陆择的一夜情对象,,
-char_003,char_006,客户,代练客户,,
-char_003,char_005,朋友,晨跑认识,,
-char_003,char_007,上下级,战队经理与选手,,
-char_003,char_009,冲突,试训时发生冲突,,
-char_007,char_009,同事,战队经理与队长,,
+NvCkQmFPFv,NvCkQmFPFo,一夜情,陆择与顾盈的一夜情,,
+NvCkQmFPFr,NvCkQmFPFq,前任,已分手,,
+NvCkQmFPFt,NvCkQmFPFq,客户,代练客户兼小迷妹,,
+NvCkQmFPFu,NvCkQmFPFq,招募,经理招募选手,Day 5,
+NvCkQmFPFw,NvCkQmFPFu,同事,队长与经理,,

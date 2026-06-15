@@ -18,7 +18,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| node_id | 目标节点 ID（如 `design_001`） | 由 agent 传入 |
+| node_id | 目标节点 ID（snowflake Base62） | 由 agent 传入 |
 | target_status | 推进目标：`1`（仅提示词）或 `2`（到图片） | `2` |
 
 ## 流程
@@ -28,7 +28,7 @@ allowed-tools: Read, Bash, Write, Edit
 通过 neo4j-helper 一次性查询所有前驱节点：
 
 ```cypher
-MATCH (app:AppearanceStyle)-[:produces]->(ds:DesignSheet {id: 'design_NNN'})
+MATCH (app:AppearanceStyle)-[:produces]->(ds:DesignSheet {id: $node_id})
 MATCH (ch:Character)-[:has_appearance]->(app)
 OPTIONAL MATCH (ch)-[:has_costume]->(cos:CostumeStyle)
 RETURN app, ds, cos, ch
@@ -38,12 +38,18 @@ RETURN app, ds, cos, ch
 
 ### 2. 创建节点（如不存在）
 
-如果 DesignSheet 节点不存在，创建节点和 `produces` 边：
+如果 DesignSheet 节点不存在，先生成 snowflake ID：
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
+```
+
+然后创建节点和 `produces` 边：
 
 ```cypher
-MERGE (ds:DesignSheet {id: 'design_NNN'})
-SET ds.status = 0, ds.approve = null;
-MATCH (app:AppearanceStyle {id: 'appearance_NNN'}), (ds:DesignSheet {id: 'design_NNN'})
+MERGE (ds:DesignSheet {id: '<snowflake_id>'})
+SET ds.status = 0, ds.approve = 'pending';
+MATCH (app:AppearanceStyle {id: '<appearance_id>'}), (ds:DesignSheet {id: '<snowflake_id>'})
 MERGE (app)-[r:produces]->(ds) SET r.sync = true;
 ```
 
@@ -62,8 +68,8 @@ MERGE (app)-[r:produces]->(ds) SET r.sync = true;
 data 参数结构：
 ```json
 {
-  "appearance": { "appearance": "...", "color_direction": "...", "shape_language": "...", "visual_tone": "...", "first_impression": "...", "memory_points": "..." },
-  "character": { "id": "char_NNN", "name": "..." }
+  "appearance": { "appearance": "...", "shape_language": "...", "visual_tone": "...", "first_impression": "..." },
+  "character": { "id": "<char_id>", "name": "...", "color_direction": "..." }
 }
 ```
 
@@ -82,7 +88,7 @@ char-prompt-assembler 将：
 infra-image-generator 将：
 - 读取节点 prompt 字段
 - 文生图模式（无参考图）
-- 输出路径：`./06_角色美术/<char_id>/设计图.png`
+- 输出路径：`./06_角色美术/<char_name>/设计图.png`
 - 更新节点：写入 image_path，status → 2，approve → 'pending'
 
 ### 4. 保存结果

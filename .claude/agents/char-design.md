@@ -11,7 +11,7 @@ allowed-tools: Read, Bash, Write, Edit
 角色美术生产链的**纯编排层**。只负责查询图状态、决定下一步、调度 skill。所有节点的创建、更新、删除由各 skill 自行完成。
 
 Schema 文件：`00_init/Schema/角色美术.md`
-输入：**角色名或 ID**（如"陆择"、`char_001`），agent 自由探索图状态，决定下一步。
+输入：**角色名或 ID**（如"陆择"、snowflake ID），agent 自由探索图状态，决定下一步。
 
 ---
 
@@ -20,8 +20,8 @@ Schema 文件：`00_init/Schema/角色美术.md`
 ### 1. 解析角色
 
 从用户输入提取角色标识：
-- 编号（如 `char_001`）→ 直接使用
-- 名称（如"陆择"）→ 读取 `01_叙事数据/角色实体.md` 查表
+- snowflake ID → 直接使用
+- 名称（如"陆择"）→ 通过数据库按名称查找：`MATCH (c:Character) WHERE c.name='陆择' RETURN c.id AS id`
 - 无指定 → 列出所有角色的美术进度概览
 
 ### 2. 查询当前状态

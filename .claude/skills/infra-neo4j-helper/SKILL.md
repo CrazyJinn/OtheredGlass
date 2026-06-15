@@ -16,7 +16,7 @@ allowed-tools: Read, Bash
 
 | 参数 | 说明 | 示例 |
 |------|------|------|
-| `自然语言描述` | 用户的意图描述 | "查询 char_001 的角色信息，然后把 status 改为 1" |
+| `自然语言描述` | 用户的意图描述 | "查询陆择的角色信息，然后把 status 改为 1" |
 | `schema_path` | Schema 文件路径（可选，默认 `schema/Schema.md`） | `schema/01_叙事基础.md` |
 
 ### 2. 读取 Schema
@@ -44,21 +44,21 @@ allowed-tools: Read, Bash
 使用 `-c` 参数直接执行 Cypher 字符串（值已内联，无 `$param`）：
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/execute_cypher.py" -c "MATCH (n:Character {id: 'char_001'}) RETURN n" --json
+python "${CLAUDE_SKILL_DIR}/scripts/execute_cypher.py" -c "MATCH (n:Character) WHERE n.name = '陆择' RETURN n" --json
 ```
 
 多条语句用 `;` 分隔，加 `--multi` 开启事务模式：
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/execute_cypher.py" -c "MERGE (n:Character {id: 'char_001'}) SET n.name = '陆择'; MATCH (n:Character {id: 'char_001'}) RETURN n" --multi --json
+python "${CLAUDE_SKILL_DIR}/scripts/execute_cypher.py" -c "MERGE (n:Character {id: '<snowflake_id>'}) SET n.name = '陆择'; MATCH (n:Character {id: '<snowflake_id>'}) RETURN n" --multi --json
 ```
 
 如需传递较长 Cypher，使用 `--stdin` 管道：
 
 ```bash
 cat <<'EOF' | python "${CLAUDE_SKILL_DIR}/scripts/execute_cypher.py" --stdin --multi --json
-MERGE (n:Character {id: 'char_001'}) SET n.name = '陆择';
-MATCH (n:Character {id: 'char_001'}) RETURN n;
+MERGE (n:Character {id: '<snowflake_id>'}) SET n.name = '陆择';
+MATCH (n:Character {id: '<snowflake_id>'}) RETURN n;
 EOF
 ```
 

@@ -24,19 +24,22 @@
 
 ## 全节点速查
 
-| 节点 | ID 前缀 | 一句话说明 |
-|------|--------|-----------|
-| Character | `char_NNN` | 有名字的人物 |
-| Event | `evt_NNN` | 某时某刻发生的某件事 |
-| Scene | `scene_NNN` | 具体地点/游戏场景 |
-| Info | `info_NNN` | 一条有意义的认知碎片 |
-| LanguageStyle | `voice_NNN` | 角色说话方式、语气、口头禅 |
+> 所有节点 ID 使用雪花算法 Base62 编码（如 `Nv93TkkkgC`），全局唯一，无前缀。由 `.claude/scripts/snowflake_base62.py` 生成。
+> 引用已有叙事基础节点时，通过名称从数据库查询 ID，不依赖前缀推断。
 
-| AppearanceStyle | `appearance_NNN` | 角色固定外貌（脸、体型、发色） |
-| CostumeStyle | `costume_NNN` | 角色默认着装（衣物、配饰） |
-| DesignSheet | `design_NNN` | 角色三视图设计稿 |
-| IllusDesign | `illus_NNN` | 着装适配立绘设计图 |
-| StandingIllustration | `stand_NNN` | 具体表情/动作的单张立绘 |
+| 节点 | ID 格式 | 一句话说明 |
+|------|---------|-----------|
+| Character | snowflake Base62 | 有名字的人物 |
+| Event | snowflake Base62 | 某时某刻发生的某件事 |
+| Scene | snowflake Base62 | 具体地点/游戏场景 |
+| Info | snowflake Base62 | 一条有意义的认知碎片 |
+| LanguageStyle | snowflake Base62 | 角色说话方式、语气、口头禅 |
+
+| AppearanceStyle | snowflake Base62 | 角色固定外貌（脸、体型、发色） |
+| CostumeStyle | snowflake Base62 | 角色默认着装（衣物、配饰） |
+| DesignSheet | snowflake Base62 | 角色三视图设计稿 |
+| IllusDesign | snowflake Base62 | 着装适配立绘设计图 |
+| StandingIllustration | snowflake Base62 | 具体表情/动作的单张立绘 |
 
 ---
 

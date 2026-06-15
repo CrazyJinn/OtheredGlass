@@ -1,6 +1,5 @@
 ﻿from_id,to_id,type,detail,start_time,end_time
-char_003,scene_004,居住,陈默的八楼出租屋,,
-char_006,scene_011,居住,林梦的超级大平层,,
-char_009,scene_015,工作,星耀电竞战队队长,,
-char_007,scene_015,工作,星耀电竞战队经理,,
-char_005,scene_013,工作,运动康复师工作地点,,
+NvCkQmFPFq,NvCkQmFPGR,居住,陈默的出租屋,,
+NvCkQmFPFu,NvCkQmFPGT,工作,星耀电竞经理,,
+NvCkQmFPFw,NvCkQmFPGT,工作,星耀电竞队长,,
+NvCkQmFPFt,NvCkQmFPGY,居住,超级大平层,,

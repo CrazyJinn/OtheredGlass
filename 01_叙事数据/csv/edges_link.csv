@@ -1,22 +1,23 @@
 ﻿from_id,to_id,type,detail,time
-char_001,info_001,涉及,灵魂穿越者能力,
-char_001,info_002,涉及,灵魂穿越者限制,
-char_002,info_003,涉及,伊芙告知试炼规则,
-evt_003,info_003,涉及,告知规则事件,
-char_003,info_004,涉及,转账付款人,
-char_004,info_004,涉及,转账收款人,
-evt_007,info_004,涉及,发现转账记录,
-evt_008,info_005,涉及,发现身体损耗,
-char_003,info_005,涉及,身体损耗的主人,
-char_006,info_006,涉及,富家千金,
-evt_023,info_006,涉及,送林梦回家发现家境,
-char_006,info_007,涉及,林梦自述童年,
-evt_023,info_007,涉及,送林梦回家时对话,
-evt_014,info_008,涉及,试训表现,
-char_003,info_008,涉及,试训当事人,
-char_009,info_008,涉及,冲突对象,
-evt_012,info_009,涉及,直播数据,
-char_006,info_009,涉及,直播提议者,
-evt_015,info_010,涉及,邀请加入二队,
-char_007,info_010,涉及,邀请方,
-char_003,info_010,涉及,被邀请者,
+NvCkQmFPFp,NvCkQmFPGa,涉及,伊芙解释系统规则,开场
+NvCkQmFPFp,NvCkQmFPGb,涉及,伊芙解释干预规则,开场
+NvCkQmFPFp,NvCkQmFPGc,涉及,伊芙告知试炼规则,开场
+NvCkQmFPFo,NvCkQmFPGd,涉及,陆择车祸死亡,开场
+NvCkQmFPFv,NvCkQmFPGe,涉及,顾盈身份,开场
+NvCkQmFPFq,NvCkQmFPGf,涉及,陈默跳江,Day 0
+NvCkQmFPG3,NvCkQmFPGg,涉及,转账记录,Day 0
+NvCkQmFPFr,NvCkQmFPGh,涉及,温蔓青身份,Day 0
+NvCkQmFPG4,NvCkQmFPGi,涉及,发现身体损耗,Day 0
+NvCkQmFPFt,NvCkQmFPGj,涉及,林梦身份,Day 2
+NvCkQmFPG8,NvCkQmFPGk,涉及,直播天赋,Day 5
+NvCkQmFPFs,NvCkQmFPGl,涉及,苏晓禾专业背景,Day 4
+NvCkQmFPGA,NvCkQmFPGm,涉及,试训表现,Day 7
+NvCkQmFPFu,NvCkQmFPGn,涉及,沈暮雪身份,Day 5
+NvCkQmFPFw,NvCkQmFPGo,涉及,江烈身份,Day 7
+NvCkQmFPGJ,NvCkQmFPGp,涉及,林梦家庭背景,Day 16
+NvCkQmFPGI,NvCkQmFPGq,涉及,林梦准备情侣角色,Day 16
+NvCkQmFPG1,NvCkQmFPGr,涉及,姐姐来电暗示,Day 0
+NvCkQmFPGE,NvCkQmFPGs,涉及,苏晓禾挑食材,Day 13
+NvCkQmFPGg,NvCkQmFPGf,因果,转账→跳江动机,
+NvCkQmFPGh,NvCkQmFPGg,因果,恋爱关系→转账,
+NvCkQmFPGa,NvCkQmFPGb,因果,系统规则→干预限制,

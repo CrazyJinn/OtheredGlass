@@ -19,7 +19,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| char_id | 角色 ID（如 `char_001`） | 由 agent 传入 |
+| char_id | 角色 ID（snowflake Base62） | 由 agent 传入 |
 | target_status | 推进目标：`1`（仅提示词）或 `2`（到图片） | `2` |
 
 ## 流程
@@ -29,7 +29,7 @@ allowed-tools: Read, Bash, Write, Edit
 从 Character 节点出发，仅返回 IllusDesign 的直接前驱（DesignSheet、CostumeStyle）：
 
 ```cypher
-MATCH (ch:Character {id: 'char_NNN'})
+MATCH (ch:Character {id: $char_id})
 MATCH (ch)-[:has_appearance]->(:AppearanceStyle)-[:produces]->(ds:DesignSheet)
 MATCH (ch)-[:has_costume]->(cos:CostumeStyle)
 RETURN ds, collect(cos) AS costumes
@@ -39,14 +39,20 @@ RETURN ds, collect(cos) AS costumes
 
 ### 2. 创建节点（如不存在）
 
-对每套装扮（CostumeStyle），如果对应的 IllusDesign 节点不存在，创建节点和边：
+对每套装扮（CostumeStyle），如果对应的 IllusDesign 节点不存在，先生成 snowflake ID：
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
+```
+
+然后创建节点和边：
 
 ```cypher
-MERGE (illus:IllusDesign {id: 'illus_NNN'})
-SET illus.status = 0, illus.approve = null;
-MATCH (ds:DesignSheet {id: 'design_NNN'}), (illus:IllusDesign {id: 'illus_NNN'})
+MERGE (illus:IllusDesign {id: '<snowflake_id>'})
+SET illus.status = 0, illus.approve = 'pending';
+MATCH (ds:DesignSheet {id: '<design_id>'}), (illus:IllusDesign {id: '<snowflake_id>'})
 MERGE (ds)-[r:produces]->(illus) SET r.sync = false;
-MATCH (cos:CostumeStyle {id: 'costume_NNN'}), (illus:IllusDesign {id: 'illus_NNN'})
+MATCH (cos:CostumeStyle {id: '<costume_id>'}), (illus:IllusDesign {id: '<snowflake_id>'})
 MERGE (cos)-[r:outfit_for]->(illus) SET r.sync = false;
 ```
 
@@ -65,7 +71,7 @@ MERGE (cos)-[r:outfit_for]->(illus) SET r.sync = false;
 data 参数结构：
 ```json
 {
-  "costume": { "default_outfit": "...", "material_direction": "...", "posture": "...", "accessories": "..." },
+  "costume": { "tags": {"outfit_style":"...","garment":"...","footwear":"...","accessory_type":"..."} },
   "illus": { "adaptation_notes": "..." }
 }
 ```
@@ -85,7 +91,7 @@ char-prompt-assembler 将：
 infra-image-generator 将：
 - 读取节点 prompt 字段
 - 图生图模式：参考 DesignSheet.image_path（`produces` 边上游）
-- 输出路径：`./06_角色美术/<char_id>/立绘设计/<costume_id>/设计图.png`
+- 输出路径：`./06_角色美术/<char_name>/<CostumeStyle.name>/立绘设计图.png`
 - 更新节点：写入 image_path，status → 2，approve → 'pending'
 
 ### 4. 保存结果

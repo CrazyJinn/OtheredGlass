@@ -15,10 +15,10 @@
 
 ```csv
 id,title,content,knowledge_level
-info_001,正常标题,正常内容,1
-info_002,"含逗号，需要引号","内容也有逗号，和换行
+<snowflake_id>,正常标题,正常内容,1
+<snowflake_id>,"含逗号，需要引号","内容也有逗号，和换行
 第二行",2
-info_003,含"引号"的标题,"内容含""引号""需转义",3
+<snowflake_id>,含"引号"的标题,"内容含""引号""需转义",3
 ```
 
 ## 文件命名
@@ -39,7 +39,7 @@ info_003,含"引号"的标题,"内容含""引号""需转义",3
 
 | 列名 | 必填 | 类型 | 说明 |
 |------|------|------|------|
-| id | 是 | string | `char_NNN` |
+| id | 是 | string | snowflake Base62 |
 | name | 是 | string | |
 | gender | 否 | string | 男/女 |
 | description | 否 | string | 人物简介 |
@@ -50,7 +50,7 @@ info_003,含"引号"的标题,"内容含""引号""需转义",3
 
 | 列名 | 必填 | 类型 | 说明 |
 |------|------|------|------|
-| id | 是 | string | `scene_NNN` |
+| id | 是 | string | snowflake Base62 |
 | name | 是 | string | |
 | description | 否 | string | |
 
@@ -58,7 +58,7 @@ info_003,含"引号"的标题,"内容含""引号""需转义",3
 
 | 列名 | 必填 | 类型 | 说明 |
 |------|------|------|------|
-| id | 是 | string | `info_NNN` |
+| id | 是 | string | snowflake Base62 |
 | title | 是 | string | |
 | content | 是 | string | |
 | knowledge_level | 是 | int | 1/2/3 |
@@ -67,7 +67,7 @@ info_003,含"引号"的标题,"内容含""引号""需转义",3
 
 | 列名 | 必填 | 类型 | 说明 |
 |------|------|------|------|
-| id | 是 | string | `evt_NNN` |
+| id | 是 | string | snowflake Base62 |
 | title | 是 | string | |
 | time | 是 | string | 日期格式，如 2024-04-11 |
 | description | 否 | string | |
@@ -83,8 +83,8 @@ Character → Character
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
-| from_id | 是 | char 编号 |
-| to_id | 是 | char 编号 |
+| from_id | 是 | Character id |
+| to_id | 是 | Character id |
 | type | 是 | 关系类型，如"恋爱""亲属""同事""仇人" |
 | detail | 否 | 关系详情，如"恋爱中""已分手""姐弟" |
 | start_time | 否 | 关系建立时间 |
@@ -96,8 +96,8 @@ Character → Event
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
-| from_id | 是 | char 编号 |
-| to_id | 是 | evt 编号 |
+| from_id | 是 | Character id |
+| to_id | 是 | Event id |
 | role | 是 | 如"当事人""目击者""受害者""施害者""参与者" |
 | detail | 否 | 角色详情 |
 
@@ -107,8 +107,8 @@ Event → Scene
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
-| from_id | 是 | evt 编号 |
-| to_id | 是 | scene 编号 |
+| from_id | 是 | Event id |
+| to_id | 是 | Scene id |
 | detail | 否 | 如"跳江地点""约会地点" |
 
 #### edges_at.csv
@@ -117,8 +117,8 @@ Character → Scene
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
-| from_id | 是 | char 编号 |
-| to_id | 是 | scene 编号 |
+| from_id | 是 | Character id |
+| to_id | 是 | Scene id |
 | type | 是 | 关联类型，如"居住""前往""工作" |
 | detail | 否 | |
 | start_time | 否 | 关联开始时间 |
@@ -130,8 +130,8 @@ Character / Event / Scene → Info（因果仅限 Info → Info）
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
-| from_id | 是 | char/evt/scene/info 编号 |
-| to_id | 是 | info 编号 |
+| from_id | 是 | Character/Event/Scene/Info id |
+| to_id | 是 | Info id |
 | type | 是 | "涉及" 或 "因果" |
 | detail | 否 | 关联说明 |
 | time | 否 | 信息关联发生的时间 |
@@ -145,8 +145,8 @@ Event → Event
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
-| from_id | 是 | evt 编号 |
-| to_id | 是 | evt 编号 |
+| from_id | 是 | Event id |
+| to_id | 是 | Event id |
 | type | 是 | "因果"/"先后"/"包含" |
 | detail | 否 | 关联说明 |
 
@@ -154,88 +154,37 @@ Event → Event
 
 ## LOAD CSV 导入模板
 
-### 节点导入模板
+### import.cypher 格式规则
+
+| 规则 | 说明 |
+|------|------|
+| 格式 | **内联 MERGE**，所有数据直接写在 cypher 中，不使用 LOAD CSV |
+| 分隔符 | `;`（单分号），每条语句以 `;` 结尾 |
+| 注释 | **不使用 `//` 注释**，说明写在 `_summary.md` |
+| 导入顺序 | 节点在前，边在后；节点按 Character → Scene → Event → Info 排列 |
+| 字符串 | Cypher 单引号 `'...'`，内容中的 `'` 需转义为 `\'` |
+
+> 不使用 LOAD CSV 的原因：LOAD CSV 的 `file:///` 依赖 Neo4j import 目录，内联 MERGE 可直接用 `execute_cypher.py -f --multi --json` 执行，零文件路径依赖。
+
+> `//` 注释会导致 `execute_cypher.py` 的 `split_cypher_statements` 跳过整段语句，因此 import.cypher 中不得包含任何 `//` 注释。
+
+### 节点模板
 
 ```cypher
-// 角色
-LOAD CSV WITH HEADERS FROM 'file:///nodes_char.csv' AS row
-MERGE (n:Character {id: row.id})
-SET n.name = row.name,
-    n.gender = row.gender,
-    n.description = row.description,
-    n.birth_year = toInteger(row.birth_year),
-    n.character_tags = row.character_tags
-;;
-
-// 场景
-LOAD CSV WITH HEADERS FROM 'file:///nodes_scene.csv' AS row
-MERGE (n:Scene {id: row.id})
-SET n.name = row.name,
-    n.description = row.description
-;;
-
-// 事件
-LOAD CSV WITH HEADERS FROM 'file:///nodes_event.csv' AS row
-MERGE (n:Event {id: row.id})
-SET n.title = row.title,
-    n.time = row.time,
-    n.description = row.description,
-    n.type = row.type
-;;
-
-// 信息
-LOAD CSV WITH HEADERS FROM 'file:///nodes_info.csv' AS row
-MERGE (n:Info {id: row.id})
-SET n.title = row.title,
-    n.content = row.content,
-    n.knowledge_level = toInteger(row.knowledge_level)
-;;
+MERGE (n:Character {id: '<id>'}) SET n.name = '<姓名>', n.gender = '<性别>', n.description = '<简介>', n.character_tags = '<标签>';
+MERGE (n:Scene {id: '<id>'}) SET n.name = '<名称>', n.description = '<描述>';
+MERGE (n:Event {id: '<id>'}) SET n.title = '<标题>', n.time = '<时间>', n.description = '<描述>', n.type = '<类型>';
+MERGE (n:Info {id: '<id>'}) SET n.title = '<标题>', n.content = '<内容>', n.knowledge_level = <1/2/3>;
 ```
 
-### 边导入模板
+### 边模板
 
 ```cypher
-// relation: Character → Character
-LOAD CSV WITH HEADERS FROM 'file:///edges_relation.csv' AS row
-MATCH (a:Character {id: row.from_id})
-MATCH (b:Character {id: row.to_id})
-MERGE (a)-[:relation {type: row.type, detail: row.detail, start_time: row.start_time, end_time: row.end_time}]->(b)
-;;
-
-// involved: Character → Event
-LOAD CSV WITH HEADERS FROM 'file:///edges_involved.csv' AS row
-MATCH (a:Character {id: row.from_id})
-MATCH (b:Event {id: row.to_id})
-MERGE (a)-[:involved {role: row.role, detail: row.detail}]->(b)
-;;
-
-// occurred_at: Event → Scene
-LOAD CSV WITH HEADERS FROM 'file:///edges_occurred_at.csv' AS row
-MATCH (a:Event {id: row.from_id})
-MATCH (b:Scene {id: row.to_id})
-MERGE (a)-[:occurred_at {detail: row.detail}]->(b)
-;;
-
-// at: Character → Scene
-LOAD CSV WITH HEADERS FROM 'file:///edges_at.csv' AS row
-MATCH (a:Character {id: row.from_id})
-MATCH (b:Scene {id: row.to_id})
-MERGE (a)-[:at {type: row.type, detail: row.detail, start_time: row.start_time, end_time: row.end_time}]->(b)
-;;
-
-// link: Character/Event/Scene/Info → Info
-LOAD CSV WITH HEADERS FROM 'file:///edges_link.csv' AS row
-MATCH (a) WHERE a.id = row.from_id AND (labels(a) = ['Character'] OR labels(a) = ['Event'] OR labels(a) = ['Scene'] OR labels(a) = ['Info'])
-MATCH (b:Info {id: row.to_id})
-MERGE (a)-[:link {type: row.type, detail: row.detail, time: row.time}]->(b)
-;;
-
-// evt_relation: Event → Event
-LOAD CSV WITH HEADERS FROM 'file:///edges_evt_relation.csv' AS row
-MATCH (a:Event {id: row.from_id})
-MATCH (b:Event {id: row.to_id})
-MERGE (a)-[:evt_relation {type: row.type, detail: row.detail}]->(b)
-;;
+MATCH (a:Character {id: '<from_id>'}), (b:Character {id: '<to_id>'}) MERGE (a)-[:relation {type: '<关系类型>', detail: '<详情>'}]->(b);
+MATCH (a:Character {id: '<from_id>'}), (b:Event {id: '<to_id>'}) MERGE (a)-[:involved {role: '<角色>', detail: '<详情>'}]->(b);
+MATCH (a:Event {id: '<from_id>'}), (b:Scene {id: '<to_id>'}) MERGE (a)-[:occurred_at {detail: '<详情>'}]->(b);
+MATCH (a:Character {id: '<from_id>'}), (b:Scene {id: '<to_id>'}) MERGE (a)-[:at {type: '<关联类型>', detail: '<详情>'}]->(b);
+MATCH (a:Character {id: '<from_id>'}), (b:Info {id: '<to_id>'}) MERGE (a)-[:link {type: '涉及', detail: '<详情>', time: '<时间>'}]->(b);
+MATCH (a:Info {id: '<from_id>'}), (b:Info {id: '<to_id>'}) MERGE (a)-[:link {type: '因果', detail: '<详情>'}]->(b);
+MATCH (a:Event {id: '<from_id>'}), (b:Event {id: '<to_id>'}) MERGE (a)-[:evt_relation {type: '<因果/先后/包含>', detail: '<详情>'}]->(b);
 ```
-
-> 节点导入在前，边导入在后。整数类型字段需 `toInteger()` 转换。时间字段保持字符串格式。

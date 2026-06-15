@@ -30,6 +30,9 @@ SCRIPT=".claude/skills/nrt-narrative-grower/scripts/narrative_grower.py"
 
 # neo4j-helper 脚本（本项目内，用于 apply 时的写入操作）
 NEO4J_HELPER=".claude/skills/infra-neo4j-helper/scripts"
+
+# snowflake ID 生成器
+SF_GEN="python .claude/scripts/snowflake_base62.py"
 ```
 
 ## Neo4j 标签约定
@@ -76,7 +79,7 @@ python $SCRIPT analyze --password 12345678
 
 ```json
 {
-  "analysis_id": "analysis_20260606_001",
+  "analysis_id": "<snowflake_id>",
   "timestamp": "...",
   "summary": {
     "total_opportunities": 8,
@@ -123,14 +126,21 @@ Claude 基于 `00_init/大纲.md` 中的世界观和角色设定，结合分析�
 
 ### Step 3: 写入草案文件
 
-将草案写入 `01_叙事数据/drafts/draft_NNN.md`，格式：
+先为草案和新实体生成 snowflake ID：
+
+```bash
+# 生成草案 ID + 事件 ID + 信息 ID（按需调整数量）
+$SF_GEN -n 10 -q
+```
+
+将草案写入 `01_叙事数据/drafts/draft_<snowflake_id>.md`，格式：
 
 ```markdown
 ---
-draft_id: draft_NNN
+draft_id: <snowflake_id>
 status: pending
 created_at: YYYY-MM-DD
-analysis_source: analysis_XXXXXXXX_NNNNNN
+analysis_source: <analysis_snowflake_id>
 opportunity_type: temporal_gap_fill | implicit_relation | character_revival | ...
 priority: high | medium | low
 title: "草案标题"
@@ -142,33 +152,39 @@ title: "草案标题"
 （缺口描述，引用分析结果）
 
 ## 建议新增事件
-### evt_NNN: Day XX -- 事件标题
+### <event_snowflake_id>: Day XX -- 事件标题
 
 > **时间**：Day XX 时段
 > **类型**：行动 / 交流 / 转折 / 状态变化
-> **场景**：scene_XXX 场景名
-> **参与角色**：char_XXX(角色名)、char_XXX(角色名)
+> **场景**：<scene_name>（从数据库查找 ID）
+> **参与角色**：<char_name>（从数据库查找 ID）、<char_name>
 
 （创意叙述内容，1-3 段自然语言描写）
 
 > **叙事意义**：（该事件在整体叙事中的作用）
 
-### evt_NNN+1: ...
+### <next_event_id>: ...
 
 ## 建议新增关系
 
 | 角色A | 角色B | 关系类型 | 详情 | 时间 | 理由 |
 |-------|-------|---------|------|------|------|
-| char_XXX | char_XXX | 关系类型 | 详情 | 时间 | 基于哪些共享事件推断 |
+| <char_name> | <char_name> | 关系类型 | 详情 | 时间 | 基于哪些共享事件推断 |
 
 ## 建议新增信息
 
 | ID | 标题 | 内容 | 知识层 | 关联实体 | 理由 |
 |----|------|------|--------|---------|------|
-| info_NNN | 标题 | 内容 | 2 | char_XXX | 理由 |
+| <info_snowflake_id> | 标题 | 内容 | 2 | <entity_name> | 理由 |
 
 ## 引用依据
-（关联已有图实体 ID 的因果/时序/角色弧引用）
+（关联已有图实体的 snowflake ID 因果/时序/角色弧引用）
+```
+
+**引用已有实体**时，通过名称从数据库查找 ID：
+```cypher
+MATCH (c:Character) WHERE c.name='角色名' RETURN c.id AS id
+MATCH (s:Scene) WHERE s.name='场景名' RETURN s.id AS id
 ```
 
 ### Step 4: 通知用户
@@ -189,7 +205,7 @@ title: "草案标题"
 ### Step 1: 通过脚本导入
 
 ```bash
-python $SCRIPT apply --draft 01_叙事数据/drafts/draft_NNN.md --password 12345678
+python $SCRIPT apply --draft 01_叙事数据/drafts/draft_<snowflake_id>.md --password 12345678
 ```
 
 脚本会：
@@ -207,35 +223,34 @@ python $SCRIPT apply --draft 01_叙事数据/drafts/draft_NNN.md --password 1234
 
 ```bash
 python $NEO4J_HELPER/execute_cypher.py --multi --password 12345678 <<EOF
-MERGE (e:Event {id: 'evt_031'}) SET e.title = '...', e.time = 'Day 20', e.type = '行动';
-MATCH (c:Character {id: 'char_003'}), (e:Event {id: 'evt_031'})
+MERGE (e:Event {id: '<snowflake_id>'}) SET e.title = '...', e.time = 'Day 20', e.type = '行动';
+MATCH (c:Character {id: '<char_id>'}), (e:Event {id: '<snowflake_id>'})
 MERGE (c)-[:involved {role: '当事人'}]->(e);
 EOF
 ```
 
 ### Step 3: 报告
 
-报告导入了哪些节点（编号 + 名称）和哪些边（类型 + 方向）。
+报告导入了哪些节点（名称 + snowflake ID）和哪些边（类型 + 方向）。
 
 ---
 
 ## ID 分配规则
 
-新实体 ID 必须在已有最大 ID 基础上递增：
+所有节点 ID 使用雪花算法 Base62 编码（如 `Nv93TkkkgC`），全局唯一，无前缀。
 
+生成命令：
 ```bash
-# 查询各类型最大 ID（通过 neo4j-helper）
-python $NEO4J_HELPER/execute_cypher.py \
-  -c "MATCH (e:Event) RETURN e.id AS id ORDER BY id DESC LIMIT 1" \
-  --password 12345678 --json
+python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
 ```
 
-| 节点 | 前缀 | 格式 |
-|------|------|------|
-| 角色 | `char_` | `char_NNN` |
-| 事件 | `evt_` | `evt_NNN` |
-| 场景 | `scene_` | `scene_NNN` |
-| 信息 | `info_` | `info_NNN` |
+引用已有实体时，通过名称从数据库查找（不依赖 CSV）：
+```cypher
+MATCH (c:Character) WHERE c.name='角色名' RETURN c.id AS id
+MATCH (e:Event) WHERE e.title='事件标题' RETURN e.id AS id
+MATCH (s:Scene) WHERE s.name='场景名' RETURN s.id AS id
+MATCH (i:Info) WHERE i.title='信息标题' RETURN i.id AS id
+```
 
 ---
 

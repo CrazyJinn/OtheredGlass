@@ -19,7 +19,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| char_id | 角色 ID（如 `char_001`） | 由 agent 传入 |
+| char_id | 角色 ID（snowflake Base62） | 由 agent 传入 |
 | target_status | 推进目标：`1`（仅提示词）或 `2`（到图片） | `2` |
 
 ## 流程
@@ -29,7 +29,7 @@ allowed-tools: Read, Bash, Write, Edit
 从 Character 节点出发，仅返回 StandingIllustration 的直接前驱（IllusDesign、LanguageStyle）：
 
 ```cypher
-MATCH (ch:Character {id: 'char_NNN'})
+MATCH (ch:Character {id: $char_id})
 MATCH (ch)-[:has_voice_style]->(voice:LanguageStyle)
 MATCH (ch)-[:has_appearance]->(:AppearanceStyle)-[:produces]->(:DesignSheet)-[:produces]->(illus:IllusDesign)
 RETURN illus, voice
@@ -47,16 +47,28 @@ RETURN illus, voice
 | P1（核心 NPC） | 6 | 按角色定制 |
 | P2（一般 NPC） | 2 | 默认、微笑 |
 
-为每个变体创建节点和边：
+为每个变体创建节点和边。先生成 snowflake ID（按变体数量批量生成）：
+
+```bash
+# 例如 P0 角色需要 10 个变体
+python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 10 -q
+```
+
+创建节点时填入该变体的表情/动作标签（参考 `55_manage/标签库.json` 的 StandingIllustration 维度）。示例（"微笑"变体）：
 
 ```cypher
-MERGE (stand:StandingIllustration {id: 'stand_NNN'})
-SET stand.variant_label = '微笑', stand.status = 0, stand.approve = null;
-MATCH (illus:IllusDesign {id: 'illus_NNN'}), (stand:StandingIllustration {id: 'stand_NNN'})
+MERGE (stand:StandingIllustration {id: '<snowflake_id>'})
+SET stand.variant_label = '微笑',
+    stand.eye = '微闭', stand.brow = '舒展', stand.mouth = '微笑',
+    stand.head_angle = '正视', stand.hand = '自然垂放', stand.foot = '并拢',
+    stand.status = 0, stand.approve = 'pending';
+MATCH (illus:IllusDesign {id: '<illus_id>'}), (stand:StandingIllustration {id: '<snowflake_id>'})
 MERGE (illus)-[r:expands_to]->(stand) SET r.sync = true, r.variant_label = '微笑';
-MATCH (voice:LanguageStyle {id: 'voice_NNN'}), (stand:StandingIllustration {id: 'stand_NNN'})
+MATCH (voice:LanguageStyle {id: '<voice_id>'}), (stand:StandingIllustration {id: '<snowflake_id>'})
 MERGE (voice)-[r:ref_style]->(stand) SET r.sync = true;
 ```
+
+各变体的表情/动作标签根据变体语义推导（如"愤怒"→ `brow=紧锁; mouth=咬牙; hand=握拳`；"战斗"→ `hand=握拳; foot=前后开立`）。标签值从 `标签库.json` 的 eye/brow/mouth/head_angle/hand/foot 候选中选。
 
 ### 3. 推进状态
 
@@ -70,21 +82,20 @@ MERGE (voice)-[r:ref_style]->(stand) SET r.sync = true;
 
 使用 Skill 工具调用 `char-prompt-assembler`，传入参数 `<node_id> StandingIllustration '<data_json>'`。
 
-data 参数结构：
+data 参数结构（stand.tags 从节点读取，含表情/动作标签）：
 ```json
 {
-  "stand": { "variant_label": "..." },
+  "stand": { "tags": {"variant_label":"...","eye":"...","brow":"...","mouth":"...","head_angle":"...","hand":"...","foot":"..."} },
   "voice": { "emotion_patterns": "...", "description": "..." }
 }
 ```
 
 char-prompt-assembler 将：
-- 解析 data 参数获取变体信息 + 语言风格数据
+- 解析 data 获取 stand.tags（表情/动作标签）+ voice 情绪数据
 - 读取 `00_init/美术风格.md`
-- 按固定格式组装：`[角色名]立绘，纯绿背景，全身像，[表情描述]，[手部动作]，[脚部动作]，[风格标签]`
-- 提取要素：眼部、眉毛、嘴部、面部肌肉、头部角度 + 手部动作 + 脚部动作
-- 参考语言风格的 emotion_patterns 补充情绪表达
-- 更新节点：写入 prompt 字段，status → 1
+- 把 tags 展开为自然语言，按固定格式组装：`[角色名]立绘，[背景色]背景，全身像，[表情描述]，[手部动作]，[脚部动作]，[风格标签]`
+- 参考 voice.emotion_patterns 补充情绪表达
+- 用 Write 写 prompt 文件，更新节点 `prompt_path` + status → 1（不再写 prompt 字段）
 
 #### 1 → 2：生成图片
 
@@ -93,9 +104,9 @@ char-prompt-assembler 将：
 使用 Skill 工具调用 `infra-image-generator`，传入参数 `<node_id>`。
 
 infra-image-generator 将：
-- 读取节点 prompt 字段
+- 读取节点 `prompt_path` 文件
 - 图生图模式：参考 IllusDesign.image_path（`expands_to` 边上游）
-- 输出路径：`./06_角色美术/<char_id>/立绘/<costume_id>/<variant_label>/立绘.png`
+- 输出路径：`./06_角色美术/<char_name>/<CostumeStyle.name>/<variant_label>立绘.png`
 - 更新节点：写入 image_path，status → 2，approve → 'pending'
 
 ### 4. 保存结果

@@ -397,15 +397,16 @@ SET n.name = $name, n.description = $desc, n.status = 0
 // AppearanceStyle — 外貌特征
 MERGE (n:AppearanceStyle {id: $id})
 SET n.name = $name, n.appearance = $appearance,
-    n.color_direction = $color_dir, n.shape_language = $shape_lang,
+    n.shape_language = $shape_lang,
     n.visual_tone = $visual_tone, n.first_impression = $first_imp,
-    n.memory_points = $mem_pts, n.status = 0
+    n.status = 0
 
 // CostumeStyle — 着装特征
 MERGE (n:CostumeStyle {id: $id})
-SET n.name = $name, n.default_outfit = $outfit,
-    n.material_direction = $mat_dir, n.posture = $posture,
-    n.accessories = $accessories, n.status = 0
+SET n.name = $name,
+    n.outfit_style = $outfit_style, n.garment = $garment,
+    n.footwear = $footwear, n.accessory_type = $accessory_type,
+    n.status = 0, n.approve = null
 
 // DesignSheet — 三视图设计稿
 MERGE (n:DesignSheet {id: $id})
@@ -555,12 +556,12 @@ MERGE (voice)-[r:ref_style]->(stand) SET r.sync = true;
 
 ```cypher
 // 单轮：查找某节点的 sync=true 下游
-MATCH (src {id: 'appearance_001'})-[r]->(dst)
+MATCH (src {id: $id})-[r]->(dst)
 WHERE r.sync = true
 RETURN dst.id AS id, labels(dst)[0] AS type
 
 // 重置下游节点 status + 清除 approve
-MATCH (n {id: 'design_001'})
+MATCH (n {id: $id})
 SET n.status = 0, n.approve = null
 RETURN n.id, labels(n)[0] AS type
 ```
@@ -626,17 +627,13 @@ RETURN n.approve = 'approved' AS is_approved
 
 ```cypher
 // 通用：从某节点出发，多跳遍历所有关联节点和边
-MATCH (src {id: 'char_001'})
+MATCH (src {id: $id})
 OPTIONAL MATCH (src)-[r1]->(data)
 OPTIONAL MATCH (data)-[r2*0..3]->(downstream)
 RETURN src, r1, data, r2, downstream
 
 // 查询某节点的所有 status=0 的下游（待处理）
-MATCH (src {id: 'char_001'})-[*1..3]->(n)
+MATCH (src {id: $id})-[*1..3]->(n)
 WHERE n.status = 0
 RETURN labels(n)[0] AS type, n.id AS id, n.status AS status
-
-// ID 分配：查询某前缀的最大编号
-MATCH (n) WHERE n.id STARTS WITH 'appearance_'
-RETURN n.id ORDER BY n.id DESC LIMIT 1
 ```

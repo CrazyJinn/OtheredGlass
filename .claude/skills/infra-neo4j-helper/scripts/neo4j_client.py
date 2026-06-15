@@ -41,20 +41,20 @@ class Neo4jClient:
     def connect(self):
         """建立连接"""
         if not self.password:
-            print("错误：未设置密码。请在工作目录的 settings.json 中设置 neo4j_password 字段。")
+            print("错误：未设置密码。请在工作目录的 settings.json 中设置 neo4j_password 字段。", file=sys.stderr)
             sys.exit(1)
         self.driver = GraphDatabase.driver(
             self.uri, auth=(self.user, self.password)
         )
         self.driver.verify_connectivity()
-        print(f"已连接: {self.uri}")
+        print(f"已连接: {self.uri}", file=sys.stderr)
         return self
 
     def close(self):
         """关闭连接"""
         if self.driver:
             self.driver.close()
-            print("连接已关闭")
+            print("连接已关闭", file=sys.stderr)
 
     def __enter__(self):
         self.connect()

@@ -1,6 +1,8 @@
 """
 graph_builder.py — 自增长图构建器
 命令：auto-ids, add-nodes, add-edges, execute-tx, discover
+
+ID 生成：使用雪花算法 Base62 编码，全局唯一，无前缀。
 """
 
 import argparse
@@ -18,20 +20,43 @@ if os.path.isdir(_NEO4J_HELPER):
 
 from neo4j_client import Neo4jClient, create_client
 
-# ─── ID 前缀映射 ───────────────────────────────────────────────
-ID_CONFIG = {
-    "char":         {"prefix": "char_",  "label": "char"},
-    "Location":     {"prefix": "loc_",   "label": "Location"},
-    "Event":        {"prefix": "evt_",   "label": "Event"},
-    "Info":         {"prefix": "info_",  "label": "Info"},
-    "Faction":      {"prefix": "faction_", "label": "Faction"},
-    "LocationType": {"prefix": "loctype_", "label": "LocationType"},
+# 导入雪花算法 ID 生成器
+_SNOWFLAKE_DIR = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "scripts"
+))
+if os.path.isdir(_SNOWFLAKE_DIR):
+    sys.path.insert(0, _SNOWFLAKE_DIR)
+
+from snowflake_base62 import SnowflakeGenerator
+
+_id_gen = SnowflakeGenerator()
+
+# ─── 标签映射 ─────────────────────────────────────────────────
+LABEL_MAP = {
+    "char":                "Character",
+    "Character":           "Character",
+    "Location":            "Location",
+    "Event":               "Event",
+    "Info":                "Info",
+    "Faction":             "Faction",
+    "LocationType":        "LocationType",
+    "AppearanceStyle":     "AppearanceStyle",
+    "CostumeStyle":        "CostumeStyle",
+    "DesignSheet":         "DesignSheet",
+    "IllusDesign":         "IllusDesign",
+    "StandingIllustration": "StandingIllustration",
+    "LanguageStyle":       "LanguageStyle",
+    "Scene":               "Scene",
 }
 
 # 显示名映射
 DISPLAY_NAME = {
-    "char": "姓名", "Location": "名称", "Event": "标题",
-    "Info": "标题", "Faction": "name", "LocationType": "name",
+    "char": "name", "Character": "name", "Location": "name",
+    "Event": "title", "Info": "title", "Faction": "name",
+    "LocationType": "name", "Scene": "name",
+    "AppearanceStyle": "name", "CostumeStyle": "name",
+    "DesignSheet": "name", "IllusDesign": "name",
+    "StandingIllustration": "name", "LanguageStyle": "name",
 }
 
 
@@ -40,74 +65,39 @@ def get_password(args):
 
 
 # ═══════════════════════════════════════════════════════════════
-# auto-ids: 查询各节点类型当前最大编号，返回下一个可用 ID
+# auto-ids: 生成雪花 ID（无需查数据库）
 # ═══════════════════════════════════════════════════════════════
-def cmd_auto_ids(client, labels):
+def cmd_auto_ids(labels):
+    """为请求的标签生成雪花 Base62 ID。"""
     result = {}
     for label in labels:
-        cfg = ID_CONFIG.get(label)
-        if not cfg:
-            result[label] = {"error": f"未知标签: {label}"}
-            continue
-        prefix = cfg["prefix"]
-        rows = client.run(
-            f"MATCH (n:{cfg['label']}) RETURN n.编号 AS id ORDER BY n.编号 DESC LIMIT 1"
-        )
-        if rows and rows[0]["id"]:
-            raw = rows[0]["id"]
-            # 从 prefix_NNN 或 prefix_scope_NNN 提取最后一段数字
-            num_str = raw.replace(prefix, "")
-            parts = num_str.split("_")
-            current_max = int(parts[-1]) if parts[-1].isdigit() else 0
-        else:
-            current_max = 0
-        next_num = current_max + 1
-        next_id = f"{prefix}{next_num:03d}"
-        result[label] = {"current_max": current_max, "next_id": next_id}
+        neo4j_label = LABEL_MAP.get(label, label)
+        new_id = _id_gen.next_id_base62()
+        result[label] = {"label": neo4j_label, "next_id": new_id}
     return result
 
 
 # ═══════════════════════════════════════════════════════════════
-# add-nodes: 原子创建节点（事务内查max+MERGE）
+# add-nodes: 原子创建节点（使用雪花 ID）
 # ═══════════════════════════════════════════════════════════════
 def cmd_add_nodes(client, nodes_json):
-    """nodes_json: [{"label":"char", "props":{"姓名":"张三","性别":"男"}}]"""
+    """nodes_json: [{"label":"char", "props":{"name":"张三","gender":"男"}}]"""
     nodes = json.loads(nodes_json) if isinstance(nodes_json, str) else nodes_json
     created = []
     cypher_list = []
 
-    # 先收集每种 label 的 max 查询 + MERGE 语句
-    label_counters = {}
     for node in nodes:
         label = node["label"]
         props = node.get("props", {})
-        cfg = ID_CONFIG.get(label)
-        if not cfg:
-            return {"error": f"未知标签: {label}"}
+        neo4j_label = LABEL_MAP.get(label, label)
 
-        prefix = cfg["prefix"]
-        label_key = cfg["label"]
+        # 如果没有显式提供 id，则用雪花算法生成
+        if "id" not in props:
+            props["id"] = _id_gen.next_id_base62()
 
-        # 如果没有显式提供编号，则自增分配
-        if "编号" not in props:
-            # 获取当前 max
-            if label_key not in label_counters:
-                rows = client.run(
-                    f"MATCH (n:{label_key}) RETURN n.编号 AS id ORDER BY n.编号 DESC LIMIT 1"
-                )
-                if rows and rows[0]["id"]:
-                    raw = rows[0]["id"]
-                    num_str = raw.replace(prefix, "")
-                    parts = num_str.split("_")
-                    label_counters[label_key] = int(parts[-1]) if parts[-1].isdigit() else 0
-                else:
-                    label_counters[label_key] = 0
-            label_counters[label_key] += 1
-            next_num = label_counters[label_key]
-            props["编号"] = f"{prefix}{next_num:03d}"
+        assigned_id = props["id"]
 
         # 构建 MERGE + SET
-        assigned_id = props["编号"]
         set_parts = []
         for k, v in props.items():
             if isinstance(v, int):
@@ -118,7 +108,7 @@ def cmd_add_nodes(client, nodes_json):
                 escaped = str(v).replace("'", "\\'")
                 set_parts.append(f"n.{k} = '{escaped}'")
         set_clause = ", ".join(set_parts) if set_parts else ""
-        cypher = f"MERGE (n:{label_key} {{编号: '{assigned_id}'}})"
+        cypher = f"MERGE (n:{neo4j_label} {{id: '{assigned_id}'}})"
         if set_clause:
             cypher += f" SET {set_clause}"
         cypher_list.append(cypher)
@@ -133,19 +123,19 @@ def cmd_add_nodes(client, nodes_json):
 # add-edges: 创建边（验证端点存在）
 # ═══════════════════════════════════════════════════════════════
 def cmd_add_edges(client, edges_json):
-    """edges_json: [{"type":"involved","from_id":"char_010","to_id":"evt_014","props":{"role":"参与者"}}]"""
+    """edges_json: [{"type":"involved","from_id":"<snowflake>","to_id":"<snowflake>","props":{"role":"参与者"}}]"""
     edges = json.loads(edges_json) if isinstance(edges_json, str) else edges_json
     created, skipped, errors = [], [], []
 
     # 边方向规则: edge_type -> (from_label_pattern, to_label_pattern)
     EDGE_RULES = {
-        "relation":       ("char", "char"),
-        "at":             ("char", "Location"),
+        "relation":       ("Character", "Character"),
+        "at":             ("Character", "Location"),
         "link":           (None, "Info"),        # from 可以是任意类型
-        "involved":       ("char", "Event"),
+        "involved":       ("Character", "Event"),
         "occurred_at":    ("Event", "Location"),
         "evt_relation":   ("Event", "Event"),
-        "BELONGS_TO":     ("char", "Faction"),
+        "BELONGS_TO":     ("Character", "Faction"),
         "CATEGORIZED_AS": ("Location", "LocationType"),
     }
 
@@ -162,9 +152,9 @@ def cmd_add_edges(client, edges_json):
 
         from_label, to_label = rule
 
-        # 验证端点
-        from_match = f"MATCH (a {{编号: '{from_id}'}})" if from_label is None else f"MATCH (a:{from_label} {{编号: '{from_id}'}})"
-        to_match = f"MATCH (b {{编号: '{to_id}'}})" if to_label is None else f"MATCH (b:{to_label} {{编号: '{to_id}'}})"
+        # 验证端点（使用 id 属性）
+        from_match = f"MATCH (a {{id: '{from_id}'}})" if from_label is None else f"MATCH (a:{from_label} {{id: '{from_id}'}})"
+        to_match = f"MATCH (b {{id: '{to_id}'}})" if to_label is None else f"MATCH (b:{to_label} {{id: '{to_id}'}})"
 
         # 构建属性
         prop_parts = []
@@ -202,12 +192,12 @@ def cmd_execute_tx(client, cypher_json):
 
 
 # ═══════════════════════════════════════════════════════════════
-# discover: 图算法发现 — 6种检查 + 可操作建议
+# discover: 图算法发现 — 7种检查 + 可操作建议
 # ═══════════════════════════════════════════════════════════════
 
 def _node_name(record):
     """从查询结果中提取节点显示名"""
-    return record.get("name", record.get("标题", record.get("id", "?")))
+    return record.get("name", record.get("title", record.get("id", "?")))
 
 
 def _parse_day(time_str):
@@ -227,8 +217,8 @@ def discover_orphans(client):
     """检查1: 孤立节点（零边）"""
     rows = client.run("""
         MATCH (n) WHERE NOT (n)--()
-        RETURN labels(n)[0] AS label, n.编号 AS id,
-               COALESCE(n.姓名, n.名称, n.标题, n.name) AS name
+        RETURN labels(n)[0] AS label, n.id AS id,
+               COALESCE(n.name, n.title) AS name
     """)
     suggestions = []
     for r in rows:
@@ -244,12 +234,12 @@ def discover_orphans(client):
 def discover_missing_relations(client):
     """检查2: 共享事件但无 relation 边的角色对"""
     rows = client.run("""
-        MATCH (c1:char)-[:involved]->(e:Event)<-[:involved]-(c2:char)
-        WHERE c1.编号 < c2.编号
+        MATCH (c1:Character)-[:involved]->(e:Event)<-[:involved]-(c2:Character)
+        WHERE c1.id < c2.id
           AND NOT (c1)-[:relation]-(c2)
-        RETURN c1.编号 AS char1_id, c1.姓名 AS char1_name,
-               c2.编号 AS char2_id, c2.姓名 AS char2_name,
-               COLLECT(DISTINCT e.标题) AS shared_events,
+        RETURN c1.id AS char1_id, c1.name AS char1_name,
+               c2.id AS char2_id, c2.name AS char2_name,
+               COLLECT(DISTINCT e.title) AS shared_events,
                COUNT(DISTINCT e) AS shared_count
         ORDER BY shared_count DESC
     """)
@@ -274,8 +264,8 @@ def discover_events_no_location(client):
     rows = client.run("""
         MATCH (e:Event)
         WHERE NOT (e)-[:occurred_at]->(:Location)
-        RETURN e.编号 AS id, e.标题 AS title, e.时间 AS time, e.类型 AS type
-        ORDER BY e.时间
+        RETURN e.id AS id, e.title AS title, e.time AS time, e.type AS type
+        ORDER BY e.time
     """)
     suggestions = []
     for r in rows:
@@ -283,7 +273,7 @@ def discover_events_no_location(client):
             "priority": "medium",
             "type": "event_no_location",
             "description": f"事件「{r['title']}」({r['id']}, {r['time']}) 缺少地点关联",
-            "action": f"ADD_EDGE occurred_at({r['id']}, loc_???) {{detail: '?'}}",
+            "action": f"ADD_EDGE occurred_at({r['id']}, <location_id>) {{detail: '?'}}",
             "event_id": r["id"],
         })
     return {"findings": rows, "suggestions": suggestions}
@@ -291,7 +281,7 @@ def discover_events_no_location(client):
 
 def discover_temporal_gaps(client, threshold=3):
     """检查4: 时间线缺口（超过 threshold 天无事件）"""
-    rows = client.run("MATCH (e:Event) RETURN e.编号 AS id, e.标题 AS title, e.时间 AS time")
+    rows = client.run("MATCH (e:Event) RETURN e.id AS id, e.title AS title, e.time AS time")
     # 在 Python 中处理时间排序（因为时间格式混合）
     events = []
     for r in rows:
@@ -308,7 +298,7 @@ def discover_temporal_gaps(client, threshold=3):
                 "priority": "high",
                 "type": "temporal_gap",
                 "description": f"{events[i]['time']} 到 {events[i+1]['time']} 之间有 {gap} 天空缺"
-                               f"（{events[i]['title']} → {events[i+1]['标题'] if '标题' in events[i+1] else events[i+1]['title']}）",
+                               f"（{events[i]['title']} → {events[i+1]['title']}）",
                 "action": f"建议在 Day {events[i]['day_num']+1} ~ Day {events[i+1]['day_num']-1} 之间补充事件",
                 "from_day": events[i]["day_num"],
                 "to_day": events[i + 1]["day_num"],
@@ -322,8 +312,8 @@ def discover_info_no_links(client):
     rows = client.run("""
         MATCH (i:Info)
         WHERE NOT ()-[:link]->(i)
-        RETURN i.编号 AS id, i.标题 AS title, i.知识层 AS level
-        ORDER BY i.知识层
+        RETURN i.id AS id, i.title AS title, i.knowledge_level AS level
+        ORDER BY i.knowledge_level
     """)
     suggestions = []
     for r in rows:
@@ -340,10 +330,10 @@ def discover_info_no_links(client):
 def discover_chars_no_faction(client):
     """检查6: 无阵营归属的角色（有 involved 边但无 BELONGS_TO）"""
     rows = client.run("""
-        MATCH (c:char)
+        MATCH (c:Character)
         WHERE NOT (c)-[:BELONGS_TO]->(:Faction)
           AND (c)-[:involved]->(:Event)
-        RETURN c.编号 AS id, c.姓名 AS name,
+        RETURN c.id AS id, c.name AS name,
                COUNT { (c)-[:involved]->(:Event) } AS event_count
         ORDER BY event_count DESC
     """)
@@ -353,7 +343,7 @@ def discover_chars_no_faction(client):
             "priority": "low",
             "type": "char_no_faction",
             "description": f"角色「{r['name']}」({r['id']}) 参与了 {r['event_count']} 个事件但无阵营归属",
-            "action": f"如果属于某阵营: ADD_EDGE BELONGS_TO({r['id']}, faction_???) {{role: '?'}}",
+            "action": f"如果属于某阵营: ADD_EDGE BELONGS_TO({r['id']}, <faction_id>) {{role: '?'}}",
             "char_id": r["id"],
         })
     return {"findings": rows, "suggestions": suggestions}
@@ -365,8 +355,8 @@ def discover_unlinked_events(client):
     rows = client.run("""
         MATCH (e:Event)
         WHERE NOT (e)-[:evt_relation]-()
-        RETURN e.编号 AS id, e.标题 AS title, e.时间 AS time
-        ORDER BY e.时间
+        RETURN e.id AS id, e.title AS title, e.time AS time
+        ORDER BY e.time
     """)
     suggestions = []
     for r in rows:
@@ -374,7 +364,7 @@ def discover_unlinked_events(client):
             "priority": "low",
             "type": "event_unlinked",
             "description": f"事件「{r['title']}」({r['id']}, {r['time']}) 未接入事件链（无因果/先后/包含关系）",
-            "action": f"ADD_EDGE evt_relation(evt_???, {r['id']}) {{type: '因果|先后|包含', detail: '?'}}",
+            "action": f"ADD_EDGE evt_relation(<event_id>, {r['id']}) {{type: '因果|先后|包含', detail: '?'}}",
             "event_id": r["id"],
         })
     return {"findings": rows, "suggestions": suggestions}
@@ -438,7 +428,7 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     # auto-ids
-    p_ids = sub.add_parser("auto-ids", help="查询各类型下一个可用ID")
+    p_ids = sub.add_parser("auto-ids", help="为指定标签生成雪花 ID")
     p_ids.add_argument("--labels", default="char,Location,Event,Info", help="逗号分隔的标签列表")
 
     # add-nodes
@@ -470,7 +460,7 @@ def main():
         with Neo4jClient(password=pw) as client:
             if args.command == "auto-ids":
                 labels = [l.strip() for l in args.labels.split(",")]
-                result = cmd_auto_ids(client, labels)
+                result = cmd_auto_ids(labels)
             elif args.command == "add-nodes":
                 result = cmd_add_nodes(client, args.nodes)
             elif args.command == "add-edges":

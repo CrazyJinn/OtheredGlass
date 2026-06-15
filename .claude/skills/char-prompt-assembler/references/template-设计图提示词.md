@@ -21,18 +21,14 @@
 6. **色调**：[主色调 / 饱和度 / 对比度]
 
 ## 角色设定
-<!-- 数据来源：AppearanceStyle 节点（appearance / color_direction） -->
+<!-- 数据来源：AppearanceStyle 节点（appearance）+ Character 节点（color_direction） -->
 
 1. **体型** ← AppearanceStyle.appearance：[身高 / 体型曲线 / 肩线 / 静态站姿]
 2. **面部** ← AppearanceStyle.appearance：[脸型 / 眼型+眼色 / 眉型 / 鼻 / 唇 / 默认表情气质]
 3. **发型** ← AppearanceStyle.appearance：[发色 / 长度 / 发型 / 质感 / 碎发细节]
 4. **贴身基础衣物**：穿着深色基础衣物（如黑色贴身背心+深色短裤），与肤色形成高对比，不涉及服装设计细节
-5. **外貌配色** ← AppearanceStyle.color_direction：[发色、瞳色、肤色等外貌相关配色]
+5. **外貌配色** ← Character.color_direction：[发色、瞳色、肤色等外貌相关配色]
 6. **特殊标记** ← AppearanceStyle.appearance：[疤痕 / 纹身 / 胎记 / 身体异征]
-
-## 玩家记忆点（设计重点）
-<!-- 数据来源：AppearanceStyle.memory_points -->
-- [提取记忆点，确保这些元素在提示词中被强调]
 ```
 
 ---

@@ -1,0 +1,39 @@
+{
+  "_comment": "角色美术设计元素标签库（受控词表）。按节点类型分组。简单维度：{label,multi,options,[female],[male]}；复合维度：{label,combine,groups:[{key,label,suffix,multi,options,[female],[male]}]}。差异维度用 female/male 数组追加性别专属候选（公共 options 男女都可见），前端按角色 gender 合并候选（公共 + 对应性别追加）。已选值按完整 val 存储（分号 ; 分隔），跨性别历史值不丢。画风从 00_init/美术风格.md 读取。允许自定义输入。",
+  "AppearanceStyle": {
+    "shape_language": { "label": "形状语言", "multi": false, "options": ["三角型", "方型", "倒三角", "细长型", "圆形", "不对称"] },
+    "age_impression": { "label": "年龄感", "multi": false, "options": ["青年", "成熟"], "female": ["少女", "御姐", "少妇", "熟女"], "male": ["正太", "少年", "大叔", "中年"] },
+    "body_type": { "label": "体态", "multi": false, "options": ["修长", "匀称"], "female": ["曼妙", "娇小", "丰腴", "纤细"], "male": ["健壮", "魁梧", "精瘦", "少年感"] },
+    "skin_tone": { "label": "肤色", "multi": false, "options": ["象牙白", "瓷白", "苍白", "蜜色", "健康粉", "小麦", "古铜"] },
+    "hair": { "label": "头发", "combine": "stack", "groups": [
+      { "key": "color", "label": "发色", "suffix": "色", "multi": true, "options": ["黑", "深棕", "棕", "金", "银白", "灰", "红", "蓝", "粉", "挑染"] },
+      { "key": "style", "label": "发型", "suffix": "", "multi": true, "options": ["直发", "微卷", "凌乱", "披散", "利落短发"], "female": ["大波浪", "单马尾", "双马尾", "盘发"], "male": ["寸头", "背头", "中分", "偏分", "飞机头"] },
+      { "key": "length", "label": "发长", "suffix": "", "multi": false, "options": ["短发", "中发", "长发", "超长发"] }
+    ]},
+    "eye": { "label": "眼睛", "combine": "stack", "groups": [
+      { "key": "color", "label": "瞳色", "suffix": "色", "multi": true, "options": ["黑", "深棕", "琥珀", "蓝", "绿", "金", "紫", "红", "异色"] },
+      { "key": "shape", "label": "眼型", "suffix": "", "multi": false, "options": ["杏眼", "丹凤眼", "圆眼", "细长眼", "下垂眼", "上挑眼"] }
+    ]},
+    "lip_shape": { "label": "唇形", "multi": false, "options": ["薄唇", "微笑唇"], "female": ["饱满", "厚唇", "樱桃唇"] },
+    "marks": { "label": "特殊标记", "multi": true, "options": ["无", "疤痕", "纹身", "胎记", "泪痣", "美人痣"], "male": ["胡茬", "络腮胡"] }
+  },
+  "CostumeStyle": {
+    "outfit_style": { "label": "着装风格", "multi": true, "options": ["休闲", "正式", "运动", "性感", "可爱", "学院", "街头", "古风", "慵懒"] },
+    "garment": { "label": "服装", "combine": "pair", "groups": [
+      { "key": "material", "label": "材质", "suffix": "", "multi": true, "options": ["棉", "丝绸", "蕾丝", "皮革", "金属", "针织", "雪纺", "牛仔", "帆布", "纱", "亚麻", "府绸"] },
+      { "key": "color", "label": "颜色", "suffix": "", "multi": false, "options": ["白", "黑", "灰", "米", "棕", "藏蓝", "红", "粉", "绿", "黄", "紫", "金", "银"] },
+      { "key": "type", "label": "服装类型", "suffix": "", "multi": true, "options": ["衬衫", "T恤", "背心", "外套", "卫衣", "裤装"], "female": ["吊带", "连衣裙", "半身裙", "内衣", "开衫", "抹胸", "薄黑丝袜", "透肉丝袜", "白丝袜", "网袜", "过膝袜", "大腿袜", "连裤袜", "吊带袜"], "male": ["西装", "夹克", "马甲", "polo衫", "工装", "中筒袜", "运动长袜"] }
+    ]},
+    "footwear": { "label": "鞋类", "multi": false, "options": ["运动鞋", "帆布鞋", "凉鞋", "拖鞋", "赤足", "靴"], "female": ["高跟鞋", "玛丽珍鞋", "松糕鞋"], "male": ["皮鞋", "工装靴", "板鞋", "牛津鞋"] },
+    "accessory_type": { "label": "配饰类型", "multi": true, "options": ["无", "耳饰", "项链", "手表", "眼镜", "戒指", "手链", "发饰", "手持物", "围巾", "帽子"] }
+  },
+  "StandingIllustration": {
+    "variant_label": { "label": "变体", "multi": false, "options": ["默认", "微笑", "愤怒", "悲伤", "惊讶", "思考", "坚定", "恐惧", "战斗", "负伤"] },
+    "eye": { "label": "眼部", "multi": false, "options": ["正常", "睁大", "微闭", "下垂", "锐利", "半闭"] },
+    "brow": { "label": "眉毛", "multi": false, "options": ["舒展", "上扬", "紧锁", "内八字", "微挑"] },
+    "mouth": { "label": "嘴部", "multi": false, "options": ["微笑", "紧抿", "微张", "咬牙", "大笑", "嘟嘴", "轻启"] },
+    "head_angle": { "label": "头部角度", "multi": false, "options": ["正视", "微侧", "上扬", "低垂", "回眸"] },
+    "hand": { "label": "手部动作", "multi": false, "options": ["自然垂放", "叉腰", "握拳", "单手托腮", "持物", "交叉胸前", "一手插兜", "双手背后", "抱臂", "抚发", "掩唇"] },
+    "foot": { "label": "脚部动作", "multi": false, "options": ["并拢", "前后开立", "单脚微抬", "跨步", "脚尖内扣", "外展", "重心偏移"] }
+  }
+}

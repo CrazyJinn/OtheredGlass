@@ -1,7 +1,7 @@
 ---
 name: infra-image-generator
 description: |
-  OfoxAI Images API 调用层。从图节点读取 prompt 字段调用 API 生成图片：
+  OfoxAI Images API 调用层。从图节点读取 prompt_path 文件调用 API 生成图片：
   DesignSheet（文生图）、IllusDesign（图生图）、StandingIllustration（图生图）。
   生成后设 approve='pending' 等待审批。在需要生成美术图片或被其他 skill 调用时使用。
 argument-hint: <node_id>
@@ -12,7 +12,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 # OfoxAI 图片生成
 
-读取节点 `prompt` 字段和参考图路径，调用 API 生成图片。**不组装提示词，不读取风格文件。**
+读取节点 `prompt_path`（prompt 文件路径）和参考图路径，调用 API 生成图片。**不组装提示词，不读取风格文件。**
 
 脚本：`${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py`
 
@@ -33,15 +33,14 @@ allowed-tools: Read, Bash, Write, Edit
 
 ### 1. 确定目标节点
 
-由调用方传入目标节点 ID（参数 `$0`）。通过 neo4j-helper 查询节点类型、状态和提示词：
+由调用方传入目标节点 ID（参数 `$0`）。通过 neo4j-helper 查询节点类型、状态和 prompt 文件路径：
 
 ```cypher
 MATCH (n {id: $node_id})
-RETURN labels(n)[0] AS type, n.status AS status,
-       n.prompt AS prompt, n.image_path AS image_path
+RETURN labels(n)[0] AS type, n.status AS status, n.prompt_path AS prompt_path, n.image_path AS image_path
 ```
 
-前置检查：status 必须为 1（提示词已由 prompt-assembler 组装完成），prompt 不为空。
+前置检查：status 必须为 1（提示词文件已由 prompt-assembler 生成），`prompt_path` 不为空。
 
 ### 2. 确定生成方式和参考图
 
@@ -59,22 +58,32 @@ RETURN labels(n)[0] AS type, n.status AS status,
 
 #### DesignSheet（文生图）
 
+prompt 从节点 `prompt_path` 指向的文件读取，经管道直送（支持多行 markdown，不经 shell 字面量）：
+
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit "<n.prompt>" --size 1024x1024 --quality low -o "./06_角色美术/<char_id>/设计图.png"
+cat "<n.prompt_path>" \
+  | python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit --prompt-stdin \
+      --size 1024x1024 -o "./06_角色美术/<char_name>/设计图.png"
 ```
 
 #### IllusDesign（图生图）
 
+prompt 从 `prompt_path` 文件读取；参考图 `--image` 是短路径，仍走命令行参数：
+
 ```bash
 # 以 DesignSheet 图片为参考
-python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit "<n.prompt>" --image "<DesignSheet.image_path>" --size 1024x1024 --quality low -o "./06_角色美术/<char_id>/立绘设计/<costume_id>/设计图.png"
+cat "<n.prompt_path>" \
+  | python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit --prompt-stdin \
+      --image "<DesignSheet.image_path>" --size 1024x1024 -o "./06_角色美术/<char_name>/<CostumeStyle.name>/立绘设计图.png"
 ```
 
 #### StandingIllustration（图生图）
 
 ```bash
 # 以 IllusDesign 图片为参考
-python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit "<n.prompt>" --image "<IllusDesign.image_path>" --size 1024x1024 --quality low -o "./06_角色美术/<char_id>/立绘/<costume_id>/<variant_label>/立绘.png"
+cat "<n.prompt_path>" \
+  | python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit --prompt-stdin \
+      --image "<IllusDesign.image_path>" --size 1024x1024 -o "./06_角色美术/<char_name>/<CostumeStyle.name>/<variant_label>立绘.png"
 ```
 
 ### 4. 更新图节点

@@ -28,6 +28,9 @@ SCRIPT=".claude/skills/nrt-graph-builder/scripts/graph_builder.py"
 
 # neo4j-helper 脚本（本项目内，用于查询已有实体）
 NEO4J_HELPER=".claude/skills/infra-neo4j-helper/scripts"
+
+# snowflake ID 生成器
+SF_GEN="python .claude/scripts/snowflake_base62.py"
 ```
 
 ---
@@ -46,29 +49,32 @@ NEO4J_HELPER=".claude/skills/infra-neo4j-helper/scripts"
 - 阵营/地点类型（如用户提及）
 
 **关系**（新边，从文本中推断）：
-- "是星耀电竞的选手" → `BELONGS_TO(char, faction_001) {role: "选手"}`
-- "参与了第5天的聚会" → `involved(char, evt_XXX) {role: "参与者"}`
-- "发生在咖啡店" → `occurred_at(evt_XXX, loc_006)`
-- "和XX是恋人" → `relation(char_A, char_B) {type: "恋爱"}`
-- "导致XX事件" → `evt_relation(evt_A, evt_B) {type: "因果"}`
+- "是星耀电竞的选手" → `BELONGS_TO(char, faction_id) {role: "选手"}`
+- "参与了第5天的聚会" → `involved(char_id, event_id) {role: "参与者"}`
+- "发生在咖啡店" → `occurred_at(event_id, location_id)`
+- "和XX是恋人" → `relation(char_A_id, char_B_id) {type: "恋爱"}`
+- "导致XX事件" → `evt_relation(event_A_id, event_B_id) {type: "因果"}`
 
-### Step 2: 解析已有实体
+### Step 2: 查找已有实体
 
-对用户提到的已有实体（如"陈默"、"星耀电竞"），用 neo4j-helper 确认编号：
+对用户提到的已有实体（如"陈默"、"星耀电竞"），通过名称从数据库查找：
 
 ```bash
 python $NEO4J_HELPER/execute_cypher.py \
-  -c "MATCH (n {姓名: '陈默'}) RETURN n.编号 AS id, labels(n)[0] AS label" \
+  -c "MATCH (c:Character) WHERE c.name='陈默' RETURN c.id AS id, c.name AS name, labels(c)[0] AS label" \
   --password 12345678 --json
 ```
 
-如果实体已存在，复用编号。如果不存在，标记为待创建。
+如果实体已存在，复用其 snowflake ID。如果不存在，标记为待创建。
 
-### Step 3: 自增 ID
+### Step 3: 生成新节点 ID
+
+新节点使用 snowflake Base62 ID：
 
 ```bash
-python $SCRIPT auto-ids --labels char,Event --password 12345678
-# 返回: {"char": {"next_id": "char_010"}, "Event": {"next_id": "evt_028"}}
+# 为新节点生成 ID
+python $SF_GEN -n 3 -q
+# 输出 3 个 snowflake ID（每行一个）
 ```
 
 ### Step 4: 执行写入
@@ -76,28 +82,28 @@ python $SCRIPT auto-ids --labels char,Event --password 12345678
 **方案A — 使用 add-nodes + add-edges（推荐，自带ID分配和端点验证）**：
 
 ```bash
-# 创建节点
+# 创建节点（脚本自动分配 snowflake ID）
 python $SCRIPT add-nodes \
-  --nodes '[{"label":"char","props":{"姓名":"张三","性别":"男"}}]' \
+  --nodes '[{"label":"char","props":{"name":"张三","gender":"男"}}]' \
   --password 12345678
 
-# 创建边
+# 创建边（使用已有实体的 snowflake ID）
 python $SCRIPT add-edges \
-  --edges '[{"type":"BELONGS_TO","from_id":"char_010","to_id":"faction_001","props":{"role":"选手"}}]' \
+  --edges '[{"type":"BELONGS_TO","from_id":"<snowflake_id>","to_id":"<faction_id>","props":{"role":"选手"}}]' \
   --password 12345678
 ```
 
-**方案B — 使用 execute-tx（需要手动拼ID，适合复杂批量操作）**：
+**方案B — 使用 execute-tx（需要手动拼 ID，适合复杂批量操作）**：
 
 ```bash
 python $SCRIPT execute-tx \
-  --cypher '["MERGE (c:char {编号:'"'"'char_010'"'"'}) SET c.姓名='"'"'张三'"'"'", "MATCH ... MERGE ..."]' \
+  --cypher '["MERGE (c:Character {id: '"'"'<snowflake_id>'"'"'}) SET c.name='"'"'张三'"'"'", "MATCH ... MERGE ..."]' \
   --password 12345678
 ```
 
 ### Step 5: 报告
 
-向用户报告：创建了哪些节点（编号+名称）、哪些边（类型+方向）。
+向用户报告：创建了哪些节点（名称 + snowflake ID）、哪些边（类型+方向）。
 
 ---
 
@@ -131,20 +137,20 @@ python $SCRIPT discover --type missing-relations --password 12345678
 
 ```
 🔴 高优先级 (3条)
-  1. 苏晓禾(char_005) 和 沈暮雪(char_007) 共同参与3个事件但无人物关系边
-     → ADD_EDGE relation(char_005, char_007) {type: '?', detail: '?'}
+  1. 苏晓禾 和 沈暮雪 共同参与3个事件但无人物关系边
+     → ADD_EDGE relation(<char_id_1>, <char_id_2>) {type: '?', detail: '?'}
   2. Day 10 到 Day 15 之间有 5 天空缺
      → 建议在 Day 11 ~ Day 14 之间补充事件
   ...
 
 🟡 中优先级 (2条)
-  1. 事件「evt_003 陆择车祸死亡」缺少地点关联
-     → ADD_EDGE occurred_at(evt_003, loc_???) {detail: '?'}
+  1. 事件「陆择车祸死亡」缺少地点关联
+     → ADD_EDGE occurred_at(<event_id>, <location_id>) {detail: '?'}
   ...
 
 🟢 低优先级 (1条)
-  1. 角色「陆择」(char_001) 参与了15个事件但无阵营归属
-     → 如果属于某阵营: ADD_EDGE BELONGS_TO(char_001, faction_???) {role: '?'}
+  1. 角色「陆择」参与了15个事件但无阵营归属
+     → 如果属于某阵营: ADD_EDGE BELONGS_TO(<char_id>, <faction_id>) {role: '?'}
 ```
 
 ### Step 3: 用户确认后执行
@@ -159,13 +165,13 @@ python $SCRIPT discover --type missing-relations --password 12345678
 
 | 边类型 | From → To | 属性 |
 |--------|-----------|------|
-| relation | char → char | type, detail |
-| at | char → Location | type, detail |
+| relation | Character → Character | type, detail |
+| at | Character → Location | type, detail |
 | link | 任意 → Info | type, detail, time |
-| involved | char → Event | role, detail |
+| involved | Character → Event | role, detail |
 | occurred_at | Event → Location | detail |
 | evt_relation | Event → Event | type, detail |
-| BELONGS_TO | char → Faction | role |
+| BELONGS_TO | Character → Faction | role |
 | CATEGORIZED_AS | Location → LocationType | 无 |
 
 ---
@@ -173,6 +179,6 @@ python $SCRIPT discover --type missing-relations --password 12345678
 ## 错误处理
 
 - **连接失败**：提示"请先启动 Neo4j 服务"
-- **端点不存在**：报告缺失端点，建议先创建或确认编号
+- **端点不存在**：报告缺失端点，建议先创建或通过名称查找确认 ID
 - **重复边**：MERGE 幂等，不报错，报告"已存在"
 - **方向错误**：脚本预校验边类型规则
