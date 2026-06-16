@@ -3,7 +3,7 @@ name: infra-image-generator
 description: |
   OfoxAI Images API 调用层。从图节点读取 prompt_path 文件调用 API 生成图片：
   DesignSheet（文生图）、IllusDesign（图生图）、StandingIllustration（图生图）。
-  生成后设 approve='pending' 等待审批。在需要生成美术图片或被其他 skill 调用时使用。
+  生成后设 status=10（待审）等待审批。在需要生成美术图片或被其他 skill 调用时使用。
 argument-hint: <node_id>
 arguments:
   - node_id
@@ -88,11 +88,11 @@ cat "<n.prompt_path>" \
 
 ### 4. 更新图节点
 
-通过 neo4j-helper 更新目标节点的 image_path、status 和 approve：
+通过 neo4j-helper 更新目标节点的 image_path 和 status：
 
 ```cypher
 MATCH (n {id: $node_id})
-SET n.image_path = '<图片路径>', n.status = 2, n.approve = 'pending'
+SET n.image_path = '<图片路径>', n.status = 10
 ```
 
 ---

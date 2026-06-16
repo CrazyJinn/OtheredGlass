@@ -48,7 +48,7 @@ python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
 
 ```cypher
 MERGE (ds:DesignSheet {id: '<snowflake_id>'})
-SET ds.status = 0, ds.approve = 'pending';
+SET ds.status = 0;
 MATCH (app:AppearanceStyle {id: '<appearance_id>'}), (ds:DesignSheet {id: '<snowflake_id>'})
 MERGE (app)-[r:produces]->(ds) SET r.sync = true;
 ```
@@ -89,7 +89,7 @@ infra-image-generator 将：
 - 读取节点 prompt 字段
 - 文生图模式（无参考图）
 - 输出路径：`./06_角色美术/<char_name>/设计图.png`
-- 更新节点：写入 image_path，status → 2，approve → 'pending'
+- 更新节点：写入 image_path，status → 10
 
 ### 4. 保存结果
 

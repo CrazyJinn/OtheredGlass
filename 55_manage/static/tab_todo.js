@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
-   tab_todo.js — Tab 3 地点美术（只读 Scene 列表）+ Tab 4 剧情占位
+   tab_todo.js — Tab 3 地点美术（只读 Location 列表）+ Tab 4 剧情占位
    ═══════════════════════════════════════════════════════════════ */
 
-async function loadSceneList() {
+async function loadLocationList() {
   const tbody = $('scene-tbody');
   const emptyEl = $('scene-empty');
   if (!tbody) return;
@@ -10,7 +10,7 @@ async function loadSceneList() {
   tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-4">加载中...</td></tr>';
 
   try {
-    const data = await api('/api/narrative/list?label=Scene');
+    const data = await api('/api/narrative/list?label=Location');
     const nodes = data.nodes || [];
     if (!nodes.length) {
       tbody.innerHTML = '';

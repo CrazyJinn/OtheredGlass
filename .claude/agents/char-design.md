@@ -26,7 +26,7 @@ Schema 文件：`00_init/Schema/角色美术.md`
 
 ### 2. 查询当前状态
 
-通过 infra-neo4j-helper 查询角色的美术子图，了解每个节点的 status 和 approve 状态。
+通过 infra-neo4j-helper 查询角色的美术子图，了解每个节点的 status 状态。
 
 ### 3. 决策与调度
 
@@ -52,16 +52,17 @@ Schema 文件：`00_init/Schema/角色美术.md`
 
 **节点由 skill 创建**：agent 不直接创建任何图节点或边。
 
-### 4. Approve 检查
+### 4. 审批检查
 
-CostumeStyle 和生产节点在完成后需等待审批：
+CostumeStyle 和生产节点在完成后需等待审批。审批态与生产态数值隔开：生产用 `0/1/2`，**审批专属 `10`（待审）/ `11`（批准）**。
 
-- `approve = null` → 未完成，继续处理
-- `approve = 'pending'` → 等待 dashboard 审批，不可推进下游
-- `approve = 'approved'` → 已通过，允许下游推进
-- `approve = 'rejected'` → 已驳回，重置 status 为 0 重新处理
+判定规则：
+- status < 完成值（CostumeStyle 为 `1`，生产节点为 `2`）→ 未完成，继续处理
+- status = `10` → 等待 dashboard 审批，不可推进下游
+- status = `11` → 已批准，允许下游推进
+- 驳回 → status 归 `0` 重新处理
 
-只有 `approve = 'approved'` 的节点才视为真正完成。
+只有 status = `11` 的节点才视为真正完成。
 
 **若全部完成且已通过审批** → 报告完成状态。
 
@@ -69,7 +70,7 @@ CostumeStyle 和生产节点在完成后需等待审批：
 
 ## Sync 级联
 
-当用户提及"同步/级联"或某节点数据变更时：沿 sync=true 出边 BFS，将下游节点 status 重置为 0、approve 清除为 null，然后重新处理。
+当用户提及"同步/级联"或某节点数据变更时：沿 sync=true 出边 BFS，将下游节点 status 重置为 0，然后重新处理。
 
 sync=false 的边阻断级联。
 

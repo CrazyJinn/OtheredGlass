@@ -2,7 +2,7 @@
 
 模板中的节点标签、边类型、属性名以实际 Schema 为准。以下基于项目 Schema（叙事基础 + 角色美术）作为示例。
 
-字段名使用 schema 中定义的英文名。节点标签使用 schema 中的英文名（Character / Event / Scene / Info）。
+字段名使用 schema 中定义的英文名。节点标签使用 schema 中的英文名（Character / Event / Location / Info）。
 
 **注意**：模板中的 `$xxx` 是占位符，实际执行时替换为字面值（字符串用单引号，数字直接写）。不使用参数化查询。
 
@@ -28,8 +28,8 @@
 MERGE (n:Character {id: $id})
 SET n.name = $name, n.gender = $gender, n.birth_year = toInteger($birth_year)
 
-// Scene
-MERGE (n:Scene {id: $id})
+// Location
+MERGE (n:Location {id: $id})
 SET n.name = $name, n.description = $desc
 
 // Event
@@ -111,8 +111,8 @@ MATCH (n:TestNode) DETACH DELETE n
 MATCH (a:Character {id: $from_id}), (b:Character {id: $to_id})
 MERGE (a)-[:relation {type: $type, detail: $detail}]->(b)
 
-// at: Character → Scene
-MATCH (a:Character {id: $from_id}), (b:Scene {id: $to_id})
+// at: Character → Location
+MATCH (a:Character {id: $from_id}), (b:Location {id: $to_id})
 MERGE (a)-[:at {type: $type, detail: $detail}]->(b)
 
 // involved: Character → Event
@@ -123,8 +123,8 @@ MERGE (a)-[:involved {role: $role, detail: $detail}]->(b)
 MATCH (a {id: $from_id}), (b:Info {id: $to_id})
 MERGE (a)-[:link {type: $type, detail: $detail, time: $time}]->(b)
 
-// occurred_at: Event → Scene
-MATCH (a:Event {id: $from_id}), (b:Scene {id: $to_id})
+// occurred_at: Event → Location
+MATCH (a:Event {id: $from_id}), (b:Location {id: $to_id})
 MERGE (a)-[:occurred_at {detail: $detail}]->(b)
 
 // evt_relation: Event → Event
@@ -169,7 +169,7 @@ MATCH (a:Character {id: $from_id})-[r:relation]->(b:Character {id: $to_id})
 DELETE r
 
 // 删除某类型的所有边
-MATCH (a:Character)-[r:at]->(b:Scene) DELETE r
+MATCH (a:Character)-[r:at]->(b:Location) DELETE r
 ```
 
 ---
@@ -397,7 +397,7 @@ SET n.name = $name, n.description = $desc, n.status = 0
 // AppearanceStyle — 外貌特征
 MERGE (n:AppearanceStyle {id: $id})
 SET n.name = $name, n.appearance = $appearance,
-    n.shape_language = $shape_lang,
+    n.shape_language = $shape_lang, n.ethnicity = $ethnicity,
     n.visual_tone = $visual_tone, n.first_impression = $first_imp,
     n.status = 0
 
@@ -406,22 +406,22 @@ MERGE (n:CostumeStyle {id: $id})
 SET n.name = $name,
     n.outfit_style = $outfit_style, n.garment = $garment,
     n.footwear = $footwear, n.accessory_type = $accessory_type,
-    n.status = 0, n.approve = null
+    n.status = 0
 
 // DesignSheet — 三视图设计稿
 MERGE (n:DesignSheet {id: $id})
-SET n.image_path = $image_path, n.approve = null, n.status = 0
+SET n.image_path = $image_path, n.status = 0
 
 // IllusDesign — 立绘设计图
 MERGE (n:IllusDesign {id: $id})
 SET n.adaptation_notes = $notes,
-    n.image_path = $image_path, n.approve = null, n.status = 0
+    n.image_path = $image_path, n.status = 0
 
 // StandingIllustration — 立绘变体
 MERGE (n:StandingIllustration {id: $id})
 SET n.variant_label = $label, n.expression = $expression,
     n.pose = $pose, n.image_path = $image_path,
-    n.approve = null, n.status = 0
+    n.status = 0
 
 // Faction — 阵营（按需）
 MERGE (n:Faction {id: $id})
@@ -513,7 +513,7 @@ MERGE (ch)-[r:has_voice_style]->(voice) SET r.sync = true;
 
 // Step 3: 创建 DesignSheet
 MERGE (ds:DesignSheet {id: $design_id})
-SET ds.approve = null, ds.status = 0;
+SET ds.status = 0;
 
 // Step 4: AppearanceStyle → DesignSheet（produces）
 MATCH (app:AppearanceStyle {id: $app_id}), (ds:DesignSheet {id: $design_id})
@@ -526,7 +526,7 @@ MERGE (app)-[r:produces]->(ds) SET r.sync = true;
 // Step 1: 创建 IllusDesign
 MERGE (illus:IllusDesign {id: $illus_id})
 SET illus.adaptation_notes = '',
-    illus.approve = null, illus.status = 0;
+    illus.status = 0;
 
 // Step 2: 连接两个上游（sync=false，不自动级联）
 MATCH (ds:DesignSheet {id: $design_id}), (illus:IllusDesign {id: $illus_id})
@@ -538,7 +538,7 @@ MERGE (cos)-[r:outfit_for]->(illus) SET r.sync = false;
 // Step 3: 创建 StandingIllustration 变体（以"微笑"为例）
 MERGE (stand:StandingIllustration {id: $stand_id})
 SET stand.variant_label = $label, stand.expression = '',
-    stand.pose = '', stand.approve = null, stand.status = 0;
+    stand.pose = '', stand.status = 0;
 
 MATCH (illus:IllusDesign {id: $illus_id}), (stand:StandingIllustration {id: $stand_id})
 MERGE (illus)-[r:expands_to]->(stand)
@@ -560,63 +560,66 @@ MATCH (src {id: $id})-[r]->(dst)
 WHERE r.sync = true
 RETURN dst.id AS id, labels(dst)[0] AS type
 
-// 重置下游节点 status + 清除 approve
+// 重置下游节点 status
 MATCH (n {id: $id})
-SET n.status = 0, n.approve = null
+SET n.status = 0
 RETURN n.id, labels(n)[0] AS type
 ```
 
 ---
 
-## Approve 审批操作
+## 审批操作（用 status 表达审批态）
+
+> 不再使用 `approve` 字段。审批态与生产态数值隔开：生产流程用 `0/1/2`，**审批专属用 `10`（待审）/ `11`（批准）**。提交审批 → `status = 10`；通过 → `status = 11`；驳回 → `status` 归 `0`。下游推进条件统一为 `status = 11`。
 
 ### 设置审批状态
 
 ```cypher
-// 图片生成完成后设为待审
+// 图片生成完成后提交审批（status 推进到 10）
 MATCH (n:DesignSheet {id: $id})
-SET n.approve = 'pending', n.status = 2
+SET n.status = 10
 
 MATCH (n:IllusDesign {id: $id})
-SET n.approve = 'pending', n.status = 2
+SET n.status = 10
 
 MATCH (n:StandingIllustration {id: $id})
-SET n.approve = 'pending', n.status = 2
+SET n.status = 10
 
 // Dashboard 审批通过
 MATCH (n {id: $id})
-SET n.approve = 'approved'
+SET n.status = 11
 
 // Dashboard 驳回（需重做）
 MATCH (n {id: $id})
-SET n.approve = 'rejected', n.status = 0
+SET n.status = 0
 ```
 
 ### 查询待审节点
 
 ```cypher
-// 所有待审节点
+// 所有待审节点（待审 = 10）
 MATCH (n)
-WHERE n.approve = 'pending'
+WHERE n.status = 10
+  AND (n:CostumeStyle OR n:DesignSheet OR n:IllusDesign OR n:StandingIllustration)
 RETURN labels(n)[0] AS type, n.id AS id, n.status AS status
 
 // 某角色的待审节点
 MATCH (ch:Character {id: $char_id})-[*1..4]->(n)
-WHERE n.approve = 'pending'
+WHERE n.status = 10
 RETURN labels(n)[0] AS type, n.id AS id
 
-// 按节点类型查询已通过节点
+// 按节点类型查询已通过节点（已通过 = 11）
 MATCH (n:DesignSheet)
-WHERE n.approve = 'approved'
+WHERE n.status = 11
 RETURN n.id, n.image_path
 ```
 
 ### 条件检查（下游推进前置）
 
 ```cypher
-// 检查某节点是否已通过审批
+// 检查某节点是否已通过审批（已通过 = status = 11）
 MATCH (n {id: $id})
-RETURN n.approve = 'approved' AS is_approved
+RETURN n.status = 11 AS is_approved
 ```
 
 ---

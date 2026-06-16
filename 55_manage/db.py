@@ -53,9 +53,9 @@ def close_client():
 NAR_STATS_QUERY = """
 MATCH (c:Character) WITH count(c) AS chars
 MATCH (e:Event) WITH chars, count(e) AS events
-MATCH (s:Scene) WITH chars, events, count(s) AS scenes
-MATCH (i:Info) WITH chars, events, scenes, count(i) AS infos
-RETURN chars, events, scenes, infos
+MATCH (s:Location) WITH chars, events, count(s) AS locations
+MATCH (i:Info) WITH chars, events, locations, count(i) AS infos
+RETURN chars, events, locations, infos
 """
 
 NAR_LIST_QUERIES = {
@@ -72,8 +72,8 @@ NAR_LIST_QUERIES = {
                n.type AS type, n.description AS description
         ORDER BY n.time LIMIT 200
     """,
-    "Scene": """
-        MATCH (n:Scene)
+    "Location": """
+        MATCH (n:Location)
         RETURN n.id AS id, n.name AS name, n.description AS description
         ORDER BY n.name LIMIT 200
     """,
@@ -117,7 +117,6 @@ RETURN c.id AS char_id, c.name AS char_name, c.gender AS char_gender,
        ap.id AS appearance_id, ap.status AS appearance_status,
        ls.id AS language_id, ls.status AS language_status,
        ds.id AS design_id, ds.status AS design_status,
-       ds.approve AS design_approve,
        ds.image_path AS design_image
 ORDER BY c.id
 """
@@ -126,12 +125,12 @@ COSTUME_QUERY = """
 MATCH (c:Character)
 OPTIONAL MATCH (c)-[:has_costume]->(co:CostumeStyle)
 RETURN c.id AS char_id,
-       collect({id: co.id, status: co.status, name: co.name, approve: co.approve}) AS costumes
+       collect({id: co.id, status: co.status, name: co.name}) AS costumes
 """
 
 COSTUME_APPROVAL_QUERY = """
 MATCH (c:Character)-[:has_costume]->(co:CostumeStyle)
-WHERE co.approve = 'pending'
+WHERE co.status = 10
 RETURN c.id AS char_id, c.name AS char_name,
        co.id AS costume_id, co.name AS costume_name,
        co.garment AS outfit, co.accessory_type AS accessories
@@ -143,9 +142,9 @@ MATCH (ds:DesignSheet)-[r1:produces]->(id:IllusDesign)
 OPTIONAL MATCH (id)-[:expands_to]->(si:StandingIllustration)
 RETURN ds.id AS design_id,
        id.id AS illus_id, id.status AS illus_status,
-       id.approve AS illus_approve, id.image_path AS illus_image,
+       id.image_path AS illus_image,
        collect(DISTINCT {
-           id: si.id, status: si.status, approve: si.approve,
+           id: si.id, status: si.status,
            image_path: si.image_path, label: si.variant_label
        }) AS stands
 """
@@ -164,7 +163,7 @@ ORDER BY b.id
 
 IMAGE_APPROVAL_QUERY = """
 MATCH (n)
-WHERE n.approve = 'pending'
+WHERE n.status = 10
   AND (n:DesignSheet OR n:IllusDesign OR n:StandingIllustration)
 RETURN labels(n)[0] AS type, n.id AS id, n.image_path AS image_path
 ORDER BY n.id
@@ -198,7 +197,7 @@ MATCH path = (source {id: $node_id})-[r*1..6]->(downstream)
 WHERE ALL(rel IN relationships(path) WHERE rel.sync <> false)
   AND downstream.status IS NOT NULL
 WITH DISTINCT downstream
-SET downstream.status = 0, downstream.approve = null, downstream.image_path = null
+SET downstream.status = 0, downstream.image_path = null
 RETURN labels(downstream)[0] AS type, downstream.id AS id
 """
 
@@ -206,16 +205,16 @@ SELF_RESET_CYPHER = """
 MATCH (n {id: $node_id})
 WHERE labels(n)[0] IN ['DesignSheet', 'IllusDesign', 'StandingIllustration']
   AND n.status >= 2
-SET n.status = 1, n.approve = null, n.image_path = null
+SET n.status = 1, n.image_path = null
 RETURN labels(n)[0] AS type, n.id AS id
 """
 
 APPROVE_NODE_CYPHER = """
-MATCH (n {id: $node_id}) SET n.approve = 'approved' RETURN n.id AS id
+MATCH (n {id: $node_id}) SET n.status = 11 RETURN n.id AS id
 """
 
 REJECT_NODE_CYPHER = """
-MATCH (n {id: $node_id}) SET n.status = 0, n.approve = null RETURN n.id AS id
+MATCH (n {id: $node_id}) SET n.status = 0 RETURN n.id AS id
 """
 
 SYNC_APPROVE_CYPHER = """
@@ -234,7 +233,7 @@ def get_narrative_stats():
     """返回叙事节点统计 + 边统计"""
     stats = _client.run(NAR_STATS_QUERY)
     edges = _client.run(NAR_EDGE_STATS_QUERY)
-    result = stats[0] if stats else {"chars": 0, "events": 0, "scenes": 0, "infos": 0}
+    result = stats[0] if stats else {"chars": 0, "events": 0, "locations": 0, "infos": 0}
     result["edges"] = edges
     return result
 
@@ -293,7 +292,6 @@ def get_art_full_status():
         if did and iid:
             illus_by_design.setdefault(did, []).append({
                 "id": iid, "status": row["illus_status"],
-                "approve": row.get("illus_approve"),
                 "image_path": row.get("illus_image"),
             })
             for s in (row.get("stands") or []):
@@ -329,8 +327,7 @@ def _is_complete(char):
         char.get("appearance_status") is not None and char["appearance_status"] >= 1
         and char.get("language_status") is not None and char["language_status"] >= 1
         and all(c.get("status") is not None and c["status"] >= 1 for c in char.get("costumes", []))
-        and char.get("design_status") is not None and char["design_status"] >= 2
-        and char.get("design_approve") == "approved"
+        and char.get("design_status") == 11
     )
 
 
@@ -356,7 +353,7 @@ def _derive_todos(characters):
             })
             continue
 
-        # 着装只看生产状态(status)；approve='pending' 属于审批事项，
+        # 着装只看生产状态(status)；待审(status=10) 属于审批事项，
         # 由专门的"着装审批"区呈现，不阻塞生产待办链（否则会掩盖下游级联重置）
         costume_ok = (
             len(co_list) > 0
@@ -378,7 +375,6 @@ def _derive_todos(characters):
             continue
 
         ds = char.get("design_status")
-        ds_ap = char.get("design_approve")
         if ds is None or ds == 0:
             todos.append(_todo(cid, name, "DesignSheet", "设计图",
                                 "missing" if ds is None else "0",
@@ -390,9 +386,9 @@ def _derive_todos(characters):
                                 "infra-image-generator", "图片生成",
                                 f"为 {char.get('design_id')} 生成图片"))
             continue
-        if ds == 2 and ds_ap != "approved":
-            todos.append(_todo(cid, name, "DesignSheet", "设计图", "2",
-                                "approve", "待审批", "", approve=ds_ap))
+        if ds == 10:
+            todos.append(_todo(cid, name, "DesignSheet", "设计图", "10",
+                                "approve", "待审批", ""))
             continue
 
         illus = char.get("illus", [])
@@ -402,11 +398,10 @@ def _derive_todos(characters):
                                 f"为 {cid} ({name}) 创建立绘设计图"))
             continue
 
-        pending_illus = [il for il in illus if il["status"] is None or il["status"] < 2 or il.get("approve") != "approved"]
+        pending_illus = [il for il in illus if il["status"] is None or il["status"] != 11]
         if pending_illus:
             for il in pending_illus[:3]:
                 il_s = il["status"]
-                il_ap = il.get("approve")
                 if il_s is None or il_s == 0:
                     todos.append(_todo(cid, name, "IllusDesign", "立绘设计",
                                         "missing" if il_s is None else "0",
@@ -414,9 +409,9 @@ def _derive_todos(characters):
                 elif il_s == 1:
                     todos.append(_todo(cid, name, "IllusDesign", "立绘设计", "1",
                                         "infra-image-generator", "图片生成", f"为 {il['id']} 生成图片"))
-                elif il_s == 2 and il_ap != "approved":
-                    todos.append(_todo(cid, name, "IllusDesign", "立绘设计", "2",
-                                        "approve", "待审批", "", approve=il_ap))
+                elif il_s == 10:
+                    todos.append(_todo(cid, name, "IllusDesign", "立绘设计", "10",
+                                        "approve", "待审批", ""))
             continue
 
         stands = char.get("stands", [])
@@ -427,12 +422,12 @@ def _derive_todos(characters):
     return todos
 
 
-def _todo(cid, name, ntype, ntype_cn, status, action, action_cn, prompt, approve=None):
+def _todo(cid, name, ntype, ntype_cn, status, action, action_cn, prompt):
     return {
         "char_id": cid, "char_name": name,
         "node_type": ntype, "node_type_cn": ntype_cn,
         "status": status, "action": action, "action_cn": action_cn,
-        "prompt": prompt, "approve": approve,
+        "prompt": prompt,
     }
 
 
@@ -444,7 +439,7 @@ def update_node(node_id: str, props: dict):
     """更新节点属性，返回级联重置结果"""
     cascade = _client.run(CASCADE_PREVIEW_CYPHER, {"node_id": node_id})
     # 过滤掉不可修改的字段
-    safe_props = {k: v for k, v in props.items() if k not in ("id", "status", "approve")}
+    safe_props = {k: v for k, v in props.items() if k not in ("id", "status")}
     _client.run(UPDATE_NODE_CYPHER, {"node_id": node_id, "props": safe_props})
     self_reset = _client.run(SELF_RESET_CYPHER, {"node_id": node_id})
     reset = _client.run(CASCADE_RESET_CYPHER, {"node_id": node_id})

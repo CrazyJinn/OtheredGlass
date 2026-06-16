@@ -5,6 +5,7 @@
     "age_impression": { "label": "年龄感", "multi": false, "options": ["青年", "成熟"], "female": ["少女", "御姐", "少妇", "熟女"], "male": ["正太", "少年", "大叔", "中年"] },
     "body_type": { "label": "体态", "multi": false, "options": ["修长", "匀称"], "female": ["曼妙", "娇小", "丰腴", "纤细"], "male": ["健壮", "魁梧", "精瘦", "少年感"] },
     "skin_tone": { "label": "肤色", "multi": false, "options": ["象牙白", "瓷白", "苍白", "蜜色", "健康粉", "小麦", "古铜"] },
+    "ethnicity": { "label": "面孔/人种", "multi": false, "options": ["中国面孔", "日系面孔", "韩系面孔", "东南亚面孔", "欧美面孔", "中东面孔", "非裔面孔", "混血面孔"] },
     "hair": { "label": "头发", "combine": "stack", "groups": [
       { "key": "color", "label": "发色", "suffix": "色", "multi": true, "options": ["黑", "深棕", "棕", "金", "银白", "灰", "红", "蓝", "粉", "挑染"] },
       { "key": "style", "label": "发型", "suffix": "", "multi": true, "options": ["直发", "微卷", "凌乱", "披散", "利落短发"], "female": ["大波浪", "单马尾", "双马尾", "盘发"], "male": ["寸头", "背头", "中分", "偏分", "飞机头"] },

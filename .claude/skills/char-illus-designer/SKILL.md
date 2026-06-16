@@ -49,7 +49,7 @@ python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
 
 ```cypher
 MERGE (illus:IllusDesign {id: '<snowflake_id>'})
-SET illus.status = 0, illus.approve = 'pending';
+SET illus.status = 0;
 MATCH (ds:DesignSheet {id: '<design_id>'}), (illus:IllusDesign {id: '<snowflake_id>'})
 MERGE (ds)-[r:produces]->(illus) SET r.sync = false;
 MATCH (cos:CostumeStyle {id: '<costume_id>'}), (illus:IllusDesign {id: '<snowflake_id>'})
@@ -92,7 +92,7 @@ infra-image-generator 将：
 - 读取节点 prompt 字段
 - 图生图模式：参考 DesignSheet.image_path（`produces` 边上游）
 - 输出路径：`./06_角色美术/<char_name>/<CostumeStyle.name>/立绘设计图.png`
-- 更新节点：写入 image_path，status → 2，approve → 'pending'
+- 更新节点：写入 image_path，status → 10
 
 ### 4. 保存结果
 

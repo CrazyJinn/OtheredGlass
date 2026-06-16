@@ -17,9 +17,9 @@ allowed-tools: Read, Bash
 
 | 输入类型 | 可能包含的节点 | 示例 |
 |----------|---------------|------|
-| 完整章节 | 全部类型（角色、事件、场景、信息） | "第一章-7号农场.md" |
+| 完整章节 | 全部类型（角色、事件、地点、信息） | "第一章-7号农场.md" |
 | 角色背景 | 角色、信息 | "角色名：幼时失去双亲被教会收养" |
-| 世界观设定 | 场景、信息 | "骑士团信奉人类至上" |
+| 世界观设定 | 地点、信息 | "骑士团信奉人类至上" |
 | 对话提纲 | 信息、角色、场景 | 场景级对话笔记 |
 | 只言片语 | 信息、角色 | "老莫说南方营地被扫荡了" |
 
@@ -38,7 +38,7 @@ allowed-tools: Read, Bash
 节点类型（4 种）：
 - **角色（Character）** — 每个有名字的真实人物
 - **事件（Event）** — 某时某刻发生的某件事
-- **场景（Scene）** — 具体地点/游戏场景
+- **地点（Location）** — 具体地点/游戏场景
 - **信息（Info）** — 每条对读者有意义的新认知
 
 ### 3. 信息提取（核心步骤）
@@ -72,9 +72,9 @@ allowed-tools: Read, Bash
 |--------|------|------|
 | relation | Character → Character | 人物关系，可随时间变化 |
 | involved | Character → Event | 人物参与事件 |
-| occurred_at | Event → Scene | 事件发生地点 |
-| at | Character → Scene | 人物—场景关联 |
-| link | Character/Event/Scene → Info | 信息关联（因果仅限 Info→Info） |
+| occurred_at | Event → Location | 事件发生地点 |
+| at | Character → Location | 人物—场景关联 |
+| link | Character/Event/Location → Info | 信息关联（因果仅限 Info→Info） |
 | evt_relation | Event → Event | 事件关联（因果/先后/包含） |
 
 - 完整内容：构建完整故事主线链

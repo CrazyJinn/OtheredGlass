@@ -21,7 +21,7 @@ id,title,content,knowledge_level
 <snowflake_id>,北边夏季降灰色雪,"北边夏天下灰色的雪，异常气象",2
 ```
 
-nodes_scene.csv:
+nodes_location.csv:
 ```csv
 id,name,description
 <snowflake_id>,南方营地,被魔物成群扫荡的营地
@@ -141,7 +141,7 @@ id,title,time,description,type
 <snowflake_id>,陆择加入星耀电竞,2024-04-11,陆择正式加入星耀电竞战队，成为队长,行动
 ```
 
-nodes_scene.csv:
+nodes_location.csv:
 ```csv
 id,name,description
 <snowflake_id>,星耀电竞基地,星耀电竞战队所在地

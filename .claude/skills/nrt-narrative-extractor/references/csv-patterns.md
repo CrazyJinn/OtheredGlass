@@ -23,7 +23,7 @@ id,title,content,knowledge_level
 
 ## 文件命名
 
-- 节点: `nodes_{节点类型小写}.csv`（如 `nodes_char.csv`、`nodes_info.csv`、`nodes_scene.csv`）
+- 节点: `nodes_{节点类型小写}.csv`（如 `nodes_char.csv`、`nodes_info.csv`、`nodes_location.csv`）
 - 边: `edges_{边类型小写}.csv`（如 `edges_relation.csv`、`edges_involved.csv`）
 - 导入脚本: `import.cypher`
 - 摘要: `_summary.md`
@@ -46,7 +46,7 @@ id,title,content,knowledge_level
 | birth_year | 否 | int | 如 2003 |
 | character_tags | 否 | string | 人设标签，逗号分隔，如"沉默寡言, 外冷内热" |
 
-#### nodes_scene.csv
+#### nodes_location.csv
 
 | 列名 | 必填 | 类型 | 说明 |
 |------|------|------|------|
@@ -103,22 +103,22 @@ Character → Event
 
 #### edges_occurred_at.csv
 
-Event → Scene
+Event → Location
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
 | from_id | 是 | Event id |
-| to_id | 是 | Scene id |
+| to_id | 是 | Location id |
 | detail | 否 | 如"跳江地点""约会地点" |
 
 #### edges_at.csv
 
-Character → Scene
+Character → Location
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
 | from_id | 是 | Character id |
-| to_id | 是 | Scene id |
+| to_id | 是 | Location id |
 | type | 是 | 关联类型，如"居住""前往""工作" |
 | detail | 否 | |
 | start_time | 否 | 关联开始时间 |
@@ -126,18 +126,18 @@ Character → Scene
 
 #### edges_link.csv
 
-Character / Event / Scene → Info（因果仅限 Info → Info）
+Character / Event / Location → Info（因果仅限 Info → Info）
 
 | 列名 | 必填 | 说明 |
 |------|------|------|
-| from_id | 是 | Character/Event/Scene/Info id |
+| from_id | 是 | Character/Event/Location/Info id |
 | to_id | 是 | Info id |
 | type | 是 | "涉及" 或 "因果" |
 | detail | 否 | 关联说明 |
 | time | 否 | 信息关联发生的时间 |
 
 > type=`因果` 仅用于 Info → Info，表示原因→结果。
-> from_id 仅限 Character、Event、Scene、Info 四种节点。
+> from_id 仅限 Character、Event、Location、Info 四种节点。
 
 #### edges_evt_relation.csv
 
@@ -161,7 +161,7 @@ Event → Event
 | 格式 | **内联 MERGE**，所有数据直接写在 cypher 中，不使用 LOAD CSV |
 | 分隔符 | `;`（单分号），每条语句以 `;` 结尾 |
 | 注释 | **不使用 `//` 注释**，说明写在 `_summary.md` |
-| 导入顺序 | 节点在前，边在后；节点按 Character → Scene → Event → Info 排列 |
+| 导入顺序 | 节点在前，边在后；节点按 Character → Location → Event → Info 排列 |
 | 字符串 | Cypher 单引号 `'...'`，内容中的 `'` 需转义为 `\'` |
 
 > 不使用 LOAD CSV 的原因：LOAD CSV 的 `file:///` 依赖 Neo4j import 目录，内联 MERGE 可直接用 `execute_cypher.py -f --multi --json` 执行，零文件路径依赖。
@@ -172,7 +172,7 @@ Event → Event
 
 ```cypher
 MERGE (n:Character {id: '<id>'}) SET n.name = '<姓名>', n.gender = '<性别>', n.description = '<简介>', n.character_tags = '<标签>';
-MERGE (n:Scene {id: '<id>'}) SET n.name = '<名称>', n.description = '<描述>';
+MERGE (n:Location {id: '<id>'}) SET n.name = '<名称>', n.description = '<描述>';
 MERGE (n:Event {id: '<id>'}) SET n.title = '<标题>', n.time = '<时间>', n.description = '<描述>', n.type = '<类型>';
 MERGE (n:Info {id: '<id>'}) SET n.title = '<标题>', n.content = '<内容>', n.knowledge_level = <1/2/3>;
 ```
@@ -182,8 +182,8 @@ MERGE (n:Info {id: '<id>'}) SET n.title = '<标题>', n.content = '<内容>', n.
 ```cypher
 MATCH (a:Character {id: '<from_id>'}), (b:Character {id: '<to_id>'}) MERGE (a)-[:relation {type: '<关系类型>', detail: '<详情>'}]->(b);
 MATCH (a:Character {id: '<from_id>'}), (b:Event {id: '<to_id>'}) MERGE (a)-[:involved {role: '<角色>', detail: '<详情>'}]->(b);
-MATCH (a:Event {id: '<from_id>'}), (b:Scene {id: '<to_id>'}) MERGE (a)-[:occurred_at {detail: '<详情>'}]->(b);
-MATCH (a:Character {id: '<from_id>'}), (b:Scene {id: '<to_id>'}) MERGE (a)-[:at {type: '<关联类型>', detail: '<详情>'}]->(b);
+MATCH (a:Event {id: '<from_id>'}), (b:Location {id: '<to_id>'}) MERGE (a)-[:occurred_at {detail: '<详情>'}]->(b);
+MATCH (a:Character {id: '<from_id>'}), (b:Location {id: '<to_id>'}) MERGE (a)-[:at {type: '<关联类型>', detail: '<详情>'}]->(b);
 MATCH (a:Character {id: '<from_id>'}), (b:Info {id: '<to_id>'}) MERGE (a)-[:link {type: '涉及', detail: '<详情>', time: '<时间>'}]->(b);
 MATCH (a:Info {id: '<from_id>'}), (b:Info {id: '<to_id>'}) MERGE (a)-[:link {type: '因果', detail: '<详情>'}]->(b);
 MATCH (a:Event {id: '<from_id>'}), (b:Event {id: '<to_id>'}) MERGE (a)-[:evt_relation {type: '<因果/先后/包含>', detail: '<详情>'}]->(b);

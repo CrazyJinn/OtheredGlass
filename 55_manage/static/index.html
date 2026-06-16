@@ -50,7 +50,7 @@ textarea.fi{min-height:60px;resize:vertical}
   <div class="grid grid-cols-6 gap-3 mb-5">
     <div class="bg-gray-800 rounded-lg p-3 border border-gray-700"><div class="text-gray-400 text-xs mb-1">角色</div><div id="ns-chars" class="text-2xl font-bold text-cyan-400">-</div></div>
     <div class="bg-gray-800 rounded-lg p-3 border border-gray-700"><div class="text-gray-400 text-xs mb-1">事件</div><div id="ns-events" class="text-2xl font-bold text-cyan-400">-</div></div>
-    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700"><div class="text-gray-400 text-xs mb-1">场景</div><div id="ns-scenes" class="text-2xl font-bold text-cyan-400">-</div></div>
+    <div class="bg-gray-800 rounded-lg p-3 border border-gray-700"><div class="text-gray-400 text-xs mb-1">地点</div><div id="ns-scenes" class="text-2xl font-bold text-cyan-400">-</div></div>
     <div class="bg-gray-800 rounded-lg p-3 border border-gray-700"><div class="text-gray-400 text-xs mb-1">信息</div><div id="ns-infos" class="text-2xl font-bold text-cyan-400">-</div></div>
     <div class="bg-gray-800 rounded-lg p-3 border border-gray-700"><div class="text-gray-400 text-xs mb-1">关系边</div><div id="ns-edges" class="text-2xl font-bold text-gray-300">-</div></div>
     <div class="bg-gray-800 rounded-lg p-3 border border-gray-700"><div class="text-gray-400 text-xs mb-1">待审草案</div><div id="ns-drafts" class="text-2xl font-bold text-amber-400">-</div></div>
@@ -63,7 +63,7 @@ textarea.fi{min-height:60px;resize:vertical}
       <div class="flex gap-1">
         <button class="nar-sub-btn active px-3 py-1 text-xs rounded border" data-label="Character" onclick="switchNarLabel('Character')">👤 角色</button>
         <button class="nar-sub-btn px-3 py-1 text-xs rounded border" data-label="Event" onclick="switchNarLabel('Event')">📅 事件</button>
-        <button class="nar-sub-btn px-3 py-1 text-xs rounded border" data-label="Scene" onclick="switchNarLabel('Scene')">🏠 场景</button>
+        <button class="nar-sub-btn px-3 py-1 text-xs rounded border" data-label="Location" onclick="switchNarLabel('Location')">🏠 地点</button>
         <button class="nar-sub-btn px-3 py-1 text-xs rounded border" data-label="Info" onclick="switchNarLabel('Info')">💡 信息</button>
       </div>
     </div>
@@ -142,7 +142,7 @@ textarea.fi{min-height:60px;resize:vertical}
 
   <!-- 图片审批 -->
   <div class="bg-gray-800 rounded-lg p-5 mb-5 border border-gray-700">
-    <h2 class="text-lg font-semibold text-amber-300 mb-4">🖼️ 图片审批 <span class="text-sm font-normal text-gray-400">(approve = pending)</span></h2>
+    <h2 class="text-lg font-semibold text-amber-300 mb-4">🖼️ 图片审批 <span class="text-sm font-normal text-gray-400">(status 待审)</span></h2>
     <div id="art-ia-list"></div>
     <div id="art-ia-e" class="hidden text-center text-gray-500 py-6">✓ 无待审批图片</div>
   </div>
@@ -163,10 +163,10 @@ textarea.fi{min-height:60px;resize:vertical}
   <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
     <h2 class="text-lg font-semibold text-emerald-300 mb-4">🏠 地点美术</h2>
     <div class="text-gray-400 mb-4">
-      <p>当前状态：Scene 节点定义在叙事基础层，场景美术无独立节点。</p>
+      <p>当前状态：Location 节点定义在叙事基础层，场景美术无独立节点。</p>
       <p class="mt-2">Schema 参考：<code class="text-xs bg-gray-900 px-2 py-1 rounded border border-gray-600">00_init/Schema/场景美术.md</code></p>
     </div>
-    <h3 class="text-md font-semibold text-gray-300 mb-3">Scene 节点一览（只读）</h3>
+    <h3 class="text-md font-semibold text-gray-300 mb-3">Location 节点一览（只读）</h3>
     <div class="overflow-x-auto"><table class="w-full text-sm">
       <thead><tr class="border-b border-gray-600 text-gray-300">
         <th class="px-3 py-2 text-left">ID</th>
@@ -175,7 +175,7 @@ textarea.fi{min-height:60px;resize:vertical}
       </tr></thead>
       <tbody id="scene-tbody"></tbody>
     </table></div>
-    <div id="scene-empty" class="hidden text-center text-gray-500 py-6">暂无 Scene 节点</div>
+    <div id="scene-empty" class="hidden text-center text-gray-500 py-6">暂无 Location 节点</div>
   </div>
 </div>
 

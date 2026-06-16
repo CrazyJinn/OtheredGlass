@@ -26,8 +26,8 @@ const NAR_NF = {
       { k: 'type', l: '类型' },
     ],
   },
-  Scene: {
-    l: '场景', i: '🏠',
+  Location: {
+    l: '地点', i: '🏠',
     thead: '<th class="px-3 py-2 text-left">ID</th><th class="px-3 py-2 text-left">名称</th><th class="px-3 py-2 text-left">描述</th>',
     f: [
       { k: 'name', l: '名称' },
@@ -48,7 +48,7 @@ const NAR_NF = {
 /* 边类型中文名 */
 const EDGE_CN = {
   relation: '人物关系', involved: '参与事件', occurred_at: '发生地点',
-  at: '人物-场景', link: '信息关联', evt_relation: '事件关联',
+  at: '人物-地点', link: '信息关联', evt_relation: '事件关联',
   has_appearance: '外貌', has_costume: '着装', has_voice_style: '语言风格',
   produces: '产出', outfit_for: '着装服务', wears: '穿着',
   expands_to: '拓展变体', ref_style: '风格参考',
@@ -133,7 +133,7 @@ function renderNarRow(n, label) {
       <td ${cls} style="max-width:300px">${trunc(n.description, 60)}</td>
     </tr>`;
   }
-  if (label === 'Scene') {
+  if (label === 'Location') {
     return `<tr class="border-b border-gray-700/50 hover:bg-gray-700/30 fade-in">
       <td ${tdClick} style="max-width:120px"><span class="text-xs text-gray-500">${esc(id)}</span></td>
       <td ${tdClick} class="font-medium">${esc(n.name) || '--'}</td>
@@ -225,7 +225,7 @@ function nodeLabelColor(label) {
   const colors = {
     Character: 'bg-cyan-900 text-cyan-200',
     Event: 'bg-amber-900 text-amber-200',
-    Scene: 'bg-emerald-900 text-emerald-200',
+    Location: 'bg-emerald-900 text-emerald-200',
     Info: 'bg-purple-900 text-purple-200',
     AppearanceStyle: 'bg-pink-900 text-pink-200',
     CostumeStyle: 'bg-violet-900 text-violet-200',

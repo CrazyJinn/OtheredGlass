@@ -16,7 +16,7 @@
 
 | 文件 | 内容 | 核心节点 |
 |------|------|---------|
-| [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Scene, Info |
+| [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Location, Info |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
 | [剧情.md](Schema/剧情.md) | 剧情节奏、分支、条件 | 待补充 |
 
@@ -31,7 +31,7 @@
 |------|---------|-----------|
 | Character | snowflake Base62 | 有名字的人物 |
 | Event | snowflake Base62 | 某时某刻发生的某件事 |
-| Scene | snowflake Base62 | 具体地点/游戏场景 |
+| Location | snowflake Base62 | 具体地点/游戏场景 |
 | Info | snowflake Base62 | 一条有意义的认知碎片 |
 | LanguageStyle | snowflake Base62 | 角色说话方式、语气、口头禅 |
 
@@ -50,9 +50,9 @@
 | **叙事基础** | | | | |
 | relation | Character → Character | N:N | ❌ | 人物关系 |
 | involved | Character → Event | N:N | ❌ | 人物参与事件 |
-| occurred_at | Event → Scene | N:1 | ❌ | 事件发生地点 |
-| at | Character → Scene | N:N | ❌ | 人物—场景 |
-| link | Character/Event/Scene → Info | N:N | ❌ | 信息关联（仅 3 大实体） |
+| occurred_at | Event → Location | N:1 | ❌ | 事件发生地点 |
+| at | Character → Location | N:N | ❌ | 人物—场景 |
+| link | Character/Event/Location → Info | N:N | ❌ | 信息关联（仅 3 大实体） |
 | evt_relation | Event → Event | N:N | ❌ | 事件因果/时序 |
 | **角色美术** | | | | |
 
@@ -75,7 +75,7 @@ flowchart LR
     subgraph 叙事["叙事基础"]
         Character["Character"]
         Event["Event"]
-        Scene["Scene"]
+        Location["Location"]
         Info["Info"]
     end
 

@@ -61,7 +61,7 @@ MERGE (stand:StandingIllustration {id: '<snowflake_id>'})
 SET stand.variant_label = '微笑',
     stand.eye = '微闭', stand.brow = '舒展', stand.mouth = '微笑',
     stand.head_angle = '正视', stand.hand = '自然垂放', stand.foot = '并拢',
-    stand.status = 0, stand.approve = 'pending';
+    stand.status = 0;
 MATCH (illus:IllusDesign {id: '<illus_id>'}), (stand:StandingIllustration {id: '<snowflake_id>'})
 MERGE (illus)-[r:expands_to]->(stand) SET r.sync = true, r.variant_label = '微笑';
 MATCH (voice:LanguageStyle {id: '<voice_id>'}), (stand:StandingIllustration {id: '<snowflake_id>'})
@@ -107,7 +107,7 @@ infra-image-generator 将：
 - 读取节点 `prompt_path` 文件
 - 图生图模式：参考 IllusDesign.image_path（`expands_to` 边上游）
 - 输出路径：`./06_角色美术/<char_name>/<CostumeStyle.name>/<variant_label>立绘.png`
-- 更新节点：写入 image_path，status → 2，approve → 'pending'
+- 更新节点：写入 image_path，status → 10
 
 ### 4. 保存结果
 

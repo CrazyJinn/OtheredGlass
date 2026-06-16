@@ -46,14 +46,13 @@ LABEL_MAP = {
     "IllusDesign":         "IllusDesign",
     "StandingIllustration": "StandingIllustration",
     "LanguageStyle":       "LanguageStyle",
-    "Scene":               "Scene",
 }
 
 # 显示名映射
 DISPLAY_NAME = {
     "char": "name", "Character": "name", "Location": "name",
     "Event": "title", "Info": "title", "Faction": "name",
-    "LocationType": "name", "Scene": "name",
+    "LocationType": "name",
     "AppearanceStyle": "name", "CostumeStyle": "name",
     "DesignSheet": "name", "IllusDesign": "name",
     "StandingIllustration": "name", "LanguageStyle": "name",

@@ -2,7 +2,7 @@
 name: char-costume-designer
 description: |
   为角色的每个事件设计着装方案。创建 CostumeStyle 节点 + wears 边（Event → CostumeStyle），
-  建议内容写入后设 approve='pending'，等待 dashboard 审批。
+  建议内容写入后设 status=10（待审），等待 dashboard 审批。
   在需要为角色创建/追加着装方案时使用。
 argument-hint: <char_id>
 arguments:
@@ -12,7 +12,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 # 着装设计（CostumeStyle）
 
-为角色的每个事件分析着装需求，创建 CostumeStyle 节点并绑定 `wears` 边。建议内容写入后设 `approve='pending'`，等待 dashboard 审批通过后参与下游 IllusDesign 生产。
+为角色的每个事件分析着装需求，创建 CostumeStyle 节点并绑定 `wears` 边。建议内容写入后设 `status=10`（待审），等待 dashboard 审批通过后参与下游 IllusDesign 生产。
 
 ## 参数
 
@@ -35,11 +35,11 @@ RETURN ch, app, collect(cos) AS costumes;
 
 // 事件 + 场景 + 已有着装绑定
 MATCH (ch:Character {id: $char_id})-[r:involved]->(e:Event)
-OPTIONAL MATCH (e)-[:occurred_at]->(s:Scene)
+OPTIONAL MATCH (e)-[:occurred_at]->(s:Location)
 OPTIONAL MATCH (e)-[:wears]->(cos:CostumeStyle)
 RETURN e.id AS event_id, e.title AS event_title,
        r.role AS role, r.detail AS detail,
-       s.id AS scene_id, s.name AS scene_name, s.description AS scene_desc,
+       s.id AS loc_id, s.name AS loc_name, s.description AS loc_desc,
        cos.id AS costume_id, cos.name AS costume_name
 ORDER BY e.id;
 ```
@@ -50,7 +50,7 @@ ORDER BY e.id;
 
 1. 提取事件上下文：
    - 事件 detail（角色在事件中的行为）
-   - Scene 环境（如果 `occurred_at` 边存在）
+   - Location 环境（如果 `occurred_at` 边存在）
    - 角色身份（character_tags）
 2. 判断是否可复用已有 CostumeStyle：
    - 比较事件环境与已有着装的适配度
@@ -88,7 +88,7 @@ python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
 ```cypher
 MERGE (cos:CostumeStyle {id: '<snowflake_id>'})
 SET cos.name = '角色名-着装描述',
-    cos.status = 1, cos.approve = 'pending';
+    cos.status = 10;
 
 MATCH (ch:Character {id: $char_id}), (cos:CostumeStyle {id: '<snowflake_id>'})
 MERGE (ch)-[r:has_costume]->(cos) SET r.sync = true;
@@ -124,7 +124,7 @@ MERGE (e)-[r:wears]->(cos) SET r.sync = false;
 
 汇总所有操作：
 - 复用了哪些已有 CostumeStyle（哪些事件）
-- 新建了哪些 CostumeStyle（哪些事件，approve='pending'）
+- 新建了哪些 CostumeStyle（哪些事件，status=10 待审）
 - 提示用户在 dashboard 中审批新建的着装方案
 
 ## 参考文档

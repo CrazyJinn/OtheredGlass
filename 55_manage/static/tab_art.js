@@ -10,6 +10,7 @@ const NF = {
     { k: 'age_impression', l: '年龄感', t: 'tags' },
     { k: 'body_type', l: '体态', t: 'tags' },
     { k: 'skin_tone', l: '肤色', t: 'tags' },
+    { k: 'ethnicity', l: '面孔/人种', t: 'tags' },
     { k: 'hair', l: '头发', t: 'tags' },
     { k: 'eye', l: '眼睛', t: 'tags' },
     { k: 'lip_shape', l: '唇形', t: 'tags' },
@@ -23,7 +24,6 @@ const NF = {
     { k: 'garment', l: '服装', t: 'tags' },
     { k: 'footwear', l: '鞋类', t: 'tags' },
     { k: 'accessory_type', l: '配饰类型', t: 'tags' },
-    { k: 'approve', l: '审批状态' },
   ]},
   LanguageStyle: { l: '语言风格', i: '🗣️', f: [
     { k: 'description', l: '语言风格描述', t: 'textarea' },
@@ -312,7 +312,7 @@ function rOv(chars) {
       <td class="px-3 py-2 text-center">${dataBadge(c.appearance_status, 1, c.appearance_id, 'AppearanceStyle')}</td>
       <td class="px-3 py-2 text-center"><div class="flex flex-wrap gap-1 justify-center items-center">${rCostumes(c.costumes)}<button type="button" onclick="addCostume('${c.char_id}','${escA(c.char_name)}')" class="text-xs text-gray-500 hover:text-amber-400 hover:ring-1 hover:ring-amber-400 px-1.5 py-0.5 rounded border border-gray-700" title="为该角色添加一套着装">＋</button></div></td>
       <td class="px-3 py-2 text-center">${dataBadge(c.language_status, 1, c.language_id, 'LanguageStyle')}</td>
-      <td class="px-3 py-2 text-center">${imgBadge(c.design_status, 2, c.design_approve, c.design_id, 'DesignSheet')}</td>
+      <td class="px-3 py-2 text-center">${imgBadge(c.design_status, 2, c.design_id, 'DesignSheet')}</td>
       <td class="px-3 py-2 text-center">${imgH}</td>
       <td class="px-3 py-2 text-center">${rIllus(c.illus || [])}</td>
       <td class="px-3 py-2 text-center">${rStands(c.stands || [])}</td>
@@ -327,31 +327,29 @@ function dataBadge(s, max, id, type) {
   return `<span class="cursor-pointer px-1.5 py-0.5 rounded text-xs ${cls} hover:ring-1 hover:ring-amber-400" onclick="event.stopPropagation();openArtNode('${id}','${type}')">${txt}</span>`;
 }
 
-function imgBadge(s, max, ap, id, type) {
+function imgBadge(s, max, id, type) {
   if (!id) return '<span class="text-gray-600 text-xs">--</span>';
   let cls, txt;
   if (s === null || s === undefined) { cls = 'bg-gray-600 text-gray-300'; txt = '--'; }
-  else if (s >= max) {
-    if (ap === 'approved') { cls = 'bg-green-700 text-green-100'; txt = '✓✓✓'; }
-    else if (ap === 'rejected') { cls = 'bg-red-800 text-red-200'; txt = '✗✗✗'; }
-    else { cls = 'bg-amber-800 text-amber-200'; txt = '⏳2'; }
-  } else { cls = SC[s] || 'bg-gray-600 text-gray-300'; txt = String(s); }
+  else if (s === 11) { cls = 'bg-green-700 text-green-100'; txt = '✓✓✓'; }
+  else if (s === 10) { cls = 'bg-amber-800 text-amber-200'; txt = '⏳'; }
+  else if (s === max) { cls = 'bg-green-800 text-green-200'; txt = '✓'; }
+  else { cls = SC[s] || 'bg-gray-600 text-gray-300'; txt = String(s); }
   return `<span class="cursor-pointer px-1.5 py-0.5 rounded text-xs ${cls} hover:ring-1 hover:ring-amber-400" onclick="event.stopPropagation();openArtNode('${id}','${type}')">${txt}</span>`;
 }
 
-function rIllus(a) { return a.length ? a.map(i => imgBadge(i.status, 2, i.approve, i.id, 'IllusDesign')).join(' ') : '<span class="text-gray-600 text-xs">--</span>'; }
-function rStands(a) { return a.length ? a.map(s => imgBadge(s.status, 2, s.approve, s.id, 'StandingIllustration')).join(' ') : '<span class="text-gray-600 text-xs">--</span>'; }
+function rIllus(a) { return a.length ? a.map(i => imgBadge(i.status, 2, i.id, 'IllusDesign')).join(' ') : '<span class="text-gray-600 text-xs">--</span>'; }
+function rStands(a) { return a.length ? a.map(s => imgBadge(s.status, 2, s.id, 'StandingIllustration')).join(' ') : '<span class="text-gray-600 text-xs">--</span>'; }
 
 /* 着装：每套独立徽章，可分别点击编辑 */
 function rCostumes(a) {
   if (!a || !a.length) return dataBadge(null, 1);
   const multi = a.length > 1;
   return a.map((co, idx) => {
-    const s = co.status, ap = co.approve, tag = multi ? String(idx + 1) : '';
+    const s = co.status, tag = multi ? String(idx + 1) : '';
     let cls, txt;
-    if (ap === 'approved') { cls = 'bg-green-700 text-green-100'; txt = '✓' + tag; }
-    else if (ap === 'rejected') { cls = 'bg-red-800 text-red-200'; txt = '✗' + tag; }
-    else if (ap === 'pending') { cls = 'bg-amber-800 text-amber-200'; txt = tag + '⏳'; }
+    if (s === 10) { cls = 'bg-amber-800 text-amber-200'; txt = tag + '⏳'; }
+    else if (s === 11) { cls = 'bg-green-700 text-green-100'; txt = '✓' + tag; }
     else if (s !== null && s !== undefined && s >= 1) { cls = 'bg-green-800 text-green-200'; txt = '✓' + tag; }
     else { cls = 'bg-yellow-800 text-yellow-200'; txt = tag || '0'; }
     const hint = co.name ? ` title="${escA(co.name)}"` : '';
@@ -380,7 +378,7 @@ function rTodo(todos) {
       : `<span class="px-2 py-0.5 rounded text-xs ${SC[t.status] || ''}">${t.status}</span>`;
     let actH;
     if (t.action === 'approve') {
-      actH = t.approve === 'rejected' ? '<span class="text-red-400">已驳回</span>' : '<span class="text-amber-300">待审批</span>';
+      actH = '<span class="text-amber-300">待审批</span>';
     } else {
       const uri = 'vscode://anthropic.claude-code/open?prompt=' + encodeURIComponent(t.prompt);
       actH = `<a href="${uri}" class="inline-block px-3 py-1 bg-blue-700 hover:bg-blue-600 rounded text-white text-xs whitespace-nowrap">▶ 启动</a>`;
@@ -466,7 +464,7 @@ function rArtPanel(detail, type) {
   const schema = NF[type] || { l: type, i: '📋', f: [] };
   const props = detail.props || {};
   const st = props.status;
-  const ap = props.approve;
+  const doneMax = SM[type] || 2;
   let h = '<div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">';
 
   // Header
@@ -474,11 +472,12 @@ function rArtPanel(detail, type) {
   h += `<div class="flex items-center gap-2"><span>${schema.i}</span><span class="font-semibold text-gray-200">${schema.l}</span><span class="text-xs text-gray-500">${props.id || ''}</span></div>`;
   h += '<div class="flex items-center gap-2">';
   if (st !== undefined && st !== null) {
-    h += `<span class="px-2 py-0.5 rounded text-xs ${SC[st] || 'bg-gray-600 text-gray-300'}">${SL[st] || ('status=' + st)}</span>`;
-  }
-  if (ap) {
-    const ac = ap === 'approved' ? 'bg-green-700 text-green-100' : ap === 'rejected' ? 'bg-red-800 text-red-200' : 'bg-amber-800 text-amber-200';
-    h += `<span class="px-2 py-0.5 rounded text-xs ${ac}">${ap}</span>`;
+    let sCls = SC[st] || 'bg-gray-600 text-gray-300';
+    let sTxt = SL[st] || ('status=' + st);
+    if (st === 10) { sCls = 'bg-amber-800 text-amber-200'; sTxt = '待审批'; }
+    else if (st === 11) { sCls = 'bg-green-700 text-green-100'; sTxt = '已批准'; }
+    else if (st === doneMax) { sCls = 'bg-green-800 text-green-200'; sTxt = (SL[st] || '已完成') + '·未审'; }
+    h += `<span class="px-2 py-0.5 rounded text-xs ${sCls}">${sTxt}</span>`;
   }
   h += '</div></div>';
   h += '<div class="px-4 py-3 space-y-2">';
@@ -511,7 +510,7 @@ function rArtPanel(detail, type) {
   const nodeId = props.id || '';
   h += '<div class="pt-3 flex gap-2 flex-wrap">';
   h += `<button onclick="saveNode('${nodeId}','${type}')" class="px-4 py-1.5 bg-amber-700 hover:bg-amber-600 rounded text-white text-sm font-medium">💾 保存</button>`;
-  if (ap === 'pending') {
+  if (st === 10) {
     h += `<button onclick="doApproveNode('${nodeId}');closeP();setTimeout(loadArtStatus,500)" class="px-4 py-1.5 bg-green-800 hover:bg-green-700 rounded text-white text-sm font-medium">✓ 通过</button>`;
     h += `<button onclick="doRejectNode('${nodeId}');closeP();setTimeout(loadArtStatus,500)" class="px-4 py-1.5 bg-red-800 hover:bg-red-700 rounded text-white text-sm font-medium">✗ 驳回</button>`;
   }

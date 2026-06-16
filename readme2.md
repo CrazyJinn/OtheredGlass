@@ -17,7 +17,7 @@
 ## 1. 叙事基础节点的提取与自增长
 
 > 叙事基础层是整个图数据库的基石，记录"谁做了什么、在哪里、知道了什么"。
-> 涵盖 4 种节点（Character / Event / Scene / Info）和 6 种边。
+> 涵盖 4 种节点（Character / Event / Location / Info）和 6 种边。
 
 ### 1.1 数据流概览
 
@@ -42,7 +42,7 @@ flowchart LR
     subgraph 图["Neo4j 叙事图"]
         D1["Character"]
         D2["Event"]
-        D3["Scene"]
+        D3["Location"]
         D4["Info"]
         D5["6 种叙事边"]
     end
@@ -71,7 +71,7 @@ flowchart LR
 |---|---|---|---|
 | **职责** | 从创作文本提取结构化实体与关系 | 手动/自动发现模式增量构建图 | 分析缺口 → 生成创意草案 → 审核后写入 |
 | **触发方式** | 用户提供文本 + Schema | 用户说"加角色/事件/关系"或 discover | 用户说"叙事增长/补剧情/分析叙事" |
-| **创建的节点** | Character, Event, Scene, Info | Character, Event, Scene, Info + Faction, Location 等 | Scene, Event, Info（通过草案） |
+| **创建的节点** | Character, Event, Location, Info | Character, Event, Location, Info + Faction, Location 等 | Location, Event, Info（通过草案） |
 | **创建的边** | 全部 6 种叙事基础边 | 全部叙事边 + BELONGS_TO, CATEGORIZED_AS | relation, involved, occurred_at, evt_relation, link |
 | **输出形式** | CSV 文件 + import.cypher（离线文件） | 直接写入 Neo4j | 草案 .md 文件 → 审批 → 写入 Neo4j |
 | **连接数据库** | ❌ 不直连 Neo4j | ✅ 直接读写 | ✅ analyze/apply 读写 |
@@ -162,7 +162,7 @@ pending（初始） → approved（人工批准） → applied（自动，导入
 
 > 叙事基础层的**所有边 sync=false**，即**不存在自动级联修改**。
 
-修改一个 Character 的属性不会自动影响关联的 Event、Scene 或 Info。这是设计上的选择：叙事数据以"事实记录"为主，修改某个角色描述不应级联重写其参与的事件。
+修改一个 Character 的属性不会自动影响关联的 Event、Location 或 Info。这是设计上的选择：叙事数据以"事实记录"为主，修改某个角色描述不应级联重写其参与的事件。
 
 补充机制是通过 graph-builder discover 和 narrative-grower analyze 实现**级联发现**——发现因数据变更而暴露的新缺口，但只产出建议，不自动修改。
 
@@ -226,7 +226,7 @@ flowchart TB
 | **阶段** | ① 概念设计 | ② 着装设计 | ③ 三视图 | ④ 立绘设计图 | ⑤ 立绘变体 |
 | **创建的节点** | AppearanceStyle, LanguageStyle | CostumeStyle | DesignSheet | IllusDesign | StandingIllustration |
 | **创建的边** | has_appearance, has_voice_style | has_costume, wears | produces | produces, outfit_for | expands_to, ref_style |
-| **前驱依赖** | Character 存在 | Character 存在 | AppearanceStyle.status=1 | DesignSheet.status=2 + CostumeStyle.approve=approved | IllusDesign.status=2 |
+| **前驱依赖** | Character 存在 | Character 存在 | AppearanceStyle.status=1 | DesignSheet.status=2 + CostumeStyle.status=11 | IllusDesign.status=2 |
 | **调用子 Skill** | infra-neo4j-helper | infra-neo4j-helper | char-prompt-assembler (Mode A) + infra-image-generator | char-prompt-assembler (Mode B) + infra-image-generator | char-prompt-assembler (Mode C) + infra-image-generator |
 | **参数** | char_id | char_id | node_id, target_status | char_id, target_status | char_id, target_status |
 
@@ -247,38 +247,40 @@ flowchart TB
 
 #### CostumeStyle（特殊数据节点）
 
-创建即 `status=1`（内容在创建时直接填写），但同时设 `approve='pending'`。
+创建即 `status=10`（内容在创建时直接填写，待审）。
 
 #### 全节点 Status 汇总表
 
-| 节点 | 生成 Skill | 0 | 1 | 2 | approve |
-|------|-----------|---|---|---|---------|
-| AppearanceStyle | char-concept-designer | 待设计 | 已完成 | — | ❌ 无 |
-| LanguageStyle | char-concept-designer | 待设计 | 已完成 | — | ❌ 无 |
-| CostumeStyle | char-costume-designer | — | 创建即为 1 | — | ✅ 创建时 pending |
-| DesignSheet | char-design-sheet | 待生成 | 提示词完成 | 图片完成 | ✅ 创建时 pending |
-| IllusDesign | char-illus-designer | 待生成 | 提示词完成 | 图片完成 | ✅ 创建时 pending |
-| StandingIllustration | char-stand-designer | 待生成 | 提示词完成 | 图片完成 | ✅ 创建时 pending |
+> 审批态与生产态隔开：生产 `0/1/2`，审批专属 `10`（待审）/ `11`（批准）。通过 → `11`；驳回 → `0`。
+
+| 节点 | 生成 Skill | 0 | 1 | 2 | 10 | 11 |
+|------|-----------|---|---|---|----|----|
+| AppearanceStyle | char-concept-designer | 待设计 | 已完成 | — | — | — |
+| LanguageStyle | char-concept-designer | 待设计 | 已完成 | — | — | — |
+| CostumeStyle | char-costume-designer | 驳回重做 | 已完成 | — | 待审 | 批准 |
+| DesignSheet | char-design-sheet | 待生成 | 提示词完成 | 图片完成 | 待审 | 批准 |
+| IllusDesign | char-illus-designer | 待生成 | 提示词完成 | 图片完成 | 待审 | 批准 |
+| StandingIllustration | char-stand-designer | 待生成 | 提示词完成 | 图片完成 | 待审 | 批准 |
 
 ### 2.4 审批流程
 
-> 4 种节点需要审批，均在**创建时**即设 `approve='pending'`，等待 Dashboard 审批。
+> 4 种节点需要审批。审批态用 `10`（待审）/ `11`（批准），与生产态 `0/1/2` 隔开。
 
 ```
-null（未完成/不适用）
-  → pending（已完成，等待审批）
-    → approved（审批通过，允许下游推进）
-    → rejected（驳回，status 回退为 0，需重新处理）
+未完成（status < 完成值）
+  → 待审（status = 10，图片/着装已完成）
+    → 通过（status = 11，允许下游推进）
+    → 驳回（status 回退为 0，需重新处理）
 ```
 
 **审批与下游推进的关系**：
 
-| 被审批节点 | 下游消费者 | 审批状态要求 |
-|-----------|-----------|------------|
-| CostumeStyle | IllusDesign（outfit_for 边） | approve=approved 才允许 IllusDesign 推进 |
-| DesignSheet | IllusDesign（produces 边） | approve=approved 才允许 IllusDesign 推进 |
-| IllusDesign | StandingIllustration（expands_to 边） | approve=approved 才允许 Standing 推进 |
-| StandingIllustration | 无下游 | 创建时即 pending，审批仅作为质量确认 |
+| 被审批节点 | 下游消费者 | 推进条件 |
+|-----------|-----------|---------|
+| CostumeStyle | IllusDesign（outfit_for 边） | status=11（批准）才允许 IllusDesign 推进 |
+| DesignSheet | IllusDesign（produces 边） | status=11（批准）才允许 IllusDesign 推进 |
+| IllusDesign | StandingIllustration（expands_to 边） | status=11（批准）才允许 Standing 推进 |
+| StandingIllustration | 无下游 | status=10（待审）仅作为质量确认 |
 
 **AppearanceStyle 和 LanguageStyle 无审批流程**——它们是设计方向的文字描述，不产出图片，直接由设计师确认。
 
@@ -291,7 +293,7 @@ null（未完成/不适用）
 
 当某节点数据发生变更时：
 1. 沿 `sync=true` 的出边做 **BFS（广度优先搜索）**
-2. 将所有可达下游节点的 `status` 重置为 `0`，`approve` 清除为 `null`
+2. 将所有可达下游节点的 `status` 重置为 `0`
 3. 遇到 `sync=false` 的边时**阻断传播**
 
 #### sync=true 的边（级联传播）
@@ -363,14 +365,14 @@ CostumeStyle 变更
 ## 3. 场景美术节点的流程（TODO）
 
 > **当前状态**：Schema 框架已建立（[场景美术.md](00_init/Schema/场景美术.md)），但无独立节点。
-> Scene 节点定义在叙事基础层（[叙事基础.md](00_init/Schema/叙事基础.md)），场景美术层仅引用。
+> Location 节点定义在叙事基础层（[叙事基础.md](00_init/Schema/叙事基础.md)），场景美术层仅引用。
 
 ### 待补充内容
 
-- 场景美术独立节点定义（如 SceneDesign, SceneAsset 等）
-- 场景美术 Skill（查询 Scene → 生成游戏场景/对话背景/UI背景的提示词 → 调用文生图 API）
+- 场景美术独立节点定义（如 LocationDesign, LocationAsset 等）
+- 场景美术 Skill（查询 Location → 生成游戏场景/对话背景/UI背景的提示词 → 调用文生图 API）
 - Status 流转与审批流程
-- 与叙事基础层 Scene 节点的 sync 级联关系
+- 与叙事基础层 Location 节点的 sync 级联关系
 - 场景装饰裁剪流程
 
 ---
@@ -397,6 +399,6 @@ CostumeStyle 变更
 | Skill | 职责 | 说明 |
 |-------|------|------|
 | **infra-neo4j-helper** | 自然语言 + Schema → Cypher → 执行 → 结构化返回 | 所有 Skill 读写图数据库的统一入口。支持多语句、增删改查混杂。 |
-| **infra-image-generator** | 从图节点读取 prompt 调用 OfoxAI API 生成图片 | 支持文生图（DesignSheet）和图生图（IllusDesign, StandingIllustration）。生成后设 approve='pending'。 |
+| **infra-image-generator** | 从图节点读取 prompt 调用 OfoxAI API 生成图片 | 支持文生图（DesignSheet）和图生图（IllusDesign, StandingIllustration）。生成后设 status=10（待审）。 |
 
 另有 `char-prompt-assembler` 作为提示词组装层，被 char-design-sheet / char-illus-designer / char-stand-designer 调用，不主动创建节点，只写入 prompt 字段并推进 status。
