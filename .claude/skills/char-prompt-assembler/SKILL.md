@@ -1,25 +1,26 @@
 ---
 name: char-prompt-assembler
 description: |
-  从调用方传入的节点数据（设计元素 tags + 自由文本）组装图片生成提示词，派生为 prompt 文件，写入节点 prompt_path 字段。
+  从调用方传入的节点数据（设计元素 tags + 自由文本）组装图片生成提示词，派生为 prompt 文件并返回其路径。
   三种模式：DesignSheet（文生图）、IllusDesign（图生图）、StandingIllustration（图生图）。
-  不读取图数据库，所有数据由调用方通过 data 参数提供。
+  纯产出层：不读写图数据库、不写 status，所有数据由调用方通过 data 参数提供。
   在需要为美术节点组装提示词或被其他 skill 调用时使用。
-argument-hint: <node_id> <mode> <data_json>
+argument-hint: <mode> <data_json>
 arguments:
-  - node_id
   - mode
   - data
 allowed-tools: Read, Bash, Write, Edit
 ---
 
+> **纯产出层**：本 skill 只负责组装 prompt 文件并**返回文件路径**，**不读写图数据库、不写 status**。节点 `prompt_path` 字段与 `status` 由调用方（生产 skill）在「保存结果」步统一写入。`status=-1`（作废重做）时调用方会再次调用本 skill 覆盖旧 prompt 文件——本 skill 每次被调用都重新组装并覆盖。
+
 # 提示词组装
 
-从调用方传入的**设计元素 tags + 自由文本**组装图片生成提示词，派生为 **prompt 文件**，写入节点 `prompt_path` 字段（**不再写 prompt 字段**）。不读取图数据库——所有数据由调用方通过 `data` 参数传入。
+从调用方传入的**设计元素 tags + 自由文本**组装图片生成提示词，派生为 **prompt 文件**并返回文件路径。不读写图数据库——所有数据由调用方通过 `data` 参数传入。
 
 ## 核心转换：tags → 自然语言
 
-数据节点的可枚举维度以**标签**形式存储（分号 `;` 分隔，受控词表见 `55_manage/标签库.json`）。组装时将每个标签展开为**自然语言描述句**，与自由文本字段一起，按 reference 模板的 markdown 结构组织成完整 prompt。
+数据节点的可枚举维度以**标签**形式存储（分号 `;` 分隔，受控词表见 `55_dashboard/config/标签库.json`）。组装时将每个标签展开为**自然语言描述句**，与自由文本字段一起，按 reference 模板的 markdown 结构组织成完整 prompt。
 
 **复合字段**（eye/hair/garment）的值已是**合成组合描述**（如 `琥珀色上挑眼`、`深棕色大波浪长发`、`棉衬衫`），直接作为该维度的自然语言使用，无需再展开子维度。
 
@@ -37,20 +38,15 @@ allowed-tools: Read, Bash, Write, Edit
 
 ## 输出流程（三种模式通用）
 
-1. 解析 data，提取 tags（分号分隔串，需 split）与自由文本字段
+1. 解析 data，提取 tags（分号分隔串，需 split）、自由文本字段，以及 `character.name` 与 `node.id`
 2. 从 `00_init/美术风格.md` 读取全局风格参数（背景色、线条、上色、色调等）
-3. 前置检查：上游数据节点 status ≥ 1
-4. 按模式规则组装 markdown prompt（见下方各模式 + reference 模板的维度结构）
-5. 用 **Write 工具**写 prompt 文件到 `06_角色美术/<char_name>/prompt.md`（不经 shell，markdown 无损；目录不存在时 Write 自动创建）
-6. 通过 neo4j-helper 更新节点 `prompt_path` 与 `status`（不再写 prompt 字段）
+3. 按模式规则组装 markdown prompt（见下方各模式 + reference 模板的维度结构）
+4. 用 **Write 工具**写 prompt 文件到 `06_角色美术/<char_name>/prompts/<node_id>.md`（不经 shell，markdown 无损；目录不存在时 Write 自动创建）
+5. **返回 prompt 文件路径**给调用方（由调用方写入节点 `prompt_path` 字段）
 
-更新命令（prompt_path 是短路径，安全内联）：
-```bash
-python "${CLAUDE_SKILL_DIR}/../infra-neo4j-helper/scripts/execute_cypher.py" \
-  -c "MATCH (n {id:'<node_id>'}) SET n.prompt_path = '06_角色美术/<char_name>/prompt.md', n.status = 1" --json
-```
+> prompt 文件按节点 id 命名（`prompts/<node_id>.md`），每个节点独立，避免同一角色多个节点互相覆盖。
 
-## 模式A：DesignSheet（status 0→1，文生图）
+## 模式A：DesignSheet（文生图）
 
 为三视图设计稿组装提示词。聚焦角色外貌，不涉及衣着——角色统一穿着深色基础衣物（黑色贴身背心+深色短裤），与肤色形成高对比。详细维度映射见 [references/template-设计图提示词.md](references/template-设计图提示词.md)。
 
@@ -68,7 +64,7 @@ python "${CLAUDE_SKILL_DIR}/../infra-neo4j-helper/scripts/execute_cypher.py" \
 
 组装：从 `appearance.tags` 展开各维度（体态/肤色/发长发型发色/眼型瞳色/唇形/特殊标记）为自然语言，结合 `appearance` 自由文本（综合气质、身高）与 `character.color_direction`（配色逻辑），加贴身基础衣物说明，画风放末尾。
 
-## 模式B：IllusDesign（status 0→1，图生图）
+## 模式B：IllusDesign（图生图）
 
 为着装适配立绘设计图组装提示词。聚焦着装描述，不重复角色外貌（图生图以 DesignSheet 为参考底图，外貌已在底图）。详细维度映射见 [references/template-着装提示词.md](references/template-着装提示词.md)。
 
@@ -86,7 +82,7 @@ python "${CLAUDE_SKILL_DIR}/../infra-neo4j-helper/scripts/execute_cypher.py" \
 
 组装：从 `costume.tags` 展开着装（风格/材质+颜色+类型/鞋/配饰）为自然语言，加 `adaptation_notes` 适配补充（无则跳过），画风放末尾。
 
-## 模式C：StandingIllustration（status 0→1，图生图）
+## 模式C：StandingIllustration（图生图）
 
 为立绘表情变体组装提示词。描述全身立绘的表情与动作。详细规则见 [references/template-立绘提示词.md](references/template-立绘提示词.md)。
 

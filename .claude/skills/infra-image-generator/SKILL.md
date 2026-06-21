@@ -1,18 +1,22 @@
 ---
 name: infra-image-generator
 description: |
-  OfoxAI Images API 调用层。从图节点读取 prompt_path 文件调用 API 生成图片：
-  DesignSheet（文生图）、IllusDesign（图生图）、StandingIllustration（图生图）。
-  生成后设 status=10（待审）等待审批。在需要生成美术图片或被其他 skill 调用时使用。
-argument-hint: <node_id>
+  OfoxAI Images API 调用层（纯产出）。读取 prompt 文件、调用 API 生成图片并返回图片路径。
+  文生图（无参考图）/ 图生图（带参考图），由是否有 ref_image_path 决定。
+  不读写图数据库、不写 status。在需要生成美术图片或被其他 skill 调用时使用。
+argument-hint: <prompt_path> <output_path> [<ref_image_path>]
 arguments:
-  - node_id
+  - prompt_path
+  - output_path
+  - ref_image_path
 allowed-tools: Read, Bash, Write, Edit
 ---
 
+> **纯产出层**：本 skill 只负责读取 prompt 文件、调用 API 生成图片并**返回图片路径**，**不读写图数据库、不写 status**。节点 `image_path` 字段与 `status` 由调用方（生产 skill）在「保存结果」步统一写入。`status=-1`（作废重做）时调用方会再次调用本 skill 重新生成并覆盖旧图片——本 skill 每次被调用都重新生成。
+
 # OfoxAI 图片生成
 
-读取节点 `prompt_path`（prompt 文件路径）和参考图路径，调用 API 生成图片。**不组装提示词，不读取风格文件。**
+读取 prompt 文件，调用 API 生成图片，返回图片路径。**不组装提示词、不读取风格文件、不查目标节点。**
 
 脚本：`${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py`
 
@@ -31,69 +35,48 @@ allowed-tools: Read, Bash, Write, Edit
 
 ## 流程
 
-### 1. 确定目标节点
+### 1. 读取 prompt
 
-由调用方传入目标节点 ID（参数 `$0`）。通过 neo4j-helper 查询节点类型、状态和 prompt 文件路径：
+从调用方传入的 `prompt_path`（参数 `$0`）读取 prompt 文件内容。
 
-```cypher
-MATCH (n {id: $node_id})
-RETURN labels(n)[0] AS type, n.status AS status, n.prompt_path AS prompt_path, n.image_path AS image_path
-```
+### 2. 确定生成方式
 
-前置检查：status 必须为 1（提示词文件已由 prompt-assembler 生成），`prompt_path` 不为空。
+由是否传入 `ref_image_path`（参数 `$2`）决定：
 
-### 2. 确定生成方式和参考图
+| 场景 | ref_image_path | 生成方式 |
+|------|----------------|---------|
+| 文生图（如 DesignSheet） | 未传 | 纯文本生成 |
+| 图生图（如 IllusDesign / StandingIllustration） | 传入 | 以参考图为底图 |
 
-| 节点类型 | 生成方式 | 参考图来源 |
-|---------|---------|-----------|
-| DesignSheet | 文生图 | 无 |
-| IllusDesign | 图生图 | 上游 DesignSheet.image_path（`produces` 边） |
-| StandingIllustration | 图生图 | 上游 IllusDesign.image_path（`expands_to` 边） |
-
-图生图模式下，通过 neo4j-helper 查询上游节点的 `image_path` 作为 `--image` 参数。
+参考图路径由调用方（生产 skill）从已存在的前驱节点查得后传入。
 
 ### 3. 生成图片
 
-> **`--size` 必须显式传入**。无法确定时向用户确认。
+> **`--size` 必须显式传入**。无法确定时向用户确认。默认 `1024x1024`。
 
-#### DesignSheet（文生图）
+#### 文生图（无参考图）
 
-prompt 从节点 `prompt_path` 指向的文件读取，经管道直送（支持多行 markdown，不经 shell 字面量）：
-
-```bash
-cat "<n.prompt_path>" \
-  | python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit --prompt-stdin \
-      --size 1024x1024 -o "./06_角色美术/<char_name>/设计图.png"
-```
-
-#### IllusDesign（图生图）
-
-prompt 从 `prompt_path` 文件读取；参考图 `--image` 是短路径，仍走命令行参数：
+prompt 经管道直送（支持多行 markdown，不经 shell 字面量）：
 
 ```bash
-# 以 DesignSheet 图片为参考
-cat "<n.prompt_path>" \
+cat "<prompt_path>" \
   | python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit --prompt-stdin \
-      --image "<DesignSheet.image_path>" --size 1024x1024 -o "./06_角色美术/<char_name>/<CostumeStyle.name>/立绘设计图.png"
+      --size 1024x1024 -o "<output_path>"
 ```
 
-#### StandingIllustration（图生图）
+#### 图生图（带参考图）
+
+参考图 `--image` 是短路径，走命令行参数：
 
 ```bash
-# 以 IllusDesign 图片为参考
-cat "<n.prompt_path>" \
+cat "<prompt_path>" \
   | python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit --prompt-stdin \
-      --image "<IllusDesign.image_path>" --size 1024x1024 -o "./06_角色美术/<char_name>/<CostumeStyle.name>/<variant_label>立绘.png"
+      --image "<ref_image_path>" --size 1024x1024 -o "<output_path>"
 ```
 
-### 4. 更新图节点
+### 4. 返回图片路径
 
-通过 neo4j-helper 更新目标节点的 image_path 和 status：
-
-```cypher
-MATCH (n {id: $node_id})
-SET n.image_path = '<图片路径>', n.status = 10
-```
+将 `output_path`（生成的图片路径）返回给调用方，由调用方写入节点 `image_path` 字段。
 
 ---
 
@@ -102,12 +85,12 @@ SET n.image_path = '<图片路径>', n.status = 10
 ### submit
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit "<prompt>" [options]
+python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py submit "<prompt>" [options]
 ```
 
 | 参数 | 必填 | 说明 |
 |------|:----:|------|
-| prompt | Y | 图像描述文本（从节点 prompt 字段读取） |
+| prompt | Y | 图像描述文本（从 prompt 文件读取，经 `--prompt-stdin` 管道传入） |
 | `--model` | N | 默认 `openai/gpt-image-2` |
 | `--size` | Y | 输出尺寸，gpt-image-2 最大边 3840px，两边 16 的倍数 |
 | `--quality` | - | **已强制为 `low`** |
@@ -118,8 +101,8 @@ python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" submit "<prompt>" [options]
 ### wait / download
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" wait '<json|file>' ./output.png
-python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py" download <url> ./output.png
+python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py wait '<json|file>' ./output.png
+python "${CLAUDE_SKILL_DIR}/scripts/ofoxai_api.py download <url> ./output.png
 ```
 
 ## 错误处理

@@ -35,7 +35,7 @@ flowchart LR
         B3["输出 CSV + import.cypher"]
     end
 
-    subgraph 导入["infra-neo4j-helper"]
+    subgraph 导入["cypher_exec.py"]
         C1["执行 import.cypher"]
     end
 
@@ -73,7 +73,7 @@ flowchart LR
 | **触发方式** | 用户提供文本 + Schema | 用户说"加角色/事件/关系"或 discover | 用户说"叙事增长/补剧情/分析叙事" |
 | **创建的节点** | Character, Event, Location, Info | Character, Event, Location, Info + Faction, Location 等 | Location, Event, Info（通过草案） |
 | **创建的边** | 全部 6 种叙事基础边 | 全部叙事边 + BELONGS_TO, CATEGORIZED_AS | relation, involved, occurred_at, evt_relation, link |
-| **输出形式** | CSV 文件 + import.cypher（离线文件） | 直接写入 Neo4j | 草案 .md 文件 → 审批 → 写入 Neo4j |
+| **输出形式** | CSV 文件 + import.cypher（离线文件） | 直接写入 Neo4j | Markdown 文件（02_剧情数据/，frontmatter status=10）→ 人工审批 → apply 写入 Neo4j |
 | **连接数据库** | ❌ 不直连 Neo4j | ✅ 直接读写 | ✅ analyze/apply 读写 |
 | **幂等性** | MERGE（重复导入不产生重复节点） | MERGE | MERGE |
 
@@ -92,7 +92,7 @@ flowchart LR
       01_叙事数据/csv/_import.cypher（导入脚本）
 ```
 
-产出物经**人工审核**后，通过 `infra-neo4j-helper` 执行 import.cypher 导入 Neo4j。
+产出物经**人工审核**后，通过 `${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py` 执行 import.cypher 导入 Neo4j。
 
 #### nrt-graph-builder（增量构建）
 
@@ -121,13 +121,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["analyze<br/>10 种图算法"] --> B["JSON 分析结果<br/>growth_opportunities"]
+    A["analyze<br/>10 种图算法"] --> B["growth_opportunities<br/>(JSON)"]
     B --> C["generate<br/>Claude 撰写创意草案"]
-    C --> D["草案 .md<br/>status: pending"]
-    D --> E{"人工审批"}
-    E -->|approved| F["apply<br/>解析草案 → Cypher → Neo4j"]
-    E -->|rejected| G["废弃 / 修改后重新提交"]
-    F --> H["status: applied"]
+    C --> D["02_剧情数据/<日期_概述>.md<br/>frontmatter status=10"]
+    D --> E{"人工审批<br/>改 frontmatter status=11"}
+    E -->|approve → 11| F["apply<br/>提取节点 → Cypher → Neo4j"]
+    E -->|reject → 0| G["驳回"]
+    F --> H["打 applied_at"]
 ```
 
 10 种分析算法（偏向**叙事创意发现**，与 graph-builder 的数据质量检查互补）：
@@ -147,13 +147,15 @@ flowchart LR
 
 ### 1.4 审批流程
 
-> 叙事基础层中，**仅有 nrt-narrative-grower 的草案有显式审批流程**。
+> 叙事基础层中，**仅有 nrt-narrative-grower 的草案有显式审批流程**。草案以 Markdown 文件存于 `02_剧情数据/`，**流程状态记在文件 frontmatter**（不写入图数据库），审批为**手动编辑 frontmatter 的 `status` 字段**。
 
 ```
-pending（初始） → approved（人工批准） → applied（自动，导入成功后）
-                → rejected（人工驳回）
+status=10（待审） → status=11（手动改 frontmatter 通过） → applied_at 标记（apply 写回后）
+                 → status=0（手动驳回）
 ```
 
+- 草案为 `02_剧情数据/<日期_概述>.md` 文件（见 [剧情.md](00_init/Schema/剧情.md)），generate 落盘即 frontmatter `status=10`。
+- **applied 用独立字段 `applied_at` 表达**（非空=已应用），不占 status 值。
 - extractor 产出物经人工审核后由用户手动触发导入，但无正式 status 字段
 - graph-builder 手动模式直接写入，无审批；发现模式产出建议后需用户确认
 - **叙事基础节点本身没有 approve 字段**，不参与下游审批
@@ -227,7 +229,9 @@ flowchart TB
 | **创建的节点** | AppearanceStyle, LanguageStyle | CostumeStyle | DesignSheet | IllusDesign | StandingIllustration |
 | **创建的边** | has_appearance, has_voice_style | has_costume, wears | produces | produces, outfit_for | expands_to, ref_style |
 | **前驱依赖** | Character 存在 | Character 存在 | AppearanceStyle.status=1 | DesignSheet.status=2 + CostumeStyle.status=11 | IllusDesign.status=2 |
-| **调用子 Skill** | infra-neo4j-helper | infra-neo4j-helper | char-prompt-assembler (Mode A) + infra-image-generator | char-prompt-assembler (Mode B) + infra-image-generator | char-prompt-assembler (Mode C) + infra-image-generator |
+| **调用子 Skill** | — | — | char-prompt-assembler (Mode A) + infra-image-generator | char-prompt-assembler (Mode B) + infra-image-generator | char-prompt-assembler (Mode C) + infra-image-generator |
+
+> 所有 skill 通过 `${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py` 读写图数据库。每个 skill 内部遵循三段式【查状态 → 完成任务 → 保存结果】：char-prompt-assembler / infra-image-generator 为**纯产出层**（只产文件、不写图），节点字段与 status 由生产 skill 在「保存结果」步用 MERGE 兜底统一写入。
 | **参数** | char_id | char_id | node_id, target_status | char_id, target_status | char_id, target_status |
 
 ### 2.3 两类 Status 流转
@@ -251,7 +255,7 @@ flowchart TB
 
 #### 全节点 Status 汇总表
 
-> 审批态与生产态隔开：生产 `0/1/2`，审批专属 `10`（待审）/ `11`（批准）。通过 → `11`；驳回 → `0`。
+> 审批态与生产态隔开：生产 `0/1/2`（`0`=首次待生成），审批专属 `10`（待审）/ `11`（批准）。通过 → `11`；驳回 → `0`。另：**`-1` = 作废重做**（sync 级联重置后；skill 看到 `-1` 必须重新生成并覆盖旧产物，禁止因文件已存在而跳过）。
 
 | 节点 | 生成 Skill | 0 | 1 | 2 | 10 | 11 |
 |------|-----------|---|---|---|----|----|
@@ -304,6 +308,8 @@ flowchart TB
 | has_voice_style | Character → LanguageStyle | 角色基础数据变更 → 重置语言风格 |
 | has_costume | Character → CostumeStyle | 角色基础数据变更 → 重置着装设计 |
 | produces | AppearanceStyle → DesignSheet | 外貌变更 → 重置设计图 |
+| produces | DesignSheet → IllusDesign | 设计图变更 → 重置立绘设计图 |
+| outfit_for | CostumeStyle → IllusDesign | 着装变更 → 重置立绘设计图 |
 | expands_to | IllusDesign → StandingIllustration | 立绘设计变更 → 重置所有变体 |
 | ref_style | LanguageStyle → StandingIllustration | 语言风格变更 → 重置引用它的变体 |
 
@@ -311,8 +317,6 @@ flowchart TB
 
 | 边 | 方向 | 阻断原因 |
 |----|------|---------|
-| produces | DesignSheet → IllusDesign | 设计图更新不自动重着装（着装可独立存在） |
-| outfit_for | CostumeStyle → IllusDesign | 着装变更不自动重绘立绘（需人工决定） |
 | wears | Event → CostumeStyle | 事件变更不影响着装定义 |
 
 #### 级联场景举例
@@ -320,11 +324,11 @@ flowchart TB
 **场景 A：修改角色外貌描述（AppearanceStyle）**
 ```
 AppearanceStyle 变更
-  → sync=true → DesignSheet 重置 (status=0) ✅
-  → DesignSheet → IllusDesign (sync=false) → 阻断 ❌
-  → IllusDesign 和 StandingIllustration 不受影响
+  → sync=true → DesignSheet 重置 ✅
+  → sync=true → IllusDesign 重置 ✅（produces）
+  → sync=true → StandingIllustration 重置 ✅（expands_to）
 ```
-**含义**：改了外貌需要重新生成三视图，但已有的着装立绘和变体不自动重做。
+**含义**：外貌是整条美术链的基础，改外貌全链重置（设计图→立绘设计图→立绘变体都需重做）。
 
 **场景 B：修改语言风格（LanguageStyle）**
 ```
@@ -336,10 +340,10 @@ LanguageStyle 变更
 **场景 C：修改着装（CostumeStyle）**
 ```
 CostumeStyle 变更
-  → outfit_for (sync=false) → 阻断 ❌
-  → IllusDesign 不受影响
+  → outfit_for (sync=true) → IllusDesign 重置 ✅
+  → sync=true → StandingIllustration 重置 ✅（expands_to）
 ```
-**含义**：着装修改不会自动重绘对应立绘，需人工决定是否重做。
+**含义**：着装变更会重置穿该着装的所有立绘设计图及其变体。
 
 ### 2.6 提示词分层策略
 
@@ -360,6 +364,12 @@ CostumeStyle 变更
 
 用户可通过 `char-design` 传入角色名或 ID，Agent 自动查询当前进度并调度对应 Skill 推进。也可无参数调用查看所有角色的美术进度概览。
 
+### 2.8 立绘按需生成（TODO）
+
+> 当前 `char-stand-designer` 按角色优先级一次生成所有变体。**按需生成（入度>N 才出图）待实现**。
+
+计划：先建变体节点+提示词（status=1），待立绘被剧情场景引用（入度>N）后再触发出图（status=10）。需要剧情侧定义**场景→立绘引用边**与入度查询，详见 [剧情.md](00_init/Schema/剧情.md) TODO。当前可显式传 `target_status=1` 先批量建节点+提示词而不出图。
+
 ---
 
 ## 3. 场景美术节点的流程（TODO）
@@ -377,28 +387,47 @@ CostumeStyle 变更
 
 ---
 
-## 4. 剧情的流程（TODO）
+## 4. 剧情的流程
 
-> **当前状态**：Schema 标注"待补充"（[剧情.md](00_init/Schema/剧情.md)）。
+> **当前状态**：叙事自增长闭环已实现（[剧情.md](00_init/Schema/剧情.md) 定义叙事草案 Markdown 文件规范）。
+> `nrt-narrative-grower` 分析叙事图缺口 → 生成创意草案（MD 文件）→ 人工审批 → apply 写回叙事基础层。
 
-### 待补充内容
+### 叙事草案（Markdown 文件）
 
-- 剧情相关节点定义（如 Chapter, Branch, Condition, Dialogue 等）
-- 剧情生成/组装 Skill
-- 从叙事基础层（Event, Character, Info）到剧情节点的转换流程
-- 分支/条件逻辑的表示方式
-- Status 流转与审批流程
-- 与叙事基础层的 sync 级联关系
+承载 grower 的 analyze→generate→apply 闭环，文件规范见 [剧情.md](00_init/Schema/剧情.md)。草案存于 `02_剧情数据/<日期_概述>.md`，**不写入图数据库**。
+
+- **status 语义**（frontmatter）：`10` 待审 / `11` 批准 / `0` 驳回 / `-1` 作废。
+- **applied**：用独立字段 `applied_at` 表达（非空=已应用），**不占 status 值**。
+
+### 三阶段流程
+
+1. **analyze**（图算法）：跑 10 种叙事创意检查 → `growth_opportunities`。
+2. **generate**：Claude 撰写创意草案 → 写 `02_剧情数据/<日期_概述>.md`（frontmatter status=10）。
+3. **apply**（status=11 后）：从草案正文提取基础节点（Character/Event/Location/Info + 边）写回叙事基础层 + 回写 frontmatter applied_at。提取规则复用 nrt-narrative-extractor。
+
+### 审批
+
+手动编辑 `02_剧情数据/<日期_概述>.md` 的 frontmatter：`status` 由 `10` 改 `11`（通过）或 `0`（驳回）。apply 由 grower skill 在 Claude Code 侧执行。
+
+### 边
+
+草案本身不是图节点，**不建任何边**。apply 后产生的基础节点之间用叙事基础层 6 种边自连，溯源用 frontmatter `applied_node_ids` 字段。
+
+### TODO
+
+- 立绘按需生成：场景 → 立绘引用边与入度门控，待定义（见 [剧情.md](00_init/Schema/剧情.md) TODO 与 §2.8）。
+- 分支/条件剧情（Chapter / Branch / Dialogue 等）尚未定义。
 
 ---
 
 ## 附录：基础设施 Skill
 
-以下两个 Skill 作为基础设施层，被所有业务 Skill 调用，不直接创建业务节点。
+以下组件作为基础设施层，被所有业务 skill 调用。
 
-| Skill | 职责 | 说明 |
-|-------|------|------|
-| **infra-neo4j-helper** | 自然语言 + Schema → Cypher → 执行 → 结构化返回 | 所有 Skill 读写图数据库的统一入口。支持多语句、增删改查混杂。 |
-| **infra-image-generator** | 从图节点读取 prompt 调用 OfoxAI API 生成图片 | 支持文生图（DesignSheet）和图生图（IllusDesign, StandingIllustration）。生成后设 status=10（待审）。 |
+| 组件 | 职责 | 说明 |
+|------|------|------|
+| **cypher_exec.py** | 执行 Cypher（统一图读写入口） | `${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py`，所有 skill 读写图数据库的唯一脚本。支持 `-c`/`-f`/`--stdin`/`--multi`/`--json`/`--raw`。Cypher 由调用方即时生成。 |
+| **infra-image-generator** | 读 prompt 文件调 OfoxAI API 生成图片（纯产出） | 文生图（DesignSheet）/ 图生图（IllusDesign, StandingIllustration）。不写图、不写 status。 |
+| **char-prompt-assembler** | 组装提示词为 prompt 文件（纯产出） | 三种模式 A/B/C。不读写图、不写 status。 |
 
-另有 `char-prompt-assembler` 作为提示词组装层，被 char-design-sheet / char-illus-designer / char-stand-designer 调用，不主动创建节点，只写入 prompt 字段并推进 status。
+> infra-neo4j-helper skill 已废弃，脚本合并为 `${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py`。char-prompt-assembler / infra-image-generator 为**纯产出层**，只产文件、不写图；节点字段与 status 由调用方（生产 skill）在「保存结果」步统一写入。

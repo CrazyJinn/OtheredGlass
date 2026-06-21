@@ -8,7 +8,7 @@
 
 **边方向原则**：所有边方向统一为 **上游（被继承者/源头）→ 下游（继承者/消费者）**。
 
-**同步机制**：每条边都有 `sync` 属性（boolean）。当上游节点更新时，所有 `sync=true` 的出边指向的下游节点自动标记为"待修改"。同步沿边方向级联传播。
+**同步机制**：每条边都有 `sync` 属性（boolean）。当上游节点更新时，所有 `sync=true` 的出边指向的下游节点 status 重置为 `-1`（作废重做，skill 必须重新生成覆盖旧产物）。同步沿边方向级联传播。
 
 ---
 
@@ -60,8 +60,8 @@
 | has_costume | Character → CostumeStyle | 1:N | ✅ | 角色着装 |
 | has_voice_style | Character → LanguageStyle | 1:1 | ✅ | 角色语言风格 |
 | produces | AppearanceStyle → DesignSheet | 1:1 | ✅ | 外貌产出设计图 |
-| produces | DesignSheet → IllusDesign | 1:N | ❌ | 设计图→立绘设计图 |
-| outfit_for | CostumeStyle → IllusDesign | 1:1 | ❌ | 着装→立绘设计图 |
+| produces | DesignSheet → IllusDesign | 1:N | ✅ | 设计图→立绘设计图 |
+| outfit_for | CostumeStyle → IllusDesign | 1:1 | ✅ | 着装→立绘设计图 |
 | wears | Event → CostumeStyle | N:N | ❌ | 事件着装 |
 | expands_to | IllusDesign → StandingIllustration | 1:N | ✅ | 拓展表情/动作变体 |
 | ref_style | LanguageStyle → StandingIllustration | 1:N | ✅ | 语言风格→立绘参考 |

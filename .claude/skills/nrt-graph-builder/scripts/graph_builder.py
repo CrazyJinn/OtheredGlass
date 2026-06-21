@@ -11,22 +11,14 @@ import os
 import re
 import sys
 
-# 导入 neo4j-helper 的 Neo4jClient（已改名为 infra-neo4j-helper）
-_NEO4J_HELPER = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "infra-neo4j-helper", "scripts"
-))
-if os.path.isdir(_NEO4J_HELPER):
-    sys.path.insert(0, _NEO4J_HELPER)
-
-from neo4j_client import Neo4jClient, create_client
-
-# 导入雪花算法 ID 生成器
-_SNOWFLAKE_DIR = os.path.normpath(os.path.join(
+# 共享脚本目录（.claude/scripts）：cypher_exec.py + snowflake_base62.py
+_SCRIPTS_DIR = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "scripts"
 ))
-if os.path.isdir(_SNOWFLAKE_DIR):
-    sys.path.insert(0, _SNOWFLAKE_DIR)
+if os.path.isdir(_SCRIPTS_DIR):
+    sys.path.insert(0, _SCRIPTS_DIR)
 
+from cypher_exec import Neo4jClient, create_client
 from snowflake_base62 import SnowflakeGenerator
 
 _id_gen = SnowflakeGenerator()

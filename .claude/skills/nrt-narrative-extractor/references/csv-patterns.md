@@ -164,9 +164,9 @@ Event → Event
 | 导入顺序 | 节点在前，边在后；节点按 Character → Location → Event → Info 排列 |
 | 字符串 | Cypher 单引号 `'...'`，内容中的 `'` 需转义为 `\'` |
 
-> 不使用 LOAD CSV 的原因：LOAD CSV 的 `file:///` 依赖 Neo4j import 目录，内联 MERGE 可直接用 `execute_cypher.py -f --multi --json` 执行，零文件路径依赖。
+> 不使用 LOAD CSV 的原因：LOAD CSV 的 `file:///` 依赖 Neo4j import 目录，内联 MERGE 可直接用 `cypher_exec.py -f --multi --json` 执行，零文件路径依赖。
 
-> `//` 注释会导致 `execute_cypher.py` 的 `split_cypher_statements` 跳过整段语句，因此 import.cypher 中不得包含任何 `//` 注释。
+> `//` 注释会导致 `cypher_exec.py` 的 `split_cypher_statements` 跳过整段语句，因此 import.cypher 中不得包含任何 `//` 注释。
 
 ### 节点模板
 

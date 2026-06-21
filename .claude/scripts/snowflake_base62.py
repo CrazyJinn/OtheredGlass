@@ -1,5 +1,7 @@
 """
-雪花算法 ID 生成器（Base62 编码输出）
+snowflake_base62.py — 雪花算法 Base62 ID 生成器
+
+全局唯一，无前缀。供各 skill 调用以生成节点 ID。
 
 结构（64 bit）:
   1 bit   - 符号位，始终为 0
@@ -8,6 +10,9 @@
   12 bit  - 序列号（0 ~ 4095），同一毫秒内递增
 
 输出：Base62 字符串（0-9 A-Z a-z），比纯数字更短、URL-safe。
+
+CLI 用法：
+    python .claude/scripts/snowflake_base62.py -n 1 -q   # 安静模式，每行一个 id
 """
 
 import time

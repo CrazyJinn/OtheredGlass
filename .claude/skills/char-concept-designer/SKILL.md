@@ -1,19 +1,19 @@
 ---
 name: char-concept-designer
 description: |
-  从 Neo4j 提取角色信息，创建 AppearanceStyle / LanguageStyle 图节点并写入内容。
-  CostumeStyle 由 char-costume-designer skill 负责。
-  在需要设计角色外貌方向（外貌/色彩/材质）、生成语言风格、
-  或角色数据节点 status=0 需推进时使用。
+  推进 AppearanceStyle / LanguageStyle 图节点：查询状态 → 生成外貌/语言设计内容 → 保存结果（MERGE 兜底建节点+边，写内容与 status）。
+  CostumeStyle 由 char-costume-designer 负责。在需要设计角色外貌方向、生成语言风格、或概念节点 status=0 需推进时使用。
 argument-hint: <char_id>
 arguments:
   - char_id
 allowed-tools: Read, Bash, Write, Edit
 ---
 
+> **status=-1 = 作废重做**：当 AppearanceStyle/LanguageStyle 被 sync 级联重置为 `status=-1` 时，即使各属性已有值（本 skill 无外部文件，"产物"即图节点属性），也**必须重新生成并覆盖**。`-1` 与 `0` 都视为"需生成"起点；`-1` 明确表示旧内容作废，**禁止因属性已有值而跳过**。
+
 # 角色概念设计
 
-创建并写入 AppearanceStyle（外貌）和 LanguageStyle（语言风格）图节点
+推进并写入 AppearanceStyle（外貌）和 LanguageStyle（语言风格）图节点。
 
 ## 参数
 
@@ -21,69 +21,34 @@ allowed-tools: Read, Bash, Write, Edit
 |------|------|--------|
 | char_id | 角色节点 ID（snowflake Base62） | 必传 |
 
-## 流程
+## 流程（三段式：查状态 → 完成任务 → 保存结果）
 
-### 1. 获取角色数据
+### 1. 查询目标节点状态
 
-通过 neo4j-helper 按 char_id 查询角色，获取完整信息：
+通过 `${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py` 查询角色 + 已有的 AppearanceStyle / LanguageStyle：
 
 ```cypher
-MATCH (ch:Character {id: $char_id})
+MATCH (ch:Character {id: '<char_id>'})
 OPTIONAL MATCH (ch)-[:has_appearance]->(app:AppearanceStyle)
 OPTIONAL MATCH (ch)-[:has_voice_style]->(voice:LanguageStyle)
-RETURN ch, app, voice;
+RETURN ch, app, voice
 ```
 
-仅处理 status=0 的节点。
+- **目标节点判定**：
+  - 若 `app` 为空 → 生成新 snowflake id 作为 `APP_ID`，本次将新建；若存在 → `APP_ID = app.id`，按 status 决定起点（`-1`/`0` 需重做）。
+  - `voice` 同理（怪物跳过，见下）。
+- **角色类型判断**（决定是否生成 LanguageStyle）：
 
-### 2. 判断产出
+  | 角色类型 | AppearanceStyle | LanguageStyle |
+  |---------|----------------|---------------|
+  | 主角(char) / NPC | 完整版 | 生成 |
+  | 怪物(enemy) | 简化版 | 不生成 |
 
-| 角色类型 | AppearanceStyle | LanguageStyle |
-|---------|----------------|---------------|
-| 主角(char) / NPC | 完整版 | 生成 |
-| 怪物(enemy) | 简化版 | 不生成 |
+### 2. 完成任务
 
-### 3. 创建节点和边
+LLM 按 [references/template-角色美术设定.md](references/template-角色美术设定.md) 与 [references/template-角色语言风格.md](references/template-角色语言风格.md) 生成设计内容。
 
-先生成 snowflake ID（AppearanceStyle 和 LanguageStyle 各需一个）：
-
-```bash
-python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 2 -q
-```
-
-通过 neo4j-helper 执行 Cypher 创建节点和边。
-
-#### 3.1 AppearanceStyle（1 个）
-
-创建节点 + `has_appearance` 边（Character → AppearanceStyle）：
-
-```cypher
-MERGE (app:AppearanceStyle {id: '<snowflake_id_1>'})
-SET app.name = '角色名外貌特征', app.status = 0
-WITH app
-MATCH (ch:Character {id: $char_id})
-MERGE (ch)-[r:has_appearance]->(app)
-SET r.sync = true;
-```
-
-#### 3.2 LanguageStyle（1 个，怪物跳过）
-
-创建节点 + `has_voice_style` 边（Character → LanguageStyle）：
-
-```cypher
-MERGE (voice:LanguageStyle {id: '<snowflake_id_2>'})
-SET voice.name = '角色名语言风格', voice.status = 0
-WITH voice
-MATCH (ch:Character {id: $char_id})
-MERGE (ch)-[r:has_voice_style]->(voice)
-SET r.sync = true;
-```
-
-### 4. 生成内容并写入图节点
-
-按模板（见 references/）生成内容，直接通过 neo4j-helper 写入图节点字段。
-
-**AppearanceStyle**（status → 1）：
+**AppearanceStyle**（怪物用简化版）：
 
 | 维度 | 属性 | 示例 | 说明 |
 |------|------|------|------|
@@ -100,7 +65,7 @@ SET r.sync = true;
 | 唇形 | lip_shape | 薄唇 / 饱满 / 厚唇 / 微笑唇 | 单选 |
 | 特殊标记 | marks | 无 / 疤痕 / 纹身 / 胎记 / 泪痣 | 可多选 |
 
-**LanguageStyle**（怪物跳过，status → 1）：
+**LanguageStyle**（怪物跳过）：
 
 | 内容 | 属性 |
 |------|------|
@@ -110,7 +75,31 @@ SET r.sync = true;
 | 情绪模式（5 种情境） | emotion_patterns |
 | 概要（1-2 句，含身份/绝不会说的话/标准台词） | description |
 
+### 3. 保存结果（MERGE 兜底 + 写内容 + status）
+
+一次性写入（节点不存在则兜底创建）：
+
+```cypher
+// AppearanceStyle
+MERGE (app:AppearanceStyle {id: '<APP_ID>'})
+  ON CREATE SET app.status = 0;
+MATCH (ch:Character {id: '<char_id>'}), (app:AppearanceStyle {id: '<APP_ID>'})
+MERGE (ch)-[r:has_appearance]->(app) SET r.sync = true;
+MATCH (app:AppearanceStyle {id: '<APP_ID>'})
+SET app.name = '<角色名外貌特征>',
+    app.appearance = '...', app.visual_tone = '...', app.first_impression = '...',
+    app.shape_language = '...', app.age_impression = '...', app.body_type = '...',
+    app.skin_tone = '...', app.ethnicity = '...', app.hair = '...', app.eye = '...',
+    app.lip_shape = '...', app.marks = '...',
+    app.status = 1;
+```
+
+LanguageStyle（怪物跳过）同理：MERGE 节点 + `has_voice_style` 边（sync=true）+ SET 五项内容 + `status = 1`。
+
+**status 写入**：概念节点无审批，完成即 `status = 1`。
+
 ## 参考文档
 
 - [角色美术设定模板](references/template-角色美术设定.md)
 - [角色语言风格模板](references/template-角色语言风格.md)
+- 写 Cypher 规则：[${CLAUDE_SKILL_DIR}/../../scripts/README.md](../../scripts/README.md)

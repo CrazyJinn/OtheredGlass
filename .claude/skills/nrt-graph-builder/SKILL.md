@@ -26,11 +26,11 @@ allowed-tools: Read, Bash
 # 本 skill 脚本
 SCRIPT=".claude/skills/nrt-graph-builder/scripts/graph_builder.py"
 
-# neo4j-helper 脚本（本项目内，用于查询已有实体）
-NEO4J_HELPER=".claude/skills/infra-neo4j-helper/scripts"
+# cypher 执行脚本（.claude/scripts，用于查询已有实体）
+CYPHER_EXEC="python ${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py"
 
 # snowflake ID 生成器
-SF_GEN="python .claude/scripts/snowflake_base62.py"
+SF_GEN="python ${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py"
 ```
 
 ---
@@ -60,9 +60,9 @@ SF_GEN="python .claude/scripts/snowflake_base62.py"
 对用户提到的已有实体（如"陈默"、"星耀电竞"），通过名称从数据库查找：
 
 ```bash
-python $NEO4J_HELPER/execute_cypher.py \
+$CYPHER_EXEC \
   -c "MATCH (c:Character) WHERE c.name='陈默' RETURN c.id AS id, c.name AS name, labels(c)[0] AS label" \
-  --password 12345678 --json
+  --json
 ```
 
 如果实体已存在，复用其 snowflake ID。如果不存在，标记为待创建。
