@@ -95,8 +95,8 @@ flowchart LR
     Character -->|"has_costume ✅ 1:N"| Costume
     Character -->|"has_voice_style ✅ 1:1"| Language
     Appearance -->|"produces ✅ 1:1"| DesignSheet
-    Costume -->|"outfit_for ❌ 1:1"| IllusDesign
-    DesignSheet -->|"produces ❌ 1:N"| IllusDesign
+    Costume -->|"outfit_for ✅ 1:1"| IllusDesign
+    DesignSheet -->|"produces ✅ 1:N"| IllusDesign
     Event -->|"wears ❌ N:N"| Costume
     IllusDesign -->|"expands_to ✅ 1:N"| StandingIllus
     Language -->|"ref_style ✅ 1:N"| StandingIllus

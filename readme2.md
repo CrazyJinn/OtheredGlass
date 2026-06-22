@@ -210,13 +210,13 @@ flowchart TB
     Character -->|"has_costume ✅"| Costume
     Event -->|"wears ❌"| Costume
     Appearance -->|"produces ✅"| DesignSheet
-    DesignSheet -->|"produces ❌"| IllusDesign
-    Costume -->|"outfit_for ❌"| IllusDesign
+    DesignSheet -->|"produces ✅"| IllusDesign
+    Costume -->|"outfit_for ✅"| IllusDesign
     IllusDesign -->|"expands_to ✅"| Standing
     Language -->|"ref_style ✅"| Standing
 
-    linkStyle 0,1,2,4,7,8 stroke:green,stroke-width:2px
-    linkStyle 3,5,6 stroke:red,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 0,1,2,4,5,6,7,8 stroke:green,stroke-width:2px
+    linkStyle 3 stroke:red,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 > 图例：✅ = sync=true（级联传播），❌ = sync=false（阻断级联）

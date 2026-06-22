@@ -80,9 +80,9 @@ char-prompt-assembler 组装 prompt 文件到 `06_角色美术/<char_name>/promp
 MERGE (illus:IllusDesign {id: '<ILLUS_ID>'})
   ON CREATE SET illus.status = 0;
 MATCH (ds:DesignSheet {id: '<ds_id>'}), (illus:IllusDesign {id: '<ILLUS_ID>'})
-MERGE (ds)-[r:produces]->(illus) SET r.sync = false;
+MERGE (ds)-[r:produces]->(illus) SET r.sync = true;
 MATCH (cos:CostumeStyle {id: '<cos_id>'}), (illus:IllusDesign {id: '<ILLUS_ID>'})
-MERGE (cos)-[r:outfit_for]->(illus) SET r.sync = false;
+MERGE (cos)-[r:outfit_for]->(illus) SET r.sync = true;
 MATCH (illus:IllusDesign {id: '<ILLUS_ID>'})
 SET illus.prompt_path = '<PROMPT_PATH>',
     illus.image_path  = '<IMAGE_PATH>',        // 仅 target_status=2 时

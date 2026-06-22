@@ -24,8 +24,8 @@
 |------|------|
 | 技术形态 | Streamlit 直连 Neo4j（`neo4j` python driver） |
 | V1 范围 | `Character` + 美术生产链 6 节点；叙事其他（Event/Location/Info）与剧情、场景美术**预留 + TODO**，不实现 |
-| 保存后级联 | 仅沿 `sync=true` 边 BFS 重置下游 `status=0`；**不自动重新出图**，重出图仍由 Skills 按 status 推进 |
-| 编辑已批准节点 | 编辑 `status=11` 的节点 → 自身直接回退到 **0（重做）**，与下游一致 |
+| 保存后级联 | 仅沿 `sync=true` 边 BFS 重置下游 `status=-1`（作废重做）；**不自动重新出图**，重出图仍由 Skills 按 status 推进 |
+| 编辑已批准节点 | 编辑 `status=11` 的节点 → 自身回退到 **0（重做）**；下游由 cascade 标 **-1** |
 | 审批职责切分 | 节点编辑器管「改属性 + submit」；审批中心管「approve / reject」 |
 | DAG 展示 | `st.graphviz_chart`；保留树形展开（expander）作备选 |
 | Schema 来源 | 字段定义解析自 `Schema/*.md`；标签词表读 `标签库.json`；status 流转与 enum 词表在 `status.py` 显式定义 |
@@ -53,7 +53,7 @@
 ├── core/
 │   ├── schema_loader.py    # 解析 Schema/*.md + 标签库.json → SchemaDef
 │   ├── status.py           # 各节点 status 枚举、流转规则、enum 词表
-│   ├── cascade.py          # sync BFS 级联（重置下游 status=0）
+│   ├── cascade.py          # sync BFS 级联（重置下游 status=-1 作废重做）
 │   └── approval.py         # 审批状态机 + 下游推进前置校验
 ├── ui/
 │   ├── page_overview.py        # 进度看板
@@ -144,7 +144,7 @@
 
 ### 5.1 级联引擎 `cascade.py`
 
-保存属性后触发。沿 `sync=true` 出边做 BFS，把可达下游 `status` 重置为 `0`，遇 `sync=false` 阻断：
+保存属性后触发。沿 `sync=true` 出边做 BFS，把可达下游 `status` 重置为 `-1`（作废重做），遇 `sync=false` 阻断：
 
 ```python
 def cascade_reset(changed_id) -> list[CascadedNode]:
@@ -158,7 +158,7 @@ def cascade_reset(changed_id) -> list[CascadedNode]:
             if d.id not in visited:
                 result.append(d)                    # 记录受影响节点 + BFS 层级
                 queue.append(d.id)
-    repo.set_status_batch([n.id for n in result], 0)
+    repo.set_status_batch([n.id for n in result], -1)
     return result        # 返回给 UI 展示级联路径
 ```
 
@@ -175,21 +175,23 @@ def cascade_reset(changed_id) -> list[CascadedNode]:
 | has_voice_style | Character → LanguageStyle | true | 传播 |
 | has_costume | Character → CostumeStyle | true | 传播 |
 | produces | AppearanceStyle → DesignSheet | true | 传播 |
+| produces | DesignSheet → IllusDesign | true | 传播 |
+| outfit_for | CostumeStyle → IllusDesign | true | 传播 |
 | expands_to | IllusDesign → StandingIllustration | true | 传播 |
 | ref_style | LanguageStyle → StandingIllustration | true | 传播 |
-| produces | DesignSheet → IllusDesign | false | 阻断 |
-| outfit_for | CostumeStyle → IllusDesign | false | 阻断 |
 | wears | Event → CostumeStyle | false | 阻断（叙事边） |
+
+> 美术生产链的 sync 边全部传播（唯一阻断的是 `wears` 叙事边）。任一上游节点编辑保存后，沿这些边 BFS 把可达下游 status 重置为 -1（作废重做）。
 
 **级联场景示例**：
 
-| 编辑节点 | 级联重置的下游 |
+| 编辑节点 | 级联重置的下游（status → -1） |
 |---------|---------------|
-| Character | AppearanceStyle、LanguageStyle、CostumeStyle；其中 AppearanceStyle 再级联到 DesignSheet，LanguageStyle 再级联到 ref_style 指向的 StandingIllustration（CostumeStyle 因 outfit_for 阻断，无下游） |
-| AppearanceStyle | DesignSheet（DesignSheet→IllusDesign 阻断） |
+| Character | AppearanceStyle、LanguageStyle、CostumeStyle；其中 AppearanceStyle 再级联到 DesignSheet → IllusDesign → StandingIllustration，CostumeStyle 再级联到 IllusDesign → StandingIllustration，LanguageStyle 再级联到 ref_style 指向的 StandingIllustration |
+| AppearanceStyle | DesignSheet → IllusDesign → StandingIllustration（全链） |
 | LanguageStyle | ref_style 指向的 StandingIllustration |
-| CostumeStyle | 无（outfit_for 阻断） |
-| DesignSheet | 无（produces D→I 阻断） |
+| CostumeStyle | IllusDesign → StandingIllustration |
+| DesignSheet | IllusDesign → StandingIllustration |
 | IllusDesign | expands_to 指向的 StandingIllustration |
 
 ### 5.2 审批状态机 `approval.py` + `status.py`
@@ -200,9 +202,9 @@ def cascade_reset(changed_id) -> list[CascadedNode]:
 
 | label | 合法 status | 完成态（可 submit） |
 |-------|------------|------------------|
-| AppearanceStyle / LanguageStyle | 0 待设计 → 1 已完成 | 无审批 |
-| CostumeStyle | 0 重做 → 1 已完成 → 10 待审 → 11 批准 | 1 |
-| DesignSheet / IllusDesign / StandingIllustration | 0 待生成 → 1 提示词完成 → 2 图片完成 → 10 待审 → 11 批准 | 2 |
+| AppearanceStyle / LanguageStyle | -1 作废 → 0 待设计 → 1 已完成 | 无审批 |
+| CostumeStyle | -1 作废 → 0 重做 → 1 已完成 → 10 待审 → 11 批准 | 1 |
+| DesignSheet / IllusDesign / StandingIllustration | -1 作废 → 0 待生成 → 1 提示词完成 → 2 图片完成 → 10 待审 → 11 批准 | 2 |
 
 **审批操作**：
 
@@ -223,11 +225,11 @@ def cascade_reset(changed_id) -> list[CascadedNode]:
 用户改属性 → 点【保存】
   ① repo.update_node(id, props)               写属性
   ② 若 node.status == 11 → set_status(id, 0)   审批失效，回退 0 重做
-  ③ cascade_reset(id)                          sync BFS 重置下游 status=0
+  ③ cascade_reset(id)                          sync BFS 重置下游 status=-1
   ④ UI 弹级联路径：已影响 N 个下游节点
 ```
 
-> 规则 ②：编辑 `status=11` 的节点 → 自身回退到 0。内容实质变更 = 审批完全作废，与下游一起回到 0 重走流程，而非停在 10 拿新内容直接送审。这是对「修改后审批态不一致」隐患的制度化防线。
+> 规则 ②：编辑 `status=11` 的节点 → 自身回退到 0。内容实质变更 = 审批完全作废，自身回 0 重走流程、下游由 cascade 标 -1 作废重做，而非停在 10 拿新内容直接送审。这是对「修改后审批态不一致」隐患的制度化防线。
 
 ---
 
