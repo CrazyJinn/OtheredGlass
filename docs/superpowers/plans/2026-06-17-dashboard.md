@@ -537,7 +537,7 @@ Expected: FAIL（模块未定义）。
 NODE_STATUS = {
     "AppearanceStyle":     {"legal": [0, 1],          "completion": 1, "has_approval": False},
     "LanguageStyle":       {"legal": [0, 1],          "completion": 1, "has_approval": False},
-    "CostumeStyle":        {"legal": [0, 1, 10, 11],  "completion": 1, "has_approval": True},
+    "CostumeStyle":        {"legal": [0, 1],          "completion": 1, "has_approval": False},
     "DesignSheet":         {"legal": [0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
     "IllusDesign":         {"legal": [0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
     "StandingIllustration":{"legal": [0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
@@ -899,7 +899,6 @@ from core import approval
 
 def test_submit_at_completion_returns_10():
     assert approval.submit("DesignSheet", 2) == 10
-    assert approval.submit("CostumeStyle", 1) == 10
 
 
 def test_submit_rejects_wrong_status():

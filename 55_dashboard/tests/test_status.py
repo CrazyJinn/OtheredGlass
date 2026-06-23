@@ -10,6 +10,7 @@ def test_completion_status():
 def test_has_approval():
     assert status.has_approval("DesignSheet") is True
     assert status.has_approval("AppearanceStyle") is False
+    assert status.has_approval("CostumeStyle") is False
 
 
 def test_is_approved():

@@ -3,6 +3,7 @@ name: char-design
 description: |
   角色美术生产链编排层——查询图状态、按依赖调度 skill 推进节点、处理 sync 级联。
   当用户需要设计角色美术、推进美术流程、查看进度、或处理角色美术相关任务时使用。
+permissionMode: bypassPermissions
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -70,7 +71,7 @@ ORDER BY n.status
 | 图节点 | Skill | Status 流程（含审批） | 审批 |
 |--------|-------|----------------------|------|
 | AppearanceStyle / LanguageStyle | char-concept-designer | -1/0→1 | 无 |
-| CostumeStyle | char-costume-designer | -1/0→1→10→11 | ✅ |
+| CostumeStyle | char-costume-designer | -1/0→1 | 无 |
 | DesignSheet | char-design-sheet | -1/0→1→2→10→11 | ✅ |
 | IllusDesign | char-illus-designer | -1/0→1→2→10→11 | ✅ |
 | StandingIllustration | char-stand-designer | -1/0→1→2→10→11 | ✅ |
@@ -78,7 +79,7 @@ ORDER BY n.status
 **Status 合法值**（skill 只能写入这些值，禁止其他值如 `3`）：
 - `-1` 作废重做（sync 级联重置后；skill 看到 `-1` 必须重新生成并覆盖旧产物，禁止因文件已存在而跳过）
 - AppearanceStyle / LanguageStyle：`0` 待设计 → `1` 已完成（无审批）
-- CostumeStyle：`0` 重做 → `1` 已完成 → `10` 待审 → `11` 批准
+- CostumeStyle：`0` 待设计 → `1` 已完成（无审批）
 - 生产节点（DesignSheet / IllusDesign / StandingIllustration）：`0` 待生成 → `1` 提示词完成 → `2` 图片完成 → `10` 待审 → `11` 批准。**实际推进**：`target_status=1` 时 skill 写 `1`；`target_status=2` 时 skill 直接写 `10`（图片完成即提交待审，`2` 为可选中间态，由 dashboard 手动 submit 路径使用）。
 - 生产态 `0/1/2`，审批专属 `10`/`11`；驳回归 `0`；**sync 级联重置归 `-1`**
 
@@ -90,15 +91,15 @@ ORDER BY n.status
 
 ### 4. 审批检查
 
-CostumeStyle 和生产节点在完成后需等待审批。审批态与生产态数值隔开：生产用 `0/1/2`，**审批专属 `10`（待审）/ `11`（批准）**。
+生产节点（DesignSheet / IllusDesign / StandingIllustration）在完成后需等待审批。审批态与生产态数值隔开：生产用 `0/1/2`，**审批专属 `10`（待审）/ `11`（批准）**。AppearanceStyle / LanguageStyle / CostumeStyle 无审批，完成值 `1` 即视为完成。
 
 判定规则：
-- status < 完成值（CostumeStyle 为 `1`，生产节点为 `2`）→ 未完成，继续处理
+- status < 完成值（生产节点为 `2`，无审批数据节点为 `1`）→ 未完成，继续处理
 - status = `10` → 等待 dashboard 审批，不可推进下游
 - status = `11` → 已批准，允许下游推进
 - 驳回 → status 归 `0` 重新处理
 
-只有 status = `11` 的节点才视为真正完成。
+生产节点只有 status = `11` 才视为真正完成；无审批节点（Appearance / Language / Costume）status = `1` 即完成。
 
 **若全部完成且已通过审批** → 报告完成状态。
 

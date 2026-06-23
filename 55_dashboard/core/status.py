@@ -4,7 +4,7 @@
 NODE_STATUS = {
     "AppearanceStyle":     {"legal": [-1, 0, 1],          "completion": 1, "has_approval": False},
     "LanguageStyle":       {"legal": [-1, 0, 1],          "completion": 1, "has_approval": False},
-    "CostumeStyle":        {"legal": [-1, 0, 1, 10, 11],  "completion": 1, "has_approval": True},
+    "CostumeStyle":        {"legal": [-1, 0, 1],          "completion": 1, "has_approval": False},
     "DesignSheet":         {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
     "IllusDesign":         {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
     "StandingIllustration":{"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},

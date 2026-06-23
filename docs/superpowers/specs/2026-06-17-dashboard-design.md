@@ -203,7 +203,7 @@ def cascade_reset(changed_id) -> list[CascadedNode]:
 | label | 合法 status | 完成态（可 submit） |
 |-------|------------|------------------|
 | AppearanceStyle / LanguageStyle | -1 作废 → 0 待设计 → 1 已完成 | 无审批 |
-| CostumeStyle | -1 作废 → 0 重做 → 1 已完成 → 10 待审 → 11 批准 | 1 |
+| CostumeStyle | -1 作废 → 0 待设计 → 1 已完成 | 1 |
 | DesignSheet / IllusDesign / StandingIllustration | -1 作废 → 0 待生成 → 1 提示词完成 → 2 图片完成 → 10 待审 → 11 批准 | 2 |
 
 **审批操作**：
@@ -217,7 +217,7 @@ def cascade_reset(changed_id) -> list[CascadedNode]:
 - `approve`：10 → 11（在审批中心）。
 - `reject`：10 → 0（在审批中心，可填理由）。
 
-**下游推进前置校验**（来自项目治理手册）：IllusDesign 推进需 `DesignSheet=11` 且 `CostumeStyle=11`；StandingIllustration 推进需 `IllusDesign=11`；StandingIllustration 的 10 仅作质量确认（无下游）。后台**不阻塞**推进（那是 Skills 的职责），只在节点详情展示「上游就绪状态」提示。
+**下游推进前置校验**（来自项目治理手册）：IllusDesign 推进需 `DesignSheet=11` 且 `CostumeStyle=1`；StandingIllustration 推进需 `IllusDesign=11`；StandingIllustration 的 10 仅作质量确认（无下游）。后台**不阻塞**推进（那是 Skills 的职责），只在节点详情展示「上游就绪状态」提示。
 
 ### 5.3 编辑保存的完整后置流程
 

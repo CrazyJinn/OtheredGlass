@@ -57,7 +57,7 @@ RETURN ch.name AS char_name, ch.priority AS priority,
   ```bash
   python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n <缺几个> -q
   ```
-  已有变体按 status 决定推进起点。各变体的表情/动作标签按变体语义推导（如"愤怒"→ `brow=紧锁; mouth=咬牙; hand=握拳`；标签值从 `55_dashboard/config/标签库.json` 的 eye/brow/mouth/head_angle/hand/foot 候选中选）。
+  已有变体按 status 决定推进起点。各变体的表情/动作标签按变体语义推导。
 - 记录 `illus_image`（图生图参考图）、`cos_name`（产物路径用）。
 
 > **TODO（立绘按需生成）**：出图（target_status=2）前应检查该立绘/着装组的**剧情入度**——即指向它的场景→立绘引用边数量（边类型待剧情模块定义，见 `00_init/Schema/剧情.md`）。入度 ≤ N（阈值待定）时，应先停在提示词态（status=1），待入度满足后再触发出图，避免为未被剧情引用的变体浪费 API。**当前未实现入度门控**，所有变体按 target_status 推进；可显式传 `target_status=1` 先批量建节点+提示词而不出图。

@@ -43,7 +43,7 @@ RETURN ch.name AS char_name,
        illus.id AS illus_id, illus.status AS illus_status, illus.adaptation_notes AS notes
 ```
 
-- **前驱校验**：`ds_status = 11`（DesignSheet 已批准）且 `cos_status = 11`（CostumeStyle 已批准），否则停止并提示先推进上游审批。
+- **前驱校验**：`ds_status = 11`（DesignSheet 已批准）且 `cos_status = 1`（CostumeStyle 已完成，无审批），否则停止并提示先推进上游。
 - **目标节点判定**（每组）：若 `illus_id` 为空 → 生成新 snowflake id 作为 `ILLUS_ID`，本次将新建；若存在 → `ILLUS_ID = illus_id`，按 status 决定推进起点。
 - 记录 `ds_image`（图生图参考图）、`cos_name`（产物路径用）。
 

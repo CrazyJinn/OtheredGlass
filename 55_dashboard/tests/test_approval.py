@@ -4,7 +4,6 @@ from core import approval
 
 def test_submit_at_completion_returns_10():
     assert approval.submit("DesignSheet", 2) == 10
-    assert approval.submit("CostumeStyle", 1) == 10
 
 
 def test_submit_rejects_wrong_status():
@@ -17,6 +16,8 @@ def test_submit_rejects_wrong_status():
 def test_submit_rejects_no_approval_label():
     with pytest.raises(approval.IllegalTransition):
         approval.submit("AppearanceStyle", 1)
+    with pytest.raises(approval.IllegalTransition):
+        approval.submit("CostumeStyle", 1)
 
 
 def test_approve_and_reject():

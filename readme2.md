@@ -249,9 +249,9 @@ flowchart TB
                                                  ──[infra-image-generator 生成图片]──→ 2（图片生成完成）
 ```
 
-#### CostumeStyle（特殊数据节点）
+#### CostumeStyle（数据节点）
 
-创建即 `status=10`（内容在创建时直接填写，待审）。
+创建即 `status=1`（内容在创建时直接填写，已完成，无审批）。
 
 #### 全节点 Status 汇总表
 
@@ -261,14 +261,14 @@ flowchart TB
 |------|-----------|---|---|---|----|----|
 | AppearanceStyle | char-concept-designer | 待设计 | 已完成 | — | — | — |
 | LanguageStyle | char-concept-designer | 待设计 | 已完成 | — | — | — |
-| CostumeStyle | char-costume-designer | 驳回重做 | 已完成 | — | 待审 | 批准 |
+| CostumeStyle | char-costume-designer | 待设计 | 已完成 | — | — | — |
 | DesignSheet | char-design-sheet | 待生成 | 提示词完成 | 图片完成 | 待审 | 批准 |
 | IllusDesign | char-illus-designer | 待生成 | 提示词完成 | 图片完成 | 待审 | 批准 |
 | StandingIllustration | char-stand-designer | 待生成 | 提示词完成 | 图片完成 | 待审 | 批准 |
 
 ### 2.4 审批流程
 
-> 4 种节点需要审批。审批态用 `10`（待审）/ `11`（批准），与生产态 `0/1/2` 隔开。
+> 3 种节点需要审批。审批态用 `10`（待审）/ `11`（批准），与生产态 `0/1/2` 隔开。
 
 ```
 未完成（status < 完成值）
@@ -281,12 +281,11 @@ flowchart TB
 
 | 被审批节点 | 下游消费者 | 推进条件 |
 |-----------|-----------|---------|
-| CostumeStyle | IllusDesign（outfit_for 边） | status=11（批准）才允许 IllusDesign 推进 |
 | DesignSheet | IllusDesign（produces 边） | status=11（批准）才允许 IllusDesign 推进 |
 | IllusDesign | StandingIllustration（expands_to 边） | status=11（批准）才允许 Standing 推进 |
 | StandingIllustration | 无下游 | status=10（待审）仅作为质量确认 |
 
-**AppearanceStyle 和 LanguageStyle 无审批流程**——它们是设计方向的文字描述，不产出图片，直接由设计师确认。
+**AppearanceStyle、LanguageStyle 和 CostumeStyle 无审批流程**——它们是设计方向的文字描述，不产出图片，直接由设计师确认。
 
 ### 2.5 Sync 级联机制
 

@@ -8,12 +8,6 @@
 ## 输出模板
 
 ```markdown
-# [角色名称] 着装适配提示词
-
-## 角色信息
-- **角色ID**：[ID]
-- **着装风格ID**：[costume_id]
-- **参考设计图**：DesignSheet.image_path
 
 ## 着装提示词
 

@@ -1,7 +1,7 @@
 ---
 name: char-costume-designer
 description: |
-  推进 CostumeStyle 图节点：查询状态 → 分析事件着装需求并生成内容 → 保存结果（复用加 wears 边；新建 MERGE 节点+边+内容，status=10 待审）。
+  推进 CostumeStyle 图节点：查询状态 → 分析事件着装需求并生成内容 → 保存结果（复用加 wears 边；新建 MERGE 节点+边+内容，status=1 已完成）。
   在需要为角色创建/追加着装方案时使用。
 argument-hint: <char_id>
 arguments:
@@ -11,7 +11,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 # 着装设计（CostumeStyle）
 
-为角色的每个事件分析着装需求，推进 CostumeStyle 节点并绑定 `wears` 边（Event → CostumeStyle）。新建着装写入内容后设 `status=10`（待审），等待 dashboard 审批通过后参与下游 IllusDesign 生产。
+为角色的每个事件分析着装需求，推进 CostumeStyle 节点并绑定 `wears` 边（Event → CostumeStyle）。新建着装写入内容后即 `status=1`（已完成，无审批），直接参与下游 IllusDesign 生产。
 
 ## 参数
 
@@ -53,7 +53,7 @@ ORDER BY e.id;
    - 例如：已有"职场御姐着装"，事件发生在"星耀电竞办公室" → 可复用
    - 例如：已有"职场御姐着装"，事件发生在"咖啡店约会" → 需要新着装
 3. 按着装需求分组：同一着装可覆盖的事件归为一组，每组对应一个 CostumeStyle（复用已有 or 新建）。
-4. 对需**新建**的组，生成 snowflake id 并按下方字段表填写内容（标签字段用分号 `;` 分隔，参考 `55_dashboard/config/标签库.json`）：
+4. 对需**新建**的组，生成 snowflake id 并按下方字段表填写内容：
 
    | 维度 | 属性 | 示例 | 说明 |
    |------|------|------|------|
@@ -79,11 +79,11 @@ MERGE (e)-[r:wears]->(cos) SET r.sync = false;
 
 复用无需审批，直接生效。
 
-#### 新建 CostumeStyle 的事件组（MERGE 节点+边+内容，status=10 待审）
+#### 新建 CostumeStyle 的事件组（MERGE 节点+边+内容，status=1 已完成）
 
 ```cypher
 MERGE (cos:CostumeStyle {id: '<snowflake_id>'})
-  ON CREATE SET cos.status = 10;
+  ON CREATE SET cos.status = 1;
 MATCH (ch:Character {id: '<char_id>'}), (cos:CostumeStyle {id: '<snowflake_id>'})
 MERGE (ch)-[r:has_costume]->(cos) SET r.sync = true;
 MATCH (e:Event) WHERE e.id IN ['<event_id_1>', '<event_id_2>', ...]
@@ -92,12 +92,12 @@ MERGE (e)-[r:wears]->(cos) SET r.sync = false;
 MATCH (cos:CostumeStyle {id: '<snowflake_id>'})
 SET cos.name = '<角色名-着装描述>',
     cos.outfit_style = '...', cos.garment = '...', cos.footwear = '...', cos.accessory_type = '...',
-    cos.status = 10;
+    cos.status = 1;
 ```
 
-**status 写入**：新建着装创建即 `status = 10`（待审）。复用操作不涉及新节点 status。
+**status 写入**：新建着装创建即 `status = 1`（已完成，无审批）。复用操作不涉及新节点 status。
 
-最后汇总：复用了哪些已有 CostumeStyle（哪些事件）、新建了哪些（status=10 待审），提示用户在 dashboard 审批新建着装。
+最后汇总：复用了哪些已有 CostumeStyle（哪些事件）、新建了哪些（status=1 已完成）。
 
 ## 参考文档
 
