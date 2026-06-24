@@ -28,3 +28,4 @@ NEO4J_PASSWORD = (
 SCHEMA_DIR = PROJECT_ROOT / "00_init" / "Schema"
 TAG_LIB_PATH = DASHBOARD_ROOT / "config" / "标签库.json"
 IMAGE_ROOT = PROJECT_ROOT  # image_path 相对项目根
+NARRATIVE_DATA_DIR = PROJECT_ROOT / "02_剧情数据"  # nrt-narrative-grower 产出的建议 json

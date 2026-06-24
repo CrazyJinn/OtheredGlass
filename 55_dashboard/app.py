@@ -13,7 +13,7 @@ import streamlit as st
 from config import settings
 from core.schema_loader import load_schema
 from repo import graph_repo
-from ui import page_overview, page_approval
+from ui import page_overview, page_approval, page_narrative_approval
 
 st.set_page_config(page_title="他者之镜 · 美术治理后台", layout="wide")
 
@@ -34,8 +34,10 @@ st.session_state["module"] = module
 if module == "场景美术（TODO）":
     st.info(f"{module}：Schema 待定义，V1 暂未实现。")
 elif module == "角色美术":
-    view = st.sidebar.radio("查看", ["角色进度", "审批中心"], horizontal=True)
+    view = st.sidebar.radio("查看", ["角色进度", "审批中心", "叙事审批"], horizontal=True)
     if view == "审批中心":
         page_approval.render()
+    elif view == "叙事审批":
+        page_narrative_approval.render()
     else:
         page_overview.render(SCHEMA)

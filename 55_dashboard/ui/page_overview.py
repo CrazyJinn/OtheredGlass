@@ -54,14 +54,14 @@ def _render_char_row(schema, char):
         if not nodes:
             st.caption("无美术节点")
             return
-        st.caption("点节点编辑 ↓")
         ncols = 3
         for i in range(0, len(nodes), ncols):
             row = st.columns(ncols)
             for j, n in enumerate(nodes[i:i+ncols]):
                 with row[j]:
                     txt = status_badge.badge_text(n["status"])
-                    if st.button(f"{n['label']} · {txt}", key=f"prog_{n['id']}",
+                    shown = n.get("name") or f"{n['label']}·{n['id'][-6:]}"
+                    if st.button(f"{shown} · {txt}", key=f"prog_{n['id']}",
                                  use_container_width=True):
                         st.session_state["_dialog_node"] = n["id"]
                         st.rerun()

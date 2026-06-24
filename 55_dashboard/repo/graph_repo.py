@@ -127,3 +127,76 @@ def get_upstream_character_id(node_id):
             id=node_id,
         ).single()
     return rec["cid"] if rec else None
+
+
+def split_cypher_script(text):
+    """把含 ; 的多语句 cypher 文本拆成独立语句列表。
+
+    正确处理：字符串字面量内的 ;（不作为分隔符）、\\ 转义、// 行注释（仅字符串外
+    视为注释并剥离整行）。规则照搬 .claude/scripts/cypher_exec.py:split_cypher_statements。
+    """
+    statements = []
+    current = []
+    in_string = False       # 是否在字符串字面量内
+    string_char = None      # 当前字符串的引号字符 (' 或 ")
+    escape_next = False     # 上一个字符是否为转义符 \
+
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+
+        # 行注释 //（仅字符串外）：跳过到行尾，不写入 current
+        if not in_string and ch == '/' and i + 1 < n and text[i + 1] == '/':
+            while i < n and text[i] != '\n':
+                i += 1
+            continue  # 留下 \n 给主循环处理
+
+        if escape_next:
+            current.append(ch)
+            escape_next = False
+            i += 1
+            continue
+        if ch == '\\' and in_string:
+            current.append(ch)
+            escape_next = True
+            i += 1
+            continue
+        if in_string:
+            current.append(ch)
+            if ch == string_char:
+                in_string = False
+            i += 1
+            continue
+        # 不在字符串内
+        if ch in ("'", '"'):
+            current.append(ch)
+            in_string = True
+            string_char = ch
+        elif ch == ';':
+            stmt = ''.join(current).strip()
+            if stmt:
+                statements.append(stmt)
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+
+    tail = ''.join(current).strip()  # 末尾无 ; 的残余
+    if tail:
+        statements.append(tail)
+    return statements
+
+
+def run_write_script(cypher_text):
+    """在单事务内逐条执行多语句 cypher；任一失败整体回滚。返回执行的语句条数。"""
+    stmts = split_cypher_script(cypher_text)
+    if not stmts:
+        return 0
+
+    def _work(tx):
+        for stmt in stmts:
+            tx.run(stmt).consume()
+
+    with _session() as s:
+        s.execute_write(_work)
+    return len(stmts)
