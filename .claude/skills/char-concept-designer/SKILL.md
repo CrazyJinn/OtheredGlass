@@ -102,4 +102,3 @@ LanguageStyle（怪物跳过）同理：MERGE 节点 + `has_voice_style` 边（s
 
 - [角色美术设定模板](references/template-角色美术设定.md)
 - [角色语言风格模板](references/template-角色语言风格.md)
-- 写 Cypher 规则：[${CLAUDE_SKILL_DIR}/../../scripts/README.md](../../scripts/README.md)

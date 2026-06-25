@@ -59,11 +59,12 @@ RETURN ch.name AS char_name, app.id AS app_id, app.status AS app_status,
 {
   "appearance": { "tags": {...}, "appearance":"...","visual_tone":"...","first_impression":"..." },
   "character": { "id":"<char_id>", "name":"<char_name>", "color_direction":"..." },
-  "node": { "id":"<DESIGN_ID>" }
+  "node": { "id":"<DESIGN_ID>" },
+  "output_path": "06_角色美术/<char_name>/prompt.md"
 }
 ```
 
-char-prompt-assembler 组装 prompt 文件到 `06_角色美术/<char_name>/prompts/<DESIGN_ID>.md` 并返回路径 `PROMPT_PATH`。
+在 data 中声明 `output_path = 06_角色美术/<char_name>/prompt.md`；char-prompt-assembler 写入该路径并返回 `PROMPT_PATH`。
 
 #### 推进到图片（status → 2，仅 target_status=2）
 
@@ -94,4 +95,3 @@ SET ds.prompt_path = '<PROMPT_PATH>',
 
 - 提示词组装：[char-prompt-assembler](../char-prompt-assembler/SKILL.md) Mode A
 - 图片生成：[infra-image-generator](../infra-image-generator/SKILL.md)
-- 写 Cypher 规则：[${CLAUDE_SKILL_DIR}/../../scripts/README.md](../../scripts/README.md)

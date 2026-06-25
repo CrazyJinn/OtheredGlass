@@ -102,4 +102,3 @@ SET cos.name = '<角色名-着装描述>',
 ## 参考文档
 
 - [着装设定模板](references/template-着装设定.md) — 各字段规则
-- 写 Cypher 规则：[${CLAUDE_SKILL_DIR}/../../scripts/README.md](../../scripts/README.md)

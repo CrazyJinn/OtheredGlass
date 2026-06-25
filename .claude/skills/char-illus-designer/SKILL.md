@@ -36,7 +36,7 @@ allowed-tools: Read, Bash, Write, Edit
 MATCH (ch:Character {id: '<char_id>'})
 MATCH (ch)-[:has_appearance]->(:AppearanceStyle)-[:produces]->(ds:DesignSheet)
 MATCH (ch)-[:has_costume]->(cos:CostumeStyle)
-OPTIONAL MATCH (ds)-[:produces]->(illus:IllusDesign)-[:outfit_for]->(cos)
+OPTIONAL MATCH (ds)-[:produces]->(illus:IllusDesign)<-[:outfit_for]-(cos)
 RETURN ch.name AS char_name,
        ds.id AS ds_id, ds.status AS ds_status, ds.image_path AS ds_image,
        cos.id AS cos_id, cos.name AS cos_name, cos.status AS cos_status,
@@ -60,11 +60,12 @@ RETURN ch.name AS char_name,
   "costume": { "tags": {"outfit_style":"...","garment":"...","footwear":"...","accessory_type":"..."} },
   "illus": { "adaptation_notes": "<根据着装补充需求填写，如'左臂夹持文件夹'；无则空>" },
   "character": { "id":"<char_id>", "name":"<char_name>" },
-  "node": { "id":"<ILLUS_ID>" }
+  "node": { "id":"<ILLUS_ID>" },
+  "output_path": "06_角色美术/<char_name>/<cos_name>/prompt.md"
 }
 ```
 
-char-prompt-assembler 组装 prompt 文件到 `06_角色美术/<char_name>/prompts/<ILLUS_ID>.md` 并返回路径 `PROMPT_PATH`。
+在 data 中声明 `output_path = 06_角色美术/<char_name>/<cos_name>/prompt.md`；char-prompt-assembler 写入该路径并返回 `PROMPT_PATH`。
 
 #### 推进到图片（status → 2，仅 target_status=2）
 
@@ -96,4 +97,3 @@ SET illus.prompt_path = '<PROMPT_PATH>',
 
 - 提示词组装：[char-prompt-assembler](../char-prompt-assembler/SKILL.md) Mode B
 - 图片生成：[infra-image-generator](../infra-image-generator/SKILL.md)
-- 写 Cypher 规则：[${CLAUDE_SKILL_DIR}/../../scripts/README.md](../../scripts/README.md)

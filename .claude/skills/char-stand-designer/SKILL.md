@@ -112,4 +112,3 @@ SET stand.prompt_path = '<PROMPT_PATH>',
 
 - 提示词组装：[char-prompt-assembler](../char-prompt-assembler/SKILL.md) Mode C
 - 图片生成：[infra-image-generator](../infra-image-generator/SKILL.md)
-- 写 Cypher 规则：[${CLAUDE_SKILL_DIR}/../../scripts/README.md](../../scripts/README.md)

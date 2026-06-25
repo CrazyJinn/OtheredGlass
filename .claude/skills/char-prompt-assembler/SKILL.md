@@ -38,13 +38,13 @@ allowed-tools: Read, Bash, Write, Edit
 
 ## 输出流程（三种模式通用）
 
-1. 解析 data，提取 tags（分号分隔串，需 split）、自由文本字段，以及 `character.name` 与 `node.id`
+1. 解析 data，提取 tags（分号分隔串，需 split）、自由文本字段、`node.id`，以及调用方声明的 `output_path`
 2. 从 `00_init/美术风格.md` 读取全局风格参数（背景色、线条、上色、色调等）
 3. 按模式规则组装 markdown prompt（见下方各模式 + reference 模板的维度结构）
-4. 用 **Write 工具**写 prompt 文件到 `06_角色美术/<char_name>/prompts/<node_id>.md`（不经 shell，markdown 无损；目录不存在时 Write 自动创建）
+4. 用 **Write 工具**写 prompt 文件到调用方在 data 中声明的 `output_path`（不经 shell，markdown 无损；目录不存在时 Write 自动创建）。**路径由调用方决定，assembler 透传，不自行拼接**。若调用方未提供 `output_path`（当前 Mode C 暂未传），回退 `06_角色美术/<character.name>/prompts/<node.id>.md`，TODO：待立绘统一处理时改为入参声明
 5. **返回 prompt 文件路径**给调用方（由调用方写入节点 `prompt_path` 字段）
 
-> prompt 文件按节点 id 命名（`prompts/<node_id>.md`），每个节点独立，避免同一角色多个节点互相覆盖。
+> prompt 文件路径由调用方在 `output_path` 入参中声明，assembler 透传使用；每个节点的路径唯一性由调用方保证。
 
 ## 模式A：DesignSheet（文生图）
 
@@ -58,7 +58,8 @@ allowed-tools: Read, Bash, Write, Edit
     "appearance":"...(自由文本:综合气质/身高)","visual_tone":"...","first_impression":"..."
   },
   "character": {"id":"<char_id>","name":"...","color_direction":"...(自由文本:配色逻辑)"},
-  "node": {"id":"<designsheet_node_id>"}
+  "node": {"id":"<designsheet_node_id>"},
+  "output_path": "06_角色美术/<char_name>/prompt.md"
 }
 ```
 
@@ -76,7 +77,8 @@ allowed-tools: Read, Bash, Write, Edit
   },
   "illus": {"adaptation_notes":"...(可选)"},
   "character": {"id":"<char_id>","name":"..."},
-  "node": {"id":"<illusdesign_node_id>"}
+  "node": {"id":"<illusdesign_node_id>"},
+  "output_path": "06_角色美术/<char_name>/<CostumeStyle.name>/prompt.md"
 }
 ```
 
