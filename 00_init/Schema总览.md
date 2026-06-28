@@ -18,6 +18,7 @@
 |------|------|---------|
 | [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Location, Info |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
+| [场景美术.md](Schema/场景美术.md) | 场景如何从地点变成画面 | Scene, SceneLayer |
 | [剧情.md](Schema/剧情.md) | 剧情节奏、分支、条件 | 待补充 |
 
 ---
@@ -40,6 +41,9 @@
 | DesignSheet | snowflake Base62 | 角色三视图设计稿 |
 | IllusDesign | snowflake Base62 | 着装适配立绘设计图 |
 | StandingIllustration | snowflake Base62 | 具体表情/动作的单张立绘 |
+
+| Scene | snowflake Base62 | 地点内的子场景视觉设定 |
+| SceneLayer | snowflake Base62 | 场景的单一图层（背景/地面/陈设/遮罩） |
 
 ---
 
@@ -65,6 +69,9 @@
 | wears | Event → CostumeStyle | N:N | ❌ | 事件着装 |
 | expands_to | IllusDesign → StandingIllustration | 1:N | ✅ | 拓展表情/动作变体 |
 | ref_style | LanguageStyle → StandingIllustration | 1:N | ✅ | 语言风格→立绘参考 |
+| **场景美术** | | | | |
+| has_scene | Location → Scene | 1:N | ✅ | 地点→场景 |
+| has_layer | Scene → SceneLayer | 1:N | ✅ | 场景→图层 |
 
 ---
 
@@ -91,6 +98,11 @@ flowchart LR
         StandingIllus["StandingIllustration"]
     end
 
+    subgraph 场景美术["场景美术"]
+        Scene["Scene"]
+        SceneLayer["SceneLayer"]
+    end
+
     Character -->|"has_appearance ✅ 1:1"| Appearance
     Character -->|"has_costume ✅ 1:N"| Costume
     Character -->|"has_voice_style ✅ 1:1"| Language
@@ -100,4 +112,6 @@ flowchart LR
     Event -->|"wears ❌ N:N"| Costume
     IllusDesign -->|"expands_to ✅ 1:N"| StandingIllus
     Language -->|"ref_style ✅ 1:N"| StandingIllus
+    Location -->|"has_scene ✅ 1:N"| Scene
+    Scene -->|"has_layer ✅ 1:N"| SceneLayer
 ```

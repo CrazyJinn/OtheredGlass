@@ -6,7 +6,7 @@ dialog 用 session_state["_dialog_node"] 保持打开：弹窗内的删除/添�
 import streamlit as st
 
 from repo import graph_repo
-from ui.components import launch_button, status_badge
+from ui.components import launch_button, status_badge, label_text, add_node_button
 from ui import page_node_editor
 
 _PRIORITY_ORDER = ["P0", "P1", "P2"]
@@ -45,23 +45,34 @@ def render(schema):
 
 def _render_char_row(schema, char):
     with st.container(border=True):
-        top = st.columns([3, 1])
+        top = st.columns([3, 2])
         top[0].write(f"**{char.get('name', char['id'])}**")
         with top[1]:
             launch_button.render(char["id"])
+            if st.button("编辑角色", key=f"edit_{char['id']}"):
+                st.session_state["_dialog_node"] = char["id"]
+                st.rerun()
+            add_node_button.render(
+                char["id"], char.get("name", ""),
+                "＋ 添加服装", "如：冬季深色厚重大衣，军装风…",
+                launch_button.build_add_costume_deeplink, "costume",
+            )
         g = graph_repo.get_character_graph(char["id"])
         nodes = [n for n in g["nodes"] if n["label"] != "Character"]
         if not nodes:
             st.caption("无美术节点")
             return
-        ncols = 3
-        for i in range(0, len(nodes), ncols):
-            row = st.columns(ncols)
-            for j, n in enumerate(nodes[i:i+ncols]):
-                with row[j]:
-                    txt = status_badge.badge_text(n["status"])
-                    shown = n.get("name") or f"{n['label']}·{n['id'][-6:]}"
-                    if st.button(f"{shown} · {txt}", key=f"prog_{n['id']}",
-                                 use_container_width=True):
-                        st.session_state["_dialog_node"] = n["id"]
-                        st.rerun()
+        nodes.sort(key=lambda n: (label_text.rank(n["label"], label_text.CHAR_ORDER),
+                                  n.get("name") or ""))
+        for n in nodes:
+            row = st.columns([8, 3])
+            with row[0]:
+                shown = n.get("name") or f"{n['id'][-6:]}"
+                if st.button(f"{label_text.label_cn(n['label'])} · {shown}",
+                             key=f"prog_{n['id']}", use_container_width=True):
+                    st.session_state["_dialog_node"] = n["id"]
+                    st.rerun()
+            with row[1]:
+                color = status_badge.badge_color(n["status"])
+                text = status_badge.badge_text(n["status"])
+                st.markdown(f":{color}[● {text}]")

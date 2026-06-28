@@ -18,7 +18,17 @@ def render_editor(schema, node_id):
     label = node["label"]
     st.subheader(f"编辑：{label}")
     st.caption(f"id: {node_id}")
-    status_badge.render(node.get("status"))
+    # 场景节点显示所属地点（回溯 Location 名用于上下文）
+    if label in ("Scene", "SceneLayer"):
+        loc_id = graph_repo.get_upstream_location_id(node_id)
+        if loc_id:
+            loc = graph_repo.get_node(loc_id)
+            if loc:
+                st.caption(f"地点：{loc.get('name', loc_id)}")
+    # 无 status 字段的节点（如 Character）不渲染状态徽章。用 is not None 而非真值判断：
+    # status=0（待处理）是合法 falsy，真值判断会误隐藏美术节点的待处理状态。
+    if node.get("status") is not None:
+        status_badge.render(node["status"])
 
     if node.get("image_path"):
         image_viewer.render_thumbnail(node["image_path"], width=200, key=f"editor_{node_id}")

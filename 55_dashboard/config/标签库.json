@@ -36,5 +36,11 @@
     "head_angle": { "label": "头部角度", "multi": false, "options": ["正视", "微侧", "上扬", "低垂", "回眸"] },
     "hand": { "label": "手部动作", "multi": false, "options": ["自然垂放", "叉腰", "握拳", "单手托腮", "持物", "交叉胸前", "一手插兜", "双手背后", "抱臂", "抚发", "掩唇"] },
     "foot": { "label": "脚部动作", "multi": false, "options": ["并拢", "前后开立", "单脚微抬", "跨步", "脚尖内扣", "外展", "重心偏移"] }
+  },
+  "Scene": {
+    "time_of_day": { "label": "时段", "multi": false, "options": ["清晨", "白天", "黄昏", "夜晚"] },
+    "weather": { "label": "天气", "multi": false, "options": ["晴", "阴", "雨", "雪", "雾"] },
+    "camp": { "label": "阵营", "multi": false, "options": ["骑士团", "秘术协会", "教会", "废土", "变异森林", "灰雪地", "无"] },
+    "art_element": { "label": "风格元素", "multi": true, "options": ["粗犷", "厚重", "蒸汽朋克", "做旧处理", "黑暗氛围"] }
   }
 }

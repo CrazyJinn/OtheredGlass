@@ -1,0 +1,44 @@
+[
+  {
+    "check": "implicit_relations",
+    "priority": "high",
+    "reason": "陈默与苏晓禾共同参与 8 个事件（晨跑偶遇苏晓禾、跑步遇雨去出租屋避雨、苏晓禾拉去超市、爬山、地铁苏晓禾睡着靠过来、生病苏晓禾送吃的、偷看苏晓禾工作约晚餐、三选一抉择）——贯穿主线感情线却无 relation 边",
+    "content": "建议补 relation 边（建议 type=恋爱、detail=暧昧发展至三选一，可调整）",
+    "cypher": "MATCH (a:Character{id:'NvCkQmFPFq'}),(b:Character{id:'NvCkQmFPFs'}) MERGE (a)-[:relation{type:'恋爱',detail:'暧昧发展至三选一'}]->(b);"
+  },
+  {
+    "check": "temporal_gaps",
+    "priority": "high",
+    "reason": "时间线在 Day 7（星耀试训与江烈冲突）至 Day 10（沈暮雪邀请加入二队）之间存在 3 天空白，试训冲突后到被邀请入队缺少过渡",
+    "content": "建议补桥接事件「试训后的等待与纠结」（Day 8，type=状态变化，可调整），挂陈默 involved 边，并与前后事件建 evt_relation 先后链",
+    "cypher": "MERGE (n:Event{id:'OK4CNAf0V6'}) SET n.title='试训后的等待与纠结', n.time='Day 8', n.type='状态变化'; MATCH (n:Event{id:'OK4CNAf0V6'}),(c:Character{id:'NvCkQmFPFq'}) MERGE (c)-[:involved{role:'当事人'}]->(n); MATCH (p:Event{id:'NvCkQmFPGA'}),(n:Event{id:'OK4CNAf0V6'}) MERGE (p)-[:evt_relation{type:'先后'}]->(n); MATCH (n:Event{id:'OK4CNAf0V6'}),(q:Event{id:'NvCkQmFPGB'}) MERGE (n)-[:evt_relation{type:'先后'}]->(q);"
+  },
+  {
+    "check": "temporal_gaps",
+    "priority": "medium",
+    "reason": "时间线在 Day 19（偷看苏晓禾工作约晚餐）至 Day 22（三选一抉择）之间存在 3 天空白，临近终局抉择缺少铺垫",
+    "content": "建议补桥接事件「三选一抉择前的内心权衡」（Day 20，type=状态变化，可调整），挂陈默 involved 边，并与前后事件建 evt_relation 先后链",
+    "cypher": "MERGE (n:Event{id:'OK4CNAf0V7'}) SET n.title='三选一抉择前的内心权衡', n.time='Day 20', n.type='状态变化'; MATCH (n:Event{id:'OK4CNAf0V7'}),(c:Character{id:'NvCkQmFPFq'}) MERGE (c)-[:involved{role:'当事人'}]->(n); MATCH (p:Event{id:'NvCkQmFPGM'}),(n:Event{id:'OK4CNAf0V7'}) MERGE (p)-[:evt_relation{type:'先后'}]->(n); MATCH (n:Event{id:'OK4CNAf0V7'}),(q:Event{id:'NvCkQmFPGN'}) MERGE (n)-[:evt_relation{type:'先后'}]->(q);"
+  },
+  {
+    "check": "character_arcs",
+    "priority": "low",
+    "reason": "伊芙（priority=P1）仅在开场「伊芙告知试炼规则」出现 1 次，作为试炼规则的引介者，在终局三选一前缺少再现节点",
+    "content": "建议补角色弧事件「伊芙现身提醒试炼终局规则」（Day 21，type=交流，可调整），挂伊芙与陈默 involved 边，并指向三选一抉择 evt_relation 先后链",
+    "cypher": "MERGE (n:Event{id:'OK4CNAf0V8'}) SET n.title='伊芙现身提醒试炼终局规则', n.time='Day 21', n.type='交流'; MATCH (n:Event{id:'OK4CNAf0V8'}),(c:Character{id:'NvCkQmFPFp'}) MERGE (c)-[:involved{role:'当事人'}]->(n); MATCH (n:Event{id:'OK4CNAf0V8'}),(d:Character{id:'NvCkQmFPFq'}) MERGE (d)-[:involved{role:'参与者'}]->(n); MATCH (n:Event{id:'OK4CNAf0V8'}),(q:Event{id:'NvCkQmFPGN'}) MERGE (n)-[:evt_relation{type:'先后'}]->(q);"
+  },
+  {
+    "check": "implicit_relations",
+    "priority": "low",
+    "reason": "苏晓禾、林梦、沈暮雪三人在「三选一抉择」中共同出现（终局候选人），但三者两两之间均无 relation 边记录这一结构关系",
+    "content": "建议为三选一三人组两两补 relation 边（建议 type=情敌、detail=三选一候选人，可调整）",
+    "cypher": "MATCH (a:Character{id:'NvCkQmFPFs'}),(b:Character{id:'NvCkQmFPFt'}) MERGE (a)-[:relation{type:'情敌',detail:'三选一候选人'}]->(b); MATCH (a:Character{id:'NvCkQmFPFs'}),(b:Character{id:'NvCkQmFPFu'}) MERGE (a)-[:relation{type:'情敌',detail:'三选一候选人'}]->(b); MATCH (a:Character{id:'NvCkQmFPFt'}),(b:Character{id:'NvCkQmFPFu'}) MERGE (a)-[:relation{type:'情敌',detail:'三选一候选人'}]->(b);"
+  },
+  {
+    "check": "relationship_evolution",
+    "priority": "low",
+    "reason": "陈默与沈暮雪现有 relation 仅为「招募」（经理招募选手），但陈默于 Day 10 加入二队后二者关系演化为共事，缺少演化记录",
+    "content": "建议补 relation 边记录演化（建议 type=同事、detail=二队经理与选手、start_time=Day 10，可调整）",
+    "cypher": "MATCH (a:Character{id:'NvCkQmFPFq'}),(b:Character{id:'NvCkQmFPFu'}) MERGE (a)-[:relation{type:'同事',detail:'二队经理与选手',start_time:'Day 10'}]->(b);"
+  }
+]

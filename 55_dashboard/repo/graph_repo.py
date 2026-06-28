@@ -1,4 +1,6 @@
 """图数据库读写：唯一写 Cypher 的地方。所有方法接收/返回普通 dict。"""
+import csv
+import io
 from contextlib import contextmanager
 from repo.neo4j_conn import get_driver
 
@@ -46,6 +48,9 @@ def get_nodes(label):
 # 美术生产链边类型（限定遍历范围，避免把叙事 Event/Info/其他角色拉进美术子图）
 _ART_EDGES = "has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style"
 
+# 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
+_SCENE_EDGES = "has_scene|has_layer"
+
 
 def get_character_graph(char_id):
     """取角色美术生产链的全部节点与边（仅沿美术边遍历）。"""
@@ -53,6 +58,34 @@ def get_character_graph(char_id):
         ids = [r["id"] for r in s.run(
             "MATCH (c:Character)-[:%s*0..5]-(n) WHERE c.id=$id RETURN DISTINCT n.id AS id" % _ART_EDGES,
             id=char_id,
+        )]
+        if not ids:
+            return {"nodes": [], "edges": []}
+        nodes = [
+            {"id": r["id"], "label": r["label"], "status": r["status"], "name": r["name"]}
+            for r in s.run(
+                "MATCH (n) WHERE n.id IN $ids "
+                "RETURN n.id AS id, labels(n)[0] AS label, n.status AS status, n.name AS name",
+                ids=ids,
+            )
+        ]
+        edges = [
+            {"from": r["f"], "to": r["t"], "type": r["ty"], "sync": r["sync"]}
+            for r in s.run(
+                "MATCH (a)-[r]->(b) WHERE a.id IN $ids AND b.id IN $ids "
+                "RETURN a.id AS f, b.id AS t, type(r) AS ty, r.sync AS sync",
+                ids=ids,
+            )
+        ]
+    return {"nodes": nodes, "edges": edges}
+
+
+def get_location_graph(loc_id):
+    """取地点场景美术链的全部节点与边（仅沿场景边遍历）。Location→Scene→SceneLayer 最深 2 跳。"""
+    with _session() as s:
+        ids = [r["id"] for r in s.run(
+            "MATCH (l:Location)-[:%s*0..3]-(n) WHERE l.id=$id RETURN DISTINCT n.id AS id" % _SCENE_EDGES,
+            id=loc_id,
         )]
         if not ids:
             return {"nodes": [], "edges": []}
@@ -129,6 +162,17 @@ def get_upstream_character_id(node_id):
     return rec["cid"] if rec else None
 
 
+def get_upstream_location_id(node_id):
+    """从节点经场景边回溯到所属 Location（Location 自身经 0 跳返回自己）。"""
+    with _session() as s:
+        rec = s.run(
+            "MATCH (l:Location)-[:%s*0..3]-(n) WHERE n.id=$id "
+            "RETURN l.id AS lid LIMIT 1" % _SCENE_EDGES,
+            id=node_id,
+        ).single()
+    return rec["lid"] if rec else None
+
+
 def split_cypher_script(text):
     """把含 ; 的多语句 cypher 文本拆成独立语句列表。
 
@@ -200,3 +244,55 @@ def run_write_script(cypher_text):
     with _session() as s:
         s.execute_write(_work)
     return len(stmts)
+
+
+def export_csv_all():
+    """全库导出为 CSV 字符串（APOC stream）。
+
+    用 apoc.export.csv.all(null, {stream:true})：stream+null 文件专为无文件系统访问设计，
+    无需 apoc.export.file.enabled。失败（APOC 未注册 / 大数据集 stream 返回空）时 raise，
+    由调用方走 export_csv_all_pure 兜底。
+
+    返回 (csv_text, {"nodes": n, "relationships": r})。
+    """
+    cypher = (
+        "CALL apoc.export.csv.all(null, {stream:true}) "
+        "YIELD file, nodes, relationships, properties, data "
+        "RETURN nodes AS n, relationships AS r, data AS data"
+    )
+    with _session() as s:
+        rec = s.run(cypher).single()
+    if rec is None or not rec["data"]:
+        raise RuntimeError("APOC stream 返回空 data（数据集过大或 APOC 未注册）")
+    return rec["data"], {"nodes": rec["n"], "relationships": rec["r"]}
+
+
+def export_csv_all_pure():
+    """纯 Python 兜底：节点表 + 边表两段 CSV，不依赖 APOC。
+
+    APOC 不可用时使用。返回 (csv_text, {"nodes": n, "relationships": r})。
+    """
+    with _session() as s:
+        node_recs = list(s.run(
+            "MATCH (n) RETURN n.id AS id, labels(n) AS labels, properties(n) AS props"
+        ))
+        rel_recs = list(s.run(
+            "MATCH (a)-[r]->(b) "
+            "RETURN a.id AS start, b.id AS end, type(r) AS type, properties(r) AS props"
+        ))
+    node_keys = sorted({k for r in node_recs for k in dict(r["props"])})
+    rel_keys = sorted({k for r in rel_recs for k in dict(r["props"])})
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["# 节点"])
+    w.writerow(["id", "labels"] + node_keys)
+    for r in node_recs:
+        p = dict(r["props"])
+        w.writerow([r["id"], ":".join(r["labels"])] + [p.get(k, "") for k in node_keys])
+    w.writerow([])
+    w.writerow(["# 边"])
+    w.writerow(["_start", "_end", "_type"] + rel_keys)
+    for r in rel_recs:
+        p = dict(r["props"])
+        w.writerow([r["start"], r["end"], r["type"]] + [p.get(k, "") for k in rel_keys])
+    return buf.getvalue(), {"nodes": len(node_recs), "relationships": len(rel_recs)}

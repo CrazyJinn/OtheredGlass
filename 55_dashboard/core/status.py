@@ -8,12 +8,18 @@ NODE_STATUS = {
     "DesignSheet":         {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
     "IllusDesign":         {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
     "StandingIllustration":{"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
+    # 场景美术
+    "Scene":               {"legal": [-1, 0, 1],            "completion": 1, "has_approval": False},
+    "SceneLayer":          {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
 }
 
 ENUM_OPTIONS = {
     "gender": ["男", "女"],
     "type": ["行动", "交流", "转折", "状态变化"],
     "knowledge_level": ["1", "2", "3"],
+    "priority": ["P0", "P1", "P2"],
+    "scene_type": ["dialogue", "functional", "combat", "ui"],
+    "layer_type": ["background", "floor", "decor", "mask"],
 }
 
 STATUS_LABEL = {
@@ -22,11 +28,11 @@ STATUS_LABEL = {
 
 
 def completion_status(label):
-    return NODE_STATUS[label]["completion"]
+    return NODE_STATUS.get(label, {}).get("completion")
 
 
 def has_approval(label):
-    return NODE_STATUS[label]["has_approval"]
+    return NODE_STATUS.get(label, {}).get("has_approval", False)
 
 
 def is_approved(status):
@@ -34,5 +40,5 @@ def is_approved(status):
 
 
 def can_submit(label, status):
-    """只有有审批的节点，在完成态时才能提交审批。"""
-    return has_approval(label) and status == completion_status(label)
+    """只有有审批的节点，在完成态时才能提交审批。无 status 字段的节点（如 Character）返回 False。"""
+    return has_approval(label) and status is not None and status == completion_status(label)
