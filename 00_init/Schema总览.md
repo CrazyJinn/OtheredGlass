@@ -19,7 +19,7 @@
 | [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Location, Info |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
 | [场景美术.md](Schema/场景美术.md) | 场景如何从地点变成画面 | Scene, SceneLayer |
-| [剧情.md](Schema/剧情.md) | 剧情节奏、分支、条件 | 待补充 |
+| [剧情.md](Schema/剧情.md) | 剧情节奏、分支、条件 | Choice |
 
 ---
 
@@ -44,6 +44,8 @@
 
 | Scene | snowflake Base62 | 地点内的子场景视觉设定 |
 | SceneLayer | snowflake Base62 | 场景的单一图层（背景/地面/陈设/遮罩） |
+
+| Choice | snowflake Base62 | 玩家选择分叉点（galgame 选项） |
 
 ---
 
@@ -72,6 +74,9 @@
 | **场景美术** | | | | |
 | has_scene | Location → Scene | 1:N | ✅ | 地点→场景 |
 | has_layer | Scene → SceneLayer | 1:N | ✅ | 场景→图层 |
+| **剧情** | | | | |
+| presents | Event → Choice | N:N | ❌ | 事件触发选择 |
+| option | Choice → Event | N:N | ❌ | 选项导向后续事件 |
 
 ---
 
@@ -103,6 +108,10 @@ flowchart LR
         SceneLayer["SceneLayer"]
     end
 
+    subgraph 剧情["剧情"]
+        Choice["Choice"]
+    end
+
     Character -->|"has_appearance ✅ 1:1"| Appearance
     Character -->|"has_costume ✅ 1:N"| Costume
     Character -->|"has_voice_style ✅ 1:1"| Language
@@ -110,6 +119,8 @@ flowchart LR
     Costume -->|"outfit_for ✅ 1:1"| IllusDesign
     DesignSheet -->|"produces ✅ 1:N"| IllusDesign
     Event -->|"wears ❌ N:N"| Costume
+    Event -->|"presents ❌ N:N"| Choice
+    Choice -->|"option ❌ N:N"| Event
     IllusDesign -->|"expands_to ✅ 1:N"| StandingIllus
     Language -->|"ref_style ✅ 1:N"| StandingIllus
     Location -->|"has_scene ✅ 1:N"| Scene
