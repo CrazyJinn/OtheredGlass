@@ -1,0 +1,37 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
+[application]
+
+config/name="他者之镜"
+run/main_scene="res://scenes/Title.tscn"
+config/features=PackedStringArray("4.6", "Forward Plus")
+
+[autoload]
+
+GameManager="*res://scripts/autoload/GameManager.gd"
+ScriptInterpreter="*res://scripts/autoload/ScriptInterpreter.gd"
+AudioManager="*res://scripts/autoload/AudioManager.gd"
+SaveManager="*res://scripts/autoload/SaveManager.gd"
+
+[display]
+
+window/size/viewport_width=1536
+window/size/viewport_height=1024
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[dotnet]
+
+project/assembly_name="他者之镜"

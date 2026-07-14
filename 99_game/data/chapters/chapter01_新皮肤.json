@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "chapter": 1,
+    "title": "新皮肤·Day0",
+    "requires": {
+      "characters": ["陈默"],
+      "scenes": ["长江大桥-栏杆", "出租屋"],
+      "portraits": ["陈默.沉重", "陈默.释然", "陈默.疲惫"]
+    }
+  },
+  "scenes": [
+    {
+      "id": "桥上",
+      "scene": "长江大桥-栏杆",
+      "time": "夜晚",
+      "bgm": { "track": "夜风", "mode": "play", "loop": true },
+      "lines": [
+        { "op": "say", "who": "陈默", "portrait": "沉重", "pos": "center", "text": "就到这里吧。" },
+        { "op": "narrate", "text": "江风很大。他翻过栏杆。" },
+        { "op": "choice", "options": [
+            { "label": "再想想", "to": "keepgoing" },
+            { "label": "跳下去", "scene": "结局_BE", "leads_to_ending": true }
+          ]
+        },
+        { "op": "label", "name": "keepgoing" },
+        { "op": "say", "who": "陈默", "portrait": "释然", "pos": "center", "text": "……电话响了。" },
+        { "op": "jump", "scene": "回出租屋" }
+      ]
+    },
+    {
+      "id": "回出租屋",
+      "scene": "出租屋",
+      "time": "凌晨",
+      "lines": [
+        { "op": "narrate", "text": "步行回八楼，身体像被掏空。" },
+        { "op": "say", "who": "陈默", "portrait": "疲惫", "pos": "center", "text": "……回来了。" }
+      ]
+    },
+    {
+      "id": "结局_BE",
+      "scene": "长江大桥-栏杆",
+      "time": "夜晚",
+      "lines": [
+        { "op": "narrate", "text": "第二天，很多人自发买了吃的来祭奠。" },
+        { "op": "ending", "kind": "BE", "title": "无人知晓的纵身" }
+      ]
+    }
+  ]
+}

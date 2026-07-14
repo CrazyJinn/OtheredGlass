@@ -1,0 +1,18 @@
+{
+  "portraits": {
+    "陈默.沉重": "assets/portraits/陈默.沉重.png",
+    "陈默.释然": "assets/portraits/陈默.释然.png",
+    "陈默.疲惫": "assets/portraits/陈默.疲惫.png"
+  },
+  "scenes": {
+    "长江大桥-栏杆": "assets/scenes/长江大桥-栏杆.png",
+    "出租屋": "assets/scenes/出租屋.png",
+    "酒店-客房": "assets/scenes/酒店-客房.png",
+    "马路-路口": "assets/scenes/马路-路口.png"
+  },
+  "bgm": {
+    "夜风": "assets/bgm/夜风.ogg"
+  },
+  "sfx": {},
+  "cg": {}
+}

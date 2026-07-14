@@ -51,6 +51,9 @@ _ART_EDGES = "has_appearance|has_voice_style|has_costume|produces|outfit_for|exp
 # 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
 _SCENE_EDGES = "has_scene|has_layer"
 
+# 剧情编排边类型（限定章节子图遍历：Chapter→contains→Scene→depicts→StandingIllustration）
+_PLOT_EDGES = "contains|depicts"
+
 
 def get_character_graph(char_id):
     """取角色美术生产链的全部节点与边（仅沿美术边遍历）。"""
@@ -89,6 +92,36 @@ def get_location_graph(loc_id):
         )]
         if not ids:
             return {"nodes": [], "edges": []}
+        nodes = [
+            {"id": r["id"], "label": r["label"], "status": r["status"], "name": r["name"]}
+            for r in s.run(
+                "MATCH (n) WHERE n.id IN $ids "
+                "RETURN n.id AS id, labels(n)[0] AS label, n.status AS status, n.name AS name",
+                ids=ids,
+            )
+        ]
+        edges = [
+            {"from": r["f"], "to": r["t"], "type": r["ty"], "sync": r["sync"]}
+            for r in s.run(
+                "MATCH (a)-[r]->(b) WHERE a.id IN $ids AND b.id IN $ids "
+                "RETURN a.id AS f, b.id AS t, type(r) AS ty, r.sync AS sync",
+                ids=ids,
+            )
+        ]
+    return {"nodes": nodes, "edges": edges}
+
+
+def get_chapter_graph(ch_id):
+    """取章节编排子图的全部节点与边（Chapter→contains→Scene→depicts→StandingIllustration）。
+
+    沿 contains/depicts 边遍历；depicts 指向的 StandingIllustration 一并纳入（供立绘缺口查看）。
+    StandingIllustration 的上游美术链（expands_to/ref_style）不在本子图，仅看其 status 是否就绪。
+    """
+    with _session() as s:
+        ids = [ch_id] + [r["id"] for r in s.run(
+            "MATCH (ch:Chapter)-[:%s*1..3]-(n) WHERE ch.id=$id RETURN DISTINCT n.id AS id" % _PLOT_EDGES,
+            id=ch_id,
+        )]
         nodes = [
             {"id": r["id"], "label": r["label"], "status": r["status"], "name": r["name"]}
             for r in s.run(

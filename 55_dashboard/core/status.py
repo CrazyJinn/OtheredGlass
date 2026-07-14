@@ -11,6 +11,8 @@ NODE_STATUS = {
     # 场景美术
     "Scene":               {"legal": [-1, 0, 1],            "completion": 1, "has_approval": False},
     "SceneLayer":          {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
+    # 剧情
+    "Chapter":             {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
 }
 
 ENUM_OPTIONS = {

@@ -68,3 +68,15 @@ def build_add_scene_deeplink(loc_id, loc_name, description):
             f"调用 scene-designer skill 创建 Scene 节点 + has_scene 边，status=1。"
         )
     return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
+
+
+def build_chapter_deeplink(ch_id, title=None):
+    """生成「推进章节剧情」的 deeplink，调 plot-design agent。"""
+    name = title or ch_id
+    prompt = f"使用 plot-design agent 推进章节 {name}（id={ch_id}）的剧情创作流程"
+    return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
+
+
+def render_chapter(ch_id, title=None, label="推进剧情创作"):
+    import streamlit as st
+    st.link_button(label, build_chapter_deeplink(ch_id, title))

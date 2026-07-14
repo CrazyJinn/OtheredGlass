@@ -13,7 +13,7 @@ import streamlit as st
 from config import settings
 from core.schema_loader import load_schema
 from repo import graph_repo
-from ui import page_overview, page_scene_overview, page_approval, page_narrative_approval
+from ui import page_overview, page_scene_overview, page_chapter_overview, page_approval, page_narrative_approval
 
 st.set_page_config(page_title="他者之镜 · 美术治理后台", layout="wide")
 
@@ -25,14 +25,19 @@ except Exception as e:
     st.stop()
 
 # 顶层模块导航（隔离远的管理域才用页面级切换）
-_MODULES = ["角色美术", "场景美术"]
+_MODULES = ["角色美术", "场景美术", "剧情"]
 if st.session_state.get("module") not in _MODULES:
     st.session_state["module"] = "角色美术"
 module = st.sidebar.radio("模块", _MODULES, index=_MODULES.index(st.session_state["module"]))
 st.session_state["module"] = module
 
 # 当前模块的查看视图（节点编辑弹窗只在「角色进度/场景进度」里有意义）
-_views = ["场景进度", "审批中心"] if module == "场景美术" else ["角色进度", "审批中心", "叙事审批"]
+if module == "场景美术":
+    _views = ["场景进度", "审批中心"]
+elif module == "剧情":
+    _views = ["章节进度", "审批中心"]
+else:
+    _views = ["角色进度", "审批中心", "叙事审批"]
 view = st.sidebar.radio("查看", _views, horizontal=True)
 
 # 切换模块/视图 = 离开节点编辑上下文 → 关闭节点编辑弹窗，避免无关 rerun 又把它重开
@@ -40,12 +45,17 @@ if st.session_state.get("_last_nav") != (module, view):
     st.session_state.pop("_dialog_node", None)
 st.session_state["_last_nav"] = (module, view)
 
-if module == "场景美术":
+if module == "剧情":
+    if view == "审批中心":
+        page_approval.render()
+    else:
+        page_chapter_overview.render(SCHEMA)
+elif module == "场景美术":
     if view == "审批中心":
         page_approval.render()
     else:
         page_scene_overview.render(SCHEMA)
-elif module == "角色美术":
+else:  # 角色美术
     if view == "审批中心":
         page_approval.render()
     elif view == "叙事审批":
