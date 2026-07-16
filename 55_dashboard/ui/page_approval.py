@@ -1,4 +1,4 @@
-"""审批中心：列出 status=10，通过/驳回。"""
+"""审批中心：列出待审节点（status=10 通用/结构审 或 30 定稿审），通过/驳回。"""
 import streamlit as st
 
 from repo import graph_repo
@@ -18,20 +18,26 @@ def render():
     for n in items:
         full = graph_repo.get_node(n["id"]) or {}
         with st.container(border=True):
-            st.write(f"**{n['label']}** · {full.get('name', n['id'])}")
+            # Chapter 有两道审批：status=10 结构审 / 30 定稿审，显式标注以便区分
+            review_tag = ""
+            if n["label"] == "Chapter":
+                review_tag = "（结构审）" if n["status"] == 10 else "（定稿审）"
+            st.write(f"**{n['label']}** · {full.get('name', n['id'])}{review_tag}")
             status_badge.render(n["status"])
             if full.get("image_path"):
                 image_viewer.render(full["image_path"])
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("通过", key=f"ok_{n['id']}"):
-                    graph_repo.set_status(n["id"], approval.approve())
+                    new_status = approval.approve(n["status"])
+                    graph_repo.set_status(n["id"], new_status)
                     # toast 而非 inline st.success/st.warning：紧随的 st.rerun() 会丢弃本轮输出。
-                    st.toast("已批准（status=11）", icon="✅")
+                    st.toast(f"已批准（status={new_status}）", icon="✅")
                     st.rerun()
             with c2:
                 reason = st.text_input("驳回理由", key=f"r_{n['id']}")
                 if st.button("驳回", key=f"no_{n['id']}"):
-                    graph_repo.set_status(n["id"], approval.reject())
-                    st.toast("已驳回（status=0）" + (f"：{reason}" if reason else ""), icon="❌")
+                    new_status = approval.reject(n["status"])
+                    graph_repo.set_status(n["id"], new_status)
+                    st.toast(f"已驳回（status={new_status}）" + (f"：{reason}" if reason else ""), icon="❌")
                     st.rerun()

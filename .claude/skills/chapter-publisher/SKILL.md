@@ -1,9 +1,9 @@
 ---
 name: chapter-publisher
 description: |
-  把审阅通过（status=11）的 Chapter 从创作区 `25_剧本/` 发布到运行时 `99_game/`：
+  把定稿已批（status=31）的 Chapter 从创作区 `25_剧本/` 发布到运行时 `99_game/`：
   拷贝剧本 JSON + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest。
-  在 Chapter 已审批且所需立绘就绪、需发布到 Godot 运行时时使用。
+  在 Chapter 已定稿审批通过且所需立绘就绪、需发布到 Godot 运行时时使用。
 argument-hint: <chapter_id>
 arguments:
   - chapter_id
@@ -43,7 +43,7 @@ RETURN DISTINCT char.name AS char_name, stand.variant_label AS variant, stand.im
 ```
 
 **前驱校验**：
-- `ch.status` 必须 = `11`（剧本已审批）。否则停止并提示先在 dashboard 审批。
+- `ch.status` 必须 = `31`（定稿已批——Chapter 经结构审 `10→11` + 定稿审 `30→31` 两道审批）。否则停止并提示先在 dashboard 审批。
 - depicts 立绘：`status=11` 且 `image_path` 非空的才拷贝；`status≠11` 的逐个**警告**（运行时该变体走占位图），不阻断发布（让已就绪资源先上线）。
 - background SceneLayer：同理，`status=11` 且 `image_path` 非空才拷贝。
 

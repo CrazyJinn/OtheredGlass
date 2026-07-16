@@ -3,9 +3,9 @@
 > **本文定位**：可视化 [.claude/agents/](.claude/agents/) 下三个编排层 Agent（`char-design` / `scene-design` / `plot-design`）的执行流程，统一用**时序图**表达。
 >
 > - **审批流程独立成节**（[§2](#2-审批流程)），不在各 Agent 时序图里展开——时序图只画"生产调度"主线，遇到待审就用 `⏸ 待审 → 批准 11` 一行带过并引用 §2。
-> - 🔧 **两处目标态变更（均未实现，仅画流程留 TODO）**：
->   1. plot-design 创作侧将拆为 `chapter-structurer` → `chapter-outliner` → `chapter-dialoguer` 三步（替代现有一次性 `screenwriter`）。
->   2. **StandingIllustration 的调用从 `char-design` 剥离，改由 `plot-design` 直接调度**——`char-design` 终点收窄到 `IllusDesign`。skill 本身（`char-stand-designer`）暂不拆改。
+> - **两处架构改动（已落地）**：
+>   1. plot-design 创作侧拆为 `chapter-structurer` → `chapter-outliner` → `chapter-dialoguer` 三步（已替代原一次性 `screenwriter`，后者已删除）。
+>   2. **StandingIllustration 的调用从 `char-design` 剥离，改由 `plot-design` 直接调度**——`char-design` 终点收窄到 `IllusDesign`；`char-stand-designer` 新增 stand_id 入参模式支持按需出图。
 >
 > 互补文档：[refer.md](refer.md)（节点治理手册：status / sync 级联 / 审批规则）。子项目指南：[55_dashboard/CLAUDE.md](55_dashboard/CLAUDE.md)（后台）、[99_game/README.md](99_game/README.md)（Godot 工程）。
 
@@ -85,11 +85,11 @@ sequenceDiagram
 | 节点 | 进入待审 | 批准（11）解锁的下游 |
 |------|---------|---------------------|
 | DesignSheet | 图片完成 → 10 | IllusDesign |
-| IllusDesign | 图片完成 → 10 | StandingIllustration（🔧 调用方由 char-design 迁至 plot-design） |
+| IllusDesign | 图片完成 → 10 | StandingIllustration（plot-design 按 depicts 推进） |
 | StandingIllustration | 图片完成 → 10 | 无下游；作为发布前置（质量确认） |
 | SceneLayer | 图片完成 → 10 | 无下游；作为发布前置 |
-| Chapter（章节结构）🔧 | 结构就绪 → 10 | 创作（提纲 / 细节对话） |
-| Chapter（定稿） | 定稿 → 10 | 立绘 + 发布 |
+| Chapter（章节结构） | 结构就绪 → 10 | 创作（提纲 / 细节对话），批准→11 |
+| Chapter（定稿） | 定稿完成 → 30 | 立绘 + 发布，批准→31 |
 
 > AppearanceStyle / LanguageStyle / CostumeStyle / Scene 等数据节点完成值 `1`，**无审批**。
 
@@ -99,7 +99,7 @@ sequenceDiagram
 
 > **唯一职责**：推进某角色的美术链。输入**角色名或 ID**（如"陆择"、snowflake ID）。
 > 依赖顺序：`char-concept-designer → char-costume-designer → char-design-sheet → char-illus-designer`。
-> 🔧 **TODO**：`StandingIllustration` 已从此链**剥离**（迁至 plot-design），`char-design` 终点收窄到 `IllusDesign`。skill 未拆改，为目标态。
+> `StandingIllustration` 已从此链**剥离**（迁至 plot-design 按 depicts 引用按需出图），`char-design` 终点收窄到 `IllusDesign`。
 
 ### 节点 → Skill 映射
 
@@ -109,7 +109,7 @@ sequenceDiagram
 | CostumeStyle | char-costume-designer | -1/0 → 1 | 无 |
 | DesignSheet | char-design-sheet | -1/0→1→2→10→11 | ✅ |
 | IllusDesign | char-illus-designer | -1/0→1→2→10→11 | ✅ |
-| ~~StandingIllustration~~ | ~~char-stand-designer~~ | 🔧 TODO：剥离给 plot-design（见 §5） | — |
+| ~~StandingIllustration~~ | ~~char-stand-designer~~ | 已剥离给 plot-design（见 §5） | — |
 
 ### 时序图
 
@@ -150,7 +150,7 @@ sequenceDiagram
     Note over A: ⏸ 待审 → 批准 11（见 §2 审批流程）
     end
 
-    Note over A: 🔧 TODO：StandingIllustration 已从此链剥离<br/>改由 plot-design 调度（见 §5）
+    Note over A: StandingIllustration 已从此链剥离<br/>改由 plot-design 按 depicts 直调（见 §5）
 
     A-->>U: 逐节点汇报 status<br/>终点 IllusDesign = 11
 ```
@@ -208,33 +208,31 @@ sequenceDiagram
 
 > **唯一职责**：推进某章节从「建结构 → 创作（提纲 + 细节对话）→ 立绘 → 发布」全链到运行时。输入**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID）。
 >
-> ⚠️ **两处目标态变更（🔧 TODO，skill 未拆改）**：
-> 1. 创作侧：现有 `screenwriter`（一次性产剧本）将拆为 `chapter-structurer` → `chapter-outliner` → `chapter-dialoguer`。
-> 2. 立绘侧：**StandingIllustration 改由 plot-design 直接调 `char-stand-designer`**；`char-design` 只负责把上游 `IllusDesign` 推进到 `11`。
+> 创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**：
+> 1. 创作侧拆为 `chapter-structurer`（建结构）→ `chapter-outliner`（提纲）→ `chapter-dialoguer`（定稿），原 `screenwriter` 已删除。
+> 2. 立绘侧：**StandingIllustration 由 plot-design 直接调 `char-stand-designer <stand_id>`**（按需）；`char-design` 只负责把上游 `IllusDesign` 推进到 `11`。
 
 ### 创作侧三阶段（对应 3 个 skill）
 
 | 阶段 | Skill | 状态 | 职责 |
 |------|-------|------|------|
-| ① 建章节 | `chapter-structurer` | 🔧 待实现 | 在图中建 Chapter 节点，把 N 个 Scene 统合进来（contains 边） |
-| ② 出提纲 | `chapter-outliner` | 🔧 待实现 | 为章节产出提纲（outline） |
-| ③ 细节对话 | `chapter-dialoguer` | 🔧 待实现 | 基于提纲创作细节对话，产出定稿剧本到 `25_剧本/` |
+| ① 建章节 | `chapter-structurer` | ✅ 已实现 | 在图中建 Chapter 节点，把 N 个 Scene 统合进来（contains 边） |
+| ② 出提纲 | `chapter-outliner` | ✅ 已实现 | 为章节产出提纲（`25_剧本/*.outline.json`） |
+| ③ 细节对话 | `chapter-dialoguer` | ✅ 已实现 | 基于提纲创作细节对话，产出定稿剧本到 `25_剧本/` |
 
-> **门控**：① 建章节结构 → 审批通过 → 才进入 ②③ 创作；细节对话定稿终审通过 + 立绘全 `11` → 才发布。
-> **过渡期**：3 个创作 skill 落地前，仍由 `screenwriter` 一次性产剧本（`-1/0→1→2→10→11`）。
+> **门控**：① 建章节结构 → 结构审通过 → 才进入 ②③ 创作；细节对话定稿终审通过 + 立绘全 `11` → 才发布。
+> **Chapter status 三段**：结构 `0→1→10→11` / 提纲 `→20` / 定稿 `→30→31`（两道审批：结构审 + 定稿审）。
 
 ### 节点 → Skill/Agent 映射（目标态）
 
 | 图节点 | 委派对象 | 工具 | Status 流程（示意） | 审批 |
 |--------|---------|------|-------------------|------|
-| Chapter（章节结构） | `chapter-structurer` 🔧 | Skill | -1/0 → 结构就绪 → 10 → 11 | ✅ 结构审 |
-| Chapter（提纲） | `chapter-outliner` 🔧 | Skill | → 提纲就绪 | — |
-| Chapter（细节对话） | `chapter-dialoguer` 🔧 | Skill | → 定稿 → 10 → 11 | ✅ 终审 |
+| Chapter（章节结构） | `chapter-structurer` | Skill | -1/0→1→10→11 | ✅ 结构审 |
+| Chapter（提纲） | `chapter-outliner` | Skill | →20 | — |
+| Chapter（细节对话） | `chapter-dialoguer` | Skill | →30→31 | ✅ 定稿审 |
 | IllusDesign（立绘上游） | `char-design` | Agent | -1/0→…→11 | ✅ |
-| StandingIllustration 🔧 | `char-stand-designer` | **Skill（plot-design 直调）** | -1/0→1→2→10→11 | ✅ |
-| Chapter 发布 | `chapter-publisher` | Skill | 仅 结构+定稿 双批 且 立绘全 11 后 | — |
-
-> 🔧 = 待实现 / 调用方变更。具体 status 值待落地时按 [剧情.md](00_init/Schema/剧情.md) Schema 确定，表中为示意。
+| StandingIllustration | `char-stand-designer` | **Skill（plot-design 直调 stand_id）** | -1/0→1→2→10→11 | ✅ |
+| Chapter 发布 | `chapter-publisher` | Skill | 仅 Chapter=31 且 立绘全 11 后 | — |
 
 ### 时序图
 
@@ -260,12 +258,12 @@ sequenceDiagram
     end
 
     rect rgb(255, 248, 240)
-    Note over A,DG: ② 创作 🔧 待实现（screenwriter 将拆为三步）
+    Note over A,DG: ② 创作（structurer → outliner → dialoguer 三 skill 串行）
     opt 章节结构未就绪（未建 / -1 重做）
         A->>ST: Skill chapter-structurer ch_id
         Note right of ST: 建 Chapter + 统合 N 个 Scene（contains）
-        ST-->>A: 结构 → 10 待审
-        Note over A: ⏸ 待审 → 11（见 §2 审批流程）
+        ST-->>A: 结构就绪（status=1）→ submit 10 结构待审
+        Note over A: ⏸ 结构审 → 11（见 §2 审批流程）
     end
     opt 结构 11 且提纲未出
         A->>OL: Skill chapter-outliner ch_id
@@ -275,13 +273,13 @@ sequenceDiagram
     opt 提纲就绪且细节对话未定稿（含 -1 重做）
         A->>DG: Skill chapter-dialoguer ch_id
         Note right of DG: 基于提纲创作细节对话<br/>产出定稿 25_剧本/
-        DG-->>A: 定稿 → 10 待审
-        Note over A: ⏸ 待审 → 11（见 §2 审批流程）
+        DG-->>A: 定稿 → 30 定稿待审
+        Note over A: ⏸ 定稿审 → 31（见 §2 审批流程）
     end
     end
 
     rect rgb(255, 240, 245)
-    Note over A,Stand: ③ 立绘 🔧 TODO：StandingIllustration 改由 plot-design 直调
+    Note over A,Stand: ③ 立绘（plot-design 按 depicts 直调 char-stand-designer）
     loop 每个 depicts 立绘
         opt 上游 IllusDesign ≠ 11
             A->>CD: Agent char-design char_id（仅推进到 IllusDesign）
@@ -295,7 +293,7 @@ sequenceDiagram
     end
     end
 
-    opt 定稿 11 且立绘全 11
+    opt 定稿 31 且立绘全 11
         A->>Pub: Skill chapter-publisher ch_id
         Note right of Pub: 拷贝剧本+立绘/背景<br/>更新 manifest → 99_game/
         Pub-->>A: 发布完成 + 运行时入口
@@ -326,7 +324,7 @@ sequenceDiagram
 | char-costume-designer | ② 着装 | 着装设计 | CostumeStyle 字段 | ✅ |
 | char-design-sheet | ③ 三视图 | 外貌底图设计（文生图） | DesignSheet prompt + 图 | ✅ |
 | char-illus-designer | ④ 立绘设计图 | 着装适配立绘（图生图） | IllusDesign prompt + 图 | ✅ |
-| char-stand-designer | ⑤ 立绘变体 | 表情/动作变体（图生图） | StandingIllustration prompt + 图 | ✅（🔧 调用方迁至 plot-design） |
+| char-stand-designer | ⑤ 立绘变体 | 表情/动作变体（图生图）；支持 stand_id 按需模式 | StandingIllustration prompt + 图 | ✅（plot-design 直调） |
 | char-prompt-assembler | 纯产出 | 组装角色提示词（Mode A/B/C） | prompt 文件 | ❌ |
 
 ### 场景美术层（Location → SceneLayer）
@@ -341,10 +339,9 @@ sequenceDiagram
 
 | Skill | 阶段 | 功能 | 主要产出 | 读写图 / 写 status |
 |-------|------|------|---------|-------------------|
-| screenwriter | 过渡 | 一次性产整个剧本（将被拆分取代） | `25_剧本/` JSON | ✅ |
-| chapter-structurer 🔧 | ① 建章节 | 建 Chapter + 统合 N 个 Scene | Chapter + contains 边 | ✅（TODO） |
-| chapter-outliner 🔧 | ② 提纲 | 为章节出提纲 | 提纲 | ✅（TODO） |
-| chapter-dialoguer 🔧 | ③ 细节对话 | 基于提纲创作细节对话 | 定稿剧本 `25_剧本/` | ✅（TODO） |
+| chapter-structurer | ① 建章节 | 建 Chapter + 统合 N 个 Scene | Chapter + contains 边 | ✅ |
+| chapter-outliner | ② 提纲 | 为章节出提纲 | `25_剧本/*.outline.json` | ✅ |
+| chapter-dialoguer | ③ 细节对话 | 基于提纲创作细节对话 + 建 depicts 立绘缺口 | 定稿剧本 `25_剧本/` | ✅ |
 | chapter-publisher | 发布 | 发布剧本 + 立绘/背景到运行时 | `99_game/` 资源 + manifest | ✅ |
 
 ### 基础设施 & 元工具
@@ -355,7 +352,7 @@ sequenceDiagram
 | cypher_exec.py | 执行 Cypher（统一图读写入口） | 所有 skill 读写 Neo4j 的唯一脚本，支持 `-c`/`-f`/`--stdin`/`--multi`/`--json` |
 | skill-creator | 新建 / 编辑 skill 本身 | 元工具，不属于生产链 |
 
-> 🔧 = 待实现 / 调用方变更目标态。纯产出层（`char-prompt-assembler` / `scene-prompt-assembler` / `infra-image-generator`）只产文件，节点字段与 status 一律由调用方生产 skill 在「保存结果」步用 MERGE 兜底写入。
+> 纯产出层（`char-prompt-assembler` / `scene-prompt-assembler` / `infra-image-generator`）只产文件，节点字段与 status 一律由调用方生产 skill 在「保存结果」步用 MERGE 兜底写入。
 
 ---
 
@@ -391,7 +388,7 @@ sequenceDiagram
 │       └── 酒店-客房/
 │           └── background/           # 各图层背景图
 │
-├── 25_剧本/                          # 剧本产出（screenwriter / chapter-dialoguer → 章节 JSON）
+├── 25_剧本/                          # 剧本产出（chapter-structurer/outliner/dialoguer → outline + 定稿 JSON）
 │
 ├── 55_dashboard/                     # 人工治理后台（Streamlit，http://localhost:8501）
 │   ├── config/                       # settings.py（凭证来源）

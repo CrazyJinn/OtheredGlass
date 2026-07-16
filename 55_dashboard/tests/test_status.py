@@ -16,6 +16,8 @@ def test_has_approval():
 def test_is_approved():
     assert status.is_approved(11) is True
     assert status.is_approved(2) is False
+    # Chapter 定稿已批(31) 不被 is_approved 认定——on_edit 沿用 ==11，31 的精细回退未实现
+    assert status.is_approved(31) is False
 
 
 def test_can_submit_only_at_completion():
@@ -60,3 +62,22 @@ def test_scenelayer_status_registration():
 def test_scene_enum_options_registered():
     assert status.ENUM_OPTIONS["scene_type"] == ["dialogue", "functional", "combat", "ui"]
     assert status.ENUM_OPTIONS["layer_type"] == ["background", "floor", "decor", "mask"]
+
+
+def test_chapter_three_stage_status():
+    """Chapter 三段式：结构(1→10→11) + 提纲(20) + 定稿(30→31)，两道审批，completion=31。"""
+    assert status.completion_status("Chapter") == 31
+    assert status.has_approval("Chapter") is True
+    # 结构段 status=1（结构就绪）可 submit（→10）；其他阶段不可
+    assert status.can_submit("Chapter", 1) is True
+    assert status.can_submit("Chapter", 0) is False
+    assert status.can_submit("Chapter", 11) is False   # 结构已批
+    assert status.can_submit("Chapter", 20) is False   # 提纲就绪（无审批）
+    assert status.can_submit("Chapter", 30) is False   # 定稿待审（dialoguer 直写，不经 submit）
+    assert status.can_submit("Chapter", 31) is False   # 定稿已批
+
+
+def test_chapter_status_labels():
+    assert status.STATUS_LABEL[20] == "提纲就绪"
+    assert status.STATUS_LABEL[30] == "定稿待审"
+    assert status.STATUS_LABEL[31] == "定稿已批"

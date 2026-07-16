@@ -37,13 +37,14 @@ def test_set_status_batch_uses_unwind(monkeypatch):
     assert sess.run.call_args[1]["status"] == 0
 
 
-def test_get_pending_approvals_filters_status_10(monkeypatch):
+def test_get_pending_approvals_filters_status_10_and_30(monkeypatch):
     recs = [{"id": "X", "label": "DesignSheet", "status": 10}]
     sess = _fake_session(recs)
     monkeypatch.setattr(graph_repo, "_session", lambda: sess)
     out = graph_repo.get_pending_approvals()
     assert out == recs
-    assert "n.status=10" in sess.run.call_args[0][0]
+    # status=10 通用待审（含 Chapter 结构审）+ status=30 Chapter 定稿待审
+    assert "n.status IN [10, 30]" in sess.run.call_args[0][0]
 
 
 def test_get_sync_downstream_filters_sync_true(monkeypatch):

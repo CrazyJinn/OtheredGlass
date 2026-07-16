@@ -177,9 +177,11 @@ def set_status_batch(node_ids, status):
 
 
 def get_pending_approvals():
+    # status=10 通用待审（含 Chapter 结构审）；status=30 Chapter 定稿待审
     with _session() as s:
         rs = s.run(
-            "MATCH (n) WHERE n.status=10 RETURN n.id AS id, labels(n)[0] AS label, n.status AS status"
+            "MATCH (n) WHERE n.status IN [10, 30] "
+            "RETURN n.id AS id, labels(n)[0] AS label, n.status AS status"
         )
         return [{"id": r["id"], "label": r["label"], "status": r["status"]} for r in rs]
 
