@@ -1,318 +1,410 @@
-# 他者之镜 - 游戏开发流程图
+# 他者之镜 - 三大编排 Agent 流程图
+
+> **本文定位**：可视化 [.claude/agents/](.claude/agents/) 下三个编排层 Agent（`char-design` / `scene-design` / `plot-design`）的执行流程，统一用**时序图**表达。
+>
+> - **审批流程独立成节**（[§2](#2-审批流程)），不在各 Agent 时序图里展开——时序图只画"生产调度"主线，遇到待审就用 `⏸ 待审 → 批准 11` 一行带过并引用 §2。
+> - 🔧 **两处目标态变更（均未实现，仅画流程留 TODO）**：
+>   1. plot-design 创作侧将拆为 `chapter-structurer` → `chapter-outliner` → `chapter-dialoguer` 三步（替代现有一次性 `screenwriter`）。
+>   2. **StandingIllustration 的调用从 `char-design` 剥离，改由 `plot-design` 直接调度**——`char-design` 终点收窄到 `IllusDesign`。skill 本身（`char-stand-designer`）暂不拆改。
+>
+> 互补文档：[refer.md](refer.md)（节点治理手册：status / sync 级联 / 审批规则）。子项目指南：[55_dashboard/CLAUDE.md](55_dashboard/CLAUDE.md)（后台）、[99_game/README.md](99_game/README.md)（Godot 工程）。
 
 ---
 
-## 1. 叙事数据打磨流程 (剧本 → 图数据库)
+## 目录
 
-> 反复迭代：撰写剧本 → 提取结构化数据 → 导入图数据库 → 审查 → 补充/修改 → 再次提取。
+1. [三个 Agent 的共同铁律](#三个-agent-的共同铁律)
+2. [审批流程](#2-审批流程)
+3. [char-design —— 角色美术生产链](#char-design--角色美术生产链)
+4. [scene-design —— 场景美术生产链](#scene-design--场景美术生产链)
+5. [plot-design —— 剧情创作生产链](#plot-design--剧情创作生产链)
+6. [全部 Skill 功能概述](#全部-skill-功能概述)
+
+---
+
+## 三个 Agent 的共同铁律
+
+> `char-design` / `scene-design` / `plot-design` 是三条生产链各自的**纯编排层**，骨架完全一致，差异只在"调度哪几个 skill / agent"。
+
+| 铁律 | 含义 |
+|------|------|
+| **纯分发，不亲自动手** | 只做：解析输入 → 只读查 status → 据 status 决策 → 用 `Skill`/`Agent` 工具整体委派 → 复查 → 汇报。**严禁**亲自写 Cypher、亲自调生成脚本、拆解生产 skill 的内部步骤、直接调纯产出子 skill（`*-prompt-assembler` / `infra-image-generator`）。 |
+| **只读查全量，禁止过滤 -1** | 开局一次查询拿到本地状态表。`-1`（作废重做）与 `0`（待生成）都是待办，**禁止**在 WHERE 加 `status >= 0` 把 `-1` 滤掉。 |
+| **调度只看 status，不看产物文件** | 唯一判据是节点 `status` 与 `target_status`。**禁止**因 `prompt_path`/`image_path`/`script_path` 已有值或磁盘文件已存在而跳过；`-1` 必须重生成并**覆盖**旧产物，重做时禁止读旧文件。 |
+| **全量循环推进，禁止只推一个就停** | 枚举所有 `status < 10` 的待办逐个委派，直到全部到达终态、撞上审批阻塞（`10` 待 dashboard 批）、或撞上需用户决策的分歧点，才返回。 |
+| **审批阻塞** | 生产节点产物完成即提交 `10`（待审）；`11`（批准）才允许下游推进；驳回归 `0`。审批由 [55_dashboard](55_dashboard/) 人工触发，**详见 [§2 审批流程](#2-审批流程)**。 |
+| **复查就地在内存表更新** | 仅在 skill/agent 返回（发生一次写入）后，对**该被推进节点**复查一次；禁止每推一个就重查整张子图。 |
+| **汇报逐节点交代** | 列出全部节点，逐个给 `status` + 本轮是否处理；未推进的说明原因；**禁止**把 `status=-1` 误报成"节点未创建"。 |
+
+### status 语义（三链通用）
+
+```
+-1  作废重做（sync 级联重置后；看到 -1 必须重生成覆盖，禁止跳过）
+ 0  待处理 / 待生成
+ 1  已完成（数据节点）｜提示词完成（生产节点）
+ 2  图片完成（生产节点可选中间态）
+10  待审（审批专属，等 dashboard）
+11  批准（生产节点唯一"真正完成"值）
+```
+
+> 审批态与生产态数值隔开：生产用 `0/1/2`，审批专属 `10`/`11`。数据节点完成值 `1`（无审批）；生产节点完成值 `11`。
+
+---
+
+## 2. 审批流程
+
+> 所有**生产节点**（产出图片/剧本/章节结构的节点）完成后都要人工审批。审批态用 `10`（待审）/ `11`（批准），与生产态 `0/1/2` 隔开。本节是通用流程，各 Agent 时序图遇到待审均引用此处。
 
 ```mermaid
 sequenceDiagram
-    participant Input as 创作输入层
-    participant Ext as [Skill] 事件提取器
-    participant Rev as [人工] 审核
-    participant Help as [Skill] Neo4j Helper
-    participant Neo as [图] Neo4j
-    participant Cre as [Skill] 创作 Skill
+    participant Skill as 生产 Skill
+    participant Agent as 编排 Agent
+    participant DB as Neo4j 图
+    participant Dash as Dashboard 人工
+    participant Down as 下游 Skill
 
-    Input->>Ext: 世界观 / 角色设定 / 事件 / 场景 + Schema
-    Ext-->>Rev: 实体.md + entities.csv + relations.csv
-    Rev->>Help: 审核通过
-    Help->>Neo: import.cypher
-    Neo->>Cre: 图结构数据
-    Cre-->>Input: 剧情建议 / 角色互动 / 支线事件 / 场景扩展
-    Cre-->>Help: 新发现实体 / 关系 (自增长)
-    Note over Cre,Help: 知识自增长循环
+    Skill->>DB: 产物完成，MERGE 写 status=10（待审）
+    Skill-->>Agent: 返回 status=10
+    Note over Agent,Down: ⏸ 审批阻塞：下游不可推进
+    Dash->>Dash: 在 dashboard 审阅产物（图 / 剧本 / 章节结构）
+    alt 批准
+        Dash->>DB: status 10 → 11
+        DB-->>Agent: status=11
+        Note over Down: ✅ 解锁：下游可推进
+        Down->>DB: 读上游=11，继续推进
+    else 驳回
+        Dash->>DB: status 10 → 0
+        DB-->>Agent: status=0
+        Note over Skill: 🔁 重做：skill 看到 0 / -1 重新生成并覆盖
+        Skill->>DB: 重生成 → 再次写 10
+    end
 ```
 
+### 待审节点清单
 
-## 2. 游戏开发流程 (图数据已就绪)
+| 节点 | 进入待审 | 批准（11）解锁的下游 |
+|------|---------|---------------------|
+| DesignSheet | 图片完成 → 10 | IllusDesign |
+| IllusDesign | 图片完成 → 10 | StandingIllustration（🔧 调用方由 char-design 迁至 plot-design） |
+| StandingIllustration | 图片完成 → 10 | 无下游；作为发布前置（质量确认） |
+| SceneLayer | 图片完成 → 10 | 无下游；作为发布前置 |
+| Chapter（章节结构）🔧 | 结构就绪 → 10 | 创作（提纲 / 细节对话） |
+| Chapter（定稿） | 定稿 → 10 | 立绘 + 发布 |
+
+> AppearanceStyle / LanguageStyle / CostumeStyle / Scene 等数据节点完成值 `1`，**无审批**。
 
 ---
 
-> 前提：Neo4j 中已有完整的叙事数据（角色、事件、场景、章节等），开发流程从此开始。
+## char-design —— 角色美术生产链
+
+> **唯一职责**：推进某角色的美术链。输入**角色名或 ID**（如"陆择"、snowflake ID）。
+> 依赖顺序：`char-concept-designer → char-costume-designer → char-design-sheet → char-illus-designer`。
+> 🔧 **TODO**：`StandingIllustration` 已从此链**剥离**（迁至 plot-design），`char-design` 终点收窄到 `IllusDesign`。skill 未拆改，为目标态。
+
+### 节点 → Skill 映射
+
+| 图节点 | Skill | Status 流程 | 审批 |
+|--------|-------|------------|------|
+| AppearanceStyle / LanguageStyle | char-concept-designer | -1/0 → 1 | 无 |
+| CostumeStyle | char-costume-designer | -1/0 → 1 | 无 |
+| DesignSheet | char-design-sheet | -1/0→1→2→10→11 | ✅ |
+| IllusDesign | char-illus-designer | -1/0→1→2→10→11 | ✅ |
+| ~~StandingIllustration~~ | ~~char-stand-designer~~ | 🔧 TODO：剥离给 plot-design（见 §5） | — |
+
+### 时序图
 
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 80, 'curve': 'basis', 'htmlLabels': true}, 'themeVariables': {'nodeTextAlignment': 'center', 'subGraphTitleFontWeight': 'bold'}}}%%
-flowchart TB
-    %% ========== 数据源 ==========
-    neo[("Neo4j 数据就绪")]
+sequenceDiagram
+    actor U as 用户
+    participant A as char-design 编排Agent
+    participant DB as Neo4j 图
+    participant S1 as char-concept-designer
+    participant S2 as char-costume-designer
+    participant S3 as char-design-sheet
+    participant S4 as char-illus-designer
 
-    %% ========== 叙事设计 ==========
-    subgraph nar["叙事设计 [图]"]
-        O_nar1[叙事节奏.md]
-        O_nar2[角色声线.md]
+    U->>A: 角色名 / ID（如"陆择"）
+
+    rect rgb(235, 245, 255)
+    Note over A,DB: ① 解析 + 只读查全量状态
+    A->>DB: MATCH (c:Character{name}) RETURN c.id
+    A->>DB: 变长路径查全部美术节点 status<br/>含 -1/0，禁止过滤（只读）
+    DB-->>A: 本地状态表（4 类节点）
     end
 
-    %% ========== 角色设计 ==========
-    subgraph char["角色设计 [图]"]
-        O_char1[角色美术设定.md]
-        O_char2[角色语言风格.md]
+    rect rgb(240, 255, 240)
+    Note over A,S4: ② 按依赖顺序逐节点整体委派 Skill
+    A->>S1: Skill char-concept-designer char_id
+    Note right of S1: 内部三段式：查→组装→MERGE 写 status
+    S1-->>A: Appearance/Language → 1
+
+    A->>S2: Skill char-costume-designer char_id
+    S2-->>A: Costume → 1
+
+    A->>S3: Skill char-design-sheet char_id 2
+    S3-->>A: DesignSheet → 10 待审
+    Note over A: ⏸ 待审 → 批准 11（见 §2 审批流程）
+
+    A->>S4: Skill char-illus-designer char_id 2
+    S4-->>A: IllusDesign → 10 待审
+    Note over A: ⏸ 待审 → 批准 11（见 §2 审批流程）
     end
 
-    %% ========== 美术提示词 ==========
-    subgraph artp["美术提示词"]
-        O_artp1[设计图提示词.md]
-        O_artp2[立绘提示词.md]
-    end
+    Note over A: 🔧 TODO：StandingIllustration 已从此链剥离<br/>改由 plot-design 调度（见 §5）
 
-    %% ========== 场景设计 ==========
-    subgraph scened["场景设计 [图]"]
-        O_scened1[游戏场景.md]
-        O_scened2[对话背景.md]
-        O_scened3[UI背景.md]
-    end
-
-    %% ========== 剧本组装 ==========
-    subgraph script["剧本组装 [图]"]
-        O_script[剧本.json]
-    end
-
-    %% ========== 解决方案设计 ==========
-    subgraph sol["解决方案设计 [图]"]
-        O_sol1[需求分析文档]
-        O_sol2[测试用例设计]
-    end
-
-    %% ========== 文生图 ==========
-    subgraph t2i["文生图 (api)"]
-        O_t2i1[角色设计图.png]
-        O_t2i2[场景装饰.png]
-        O_t2i3[对话背景.png]
-        O_t2i4[UI背景.png]
-    end
-
-    %% ========== 图生图 ==========
-    subgraph i2i["图生图 (api)"]
-        O_i2i1[立绘.png]
-        O_i2i2[过场.png]
-    end
-
-    %% ========== 装饰裁剪 ==========
-    subgraph deco["装饰裁剪"]
-        O_deco[装饰切片.png]
-    end
-
-    %% ========== 音频实现 ==========
-    subgraph audio["音频实现"]
-        O_audio1[BGM.mp3]
-        O_audio2[音效.mp3]
-    end
-
-    %% ========== 代码生成 ==========
-    subgraph code["代码生成"]
-        O_code[游戏代码]
-    end
-
-    %% ========== 资源搬运 ==========
-    subgraph xfer["资源搬运"]
-        O_xfer[assets目录]
-    end
-
-    %% ========== 游戏组装 ==========
-    subgraph final["游戏组装 (人工)"]
-        O_final[游戏成品]
-    end
-
-    %% ========== 连线 ==========
-    neo --> nar
-    neo --> char
-    neo --> scened
-    neo --> sol
-    neo --> audio
-    O_char1 & O_char2 --> artp
-    O_nar1 --> script
-    O_artp1 --> t2i
-    O_artp2 --> t2i
-    O_artp2 --> i2i
-    O_scened1 & O_scened2 & O_scened3 --> t2i
-    O_t2i1 --> i2i
-    O_t2i2 --> deco
-    O_sol1 & O_sol2 --> code
-    O_t2i1 & O_t2i2 & O_t2i3 & O_t2i4 & O_i2i1 & O_i2i2 & O_deco & O_audio1 & O_audio2 --> xfer
-    O_xfer & O_code & O_script --> final
-
-    %% ========== 样式 ==========
-    classDef neo4j fill:#e3f2fd,stroke:#1565c0,stroke-width:3px,color:#0d47a1
-    classDef manual fill:#ffebee,stroke:#c62828,stroke-width:3px,color:#000
-    classDef auto fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000
-    classDef graphSkill fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000
-
-    class neo neo4j
-    class final manual
-    class artp,t2i,i2i,deco,code,xfer auto
-    class nar,char,scened,script,sol,audio graphSkill
+    A-->>U: 逐节点汇报 status<br/>终点 IllusDesign = 11
 ```
 
-### Neo4j 数据中枢 (mindmap)
+---
 
-> 下方独立展示 Neo4j 作为结构化数据中枢的角色：哪些 Skill 向图写入，哪些从图读取。
+## scene-design —— 场景美术生产链
+
+> **唯一职责**：推进某地点的场景美术。输入**地点名或 ID**（如"咖啡店"、snowflake ID）。
+> 依赖顺序：`scene-designer → scene-layer-designer`（Location→Scene→SceneLayer，最深 2 跳）。
+
+### 节点 → Skill 映射
+
+| 图节点 | Skill | Status 流程 | 审批 |
+|--------|-------|------------|------|
+| Scene | scene-designer | -1/0 → 1 | 无 |
+| SceneLayer | scene-layer-designer | -1/0→1→2→10→11 | ✅ |
+
+### 时序图
 
 ```mermaid
-mindmap
-  root((Neo4j Helper))
-    写入
-      来自创作输入层
-        世界观 / 角色设定 / 事件 / 场景 + Schema
-        → 事件提取器 → 人工审核 → import.cypher
-      来自创作 Skill
-        新发现实体 / 关系 (自增长回流)
-    存储
-      Character · 角色属性/性格/标签
-      Location · 地点/级别
-      Event · 事件类型/时间/因果链
-      Info · 信息/知识层级
-      Location · 场景边界/环境叙事
-      Chapter · 章节结构/时序
-    查询
-      叙事设计
-        关系图 · 事件链 · 信息层级 · 场景序列
-      角色设计
-        角色属性 · 关系 · 标签 · 参与事件
-      场景设计
-        Location 节点 · 环境叙事属性
-      剧本组装
-        Chapter / Location / Event 层次结构
+sequenceDiagram
+    actor U as 用户
+    participant A as scene-design 编排Agent
+    participant DB as Neo4j 图
+    participant Scene as scene-designer
+    participant Layer as scene-layer-designer
+
+    U->>A: 地点名 / ID（如"咖啡店"）
+
+    rect rgb(235, 245, 255)
+    Note over A,DB: ① 解析 + 只读查全量状态
+    A->>DB: MATCH (l:Location{name}) RETURN l.id
+    A->>DB: 无方向变长路径查全部场景节点 status<br/>含 -1/0（只读）
+    DB-->>A: 本地状态表（Scene + SceneLayer）
+    end
+
+    rect rgb(240, 255, 240)
+    Note over A,Layer: ② 按依赖顺序逐节点整体委派 Skill
+    A->>Scene: Skill scene-designer loc_id
+    Note right of Scene: 内部三段式：查→组装→MERGE 写 status
+    Scene-->>A: Scene → 1
+
+    A->>Layer: Skill scene-layer-designer scene_id 2
+    Layer-->>A: SceneLayer → 10 待审
+    Note over A: ⏸ 待审 → 批准 11（见 §2 审批流程）
+    end
+
+    A-->>U: 逐节点汇报 status
 ```
 
 ---
 
-## 图例说明
+## plot-design —— 剧情创作生产链
 
-| 样式 | 含义 |
-|------|------|
-| 蓝色节点 + [图] 标记 | 从 Neo4j 读取结构化数据的 Skill |
-| 绿色节点 | Skill 自动完成 |
-| 红色节点 | 人工完成 |
-| 虚线箭头 | 迭代回溯（审查后返回修改） |
+> **唯一职责**：推进某章节从「建结构 → 创作（提纲 + 细节对话）→ 立绘 → 发布」全链到运行时。输入**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID）。
+>
+> ⚠️ **两处目标态变更（🔧 TODO，skill 未拆改）**：
+> 1. 创作侧：现有 `screenwriter`（一次性产剧本）将拆为 `chapter-structurer` → `chapter-outliner` → `chapter-dialoguer`。
+> 2. 立绘侧：**StandingIllustration 改由 plot-design 直接调 `char-stand-designer`**；`char-design` 只负责把上游 `IllusDesign` 推进到 `11`。
+
+### 创作侧三阶段（对应 3 个 skill）
+
+| 阶段 | Skill | 状态 | 职责 |
+|------|-------|------|------|
+| ① 建章节 | `chapter-structurer` | 🔧 待实现 | 在图中建 Chapter 节点，把 N 个 Scene 统合进来（contains 边） |
+| ② 出提纲 | `chapter-outliner` | 🔧 待实现 | 为章节产出提纲（outline） |
+| ③ 细节对话 | `chapter-dialoguer` | 🔧 待实现 | 基于提纲创作细节对话，产出定稿剧本到 `25_剧本/` |
+
+> **门控**：① 建章节结构 → 审批通过 → 才进入 ②③ 创作；细节对话定稿终审通过 + 立绘全 `11` → 才发布。
+> **过渡期**：3 个创作 skill 落地前，仍由 `screenwriter` 一次性产剧本（`-1/0→1→2→10→11`）。
+
+### 节点 → Skill/Agent 映射（目标态）
+
+| 图节点 | 委派对象 | 工具 | Status 流程（示意） | 审批 |
+|--------|---------|------|-------------------|------|
+| Chapter（章节结构） | `chapter-structurer` 🔧 | Skill | -1/0 → 结构就绪 → 10 → 11 | ✅ 结构审 |
+| Chapter（提纲） | `chapter-outliner` 🔧 | Skill | → 提纲就绪 | — |
+| Chapter（细节对话） | `chapter-dialoguer` 🔧 | Skill | → 定稿 → 10 → 11 | ✅ 终审 |
+| IllusDesign（立绘上游） | `char-design` | Agent | -1/0→…→11 | ✅ |
+| StandingIllustration 🔧 | `char-stand-designer` | **Skill（plot-design 直调）** | -1/0→1→2→10→11 | ✅ |
+| Chapter 发布 | `chapter-publisher` | Skill | 仅 结构+定稿 双批 且 立绘全 11 后 | — |
+
+> 🔧 = 待实现 / 调用方变更。具体 status 值待落地时按 [剧情.md](00_init/Schema/剧情.md) Schema 确定，表中为示意。
+
+### 时序图
+
+```mermaid
+sequenceDiagram
+    actor U as 用户
+    participant A as plot-design 编排Agent
+    participant DB as Neo4j 图
+    participant ST as chapter-structurer
+    participant OL as chapter-outliner
+    participant DG as chapter-dialoguer
+    participant CD as char-design Agent
+    participant Stand as char-stand-designer
+    participant Pub as chapter-publisher
+
+    U->>A: 章节标题/序号/ID（如「新皮肤」）
+
+    rect rgb(235, 245, 255)
+    Note over A,DB: ① 解析 + 只读查全量状态
+    A->>DB: MATCH (ch:Chapter{title/chapter_no}) RETURN ch.id
+    A->>DB: 一次查 Chapter + contains的Scene<br/>+ depicts的立绘 + 立绘所属角色（只读）
+    DB-->>A: 本地状态表
+    end
+
+    rect rgb(255, 248, 240)
+    Note over A,DG: ② 创作 🔧 待实现（screenwriter 将拆为三步）
+    opt 章节结构未就绪（未建 / -1 重做）
+        A->>ST: Skill chapter-structurer ch_id
+        Note right of ST: 建 Chapter + 统合 N 个 Scene（contains）
+        ST-->>A: 结构 → 10 待审
+        Note over A: ⏸ 待审 → 11（见 §2 审批流程）
+    end
+    opt 结构 11 且提纲未出
+        A->>OL: Skill chapter-outliner ch_id
+        Note right of OL: 为章节产出提纲
+        OL-->>A: 提纲就绪
+    end
+    opt 提纲就绪且细节对话未定稿（含 -1 重做）
+        A->>DG: Skill chapter-dialoguer ch_id
+        Note right of DG: 基于提纲创作细节对话<br/>产出定稿 25_剧本/
+        DG-->>A: 定稿 → 10 待审
+        Note over A: ⏸ 待审 → 11（见 §2 审批流程）
+    end
+    end
+
+    rect rgb(255, 240, 245)
+    Note over A,Stand: ③ 立绘 🔧 TODO：StandingIllustration 改由 plot-design 直调
+    loop 每个 depicts 立绘
+        opt 上游 IllusDesign ≠ 11
+            A->>CD: Agent char-design char_id（仅推进到 IllusDesign）
+            Note right of CD: concept→costume→sheet→illus<br/>不含 Standing（已剥离）
+            CD-->>A: IllusDesign → 11
+        end
+        A->>Stand: Skill char-stand-designer stand_id 2
+        Note right of Stand: 基于 IllusDesign 产出立绘变体
+        Stand-->>A: StandingIllustration → 10 待审
+        Note over A: ⏸ 待审 → 11（见 §2 审批流程）
+    end
+    end
+
+    opt 定稿 11 且立绘全 11
+        A->>Pub: Skill chapter-publisher ch_id
+        Note right of Pub: 拷贝剧本+立绘/背景<br/>更新 manifest → 99_game/
+        Pub-->>A: 发布完成 + 运行时入口
+    end
+
+    A-->>U: 逐节点汇报<br/>结构/提纲/定稿/立绘 status + 发布状态
+```
 
 ---
 
+## 全部 Skill 功能概述
 
-## Skill 说明
+> 下表覆盖三条生产链的全部 skill + 叙事层 + 基础设施。**纯产出层**（只产文件、不读写图、不写 status）单独标注。三个**编排 Agent**（`char-design` / `scene-design` / `plot-design`）不在此表——它们是调度者，调度的对象就是表里的 skill。
 
-### 叙事数据打磨阶段 (图1)
+### 叙事层（创作输入 → 叙事图）
 
-| Skill | 说明 |
-|-------|------|
-| **事件提取器** | 从创作输入提取实体/关系，输出实体.md + entities.csv + relations.csv |
-| **人工审核** | 审核提取结果，通过或驳回修改 |
-| **Neo4j Helper** | 汇总所有读写操作，去重/合并/补全后生成 Cypher，写入图数据库 |
-| **创作 Skill** | 基于图数据推理，生成剧情建议/角色互动/支线事件/场景扩展，自增长回流新实体和关系 |
+| Skill | 功能 | 主要产出 | 读写图 / 写 status |
+|-------|------|---------|-------------------|
+| nrt-narrative-extractor | 从创作文本提取结构化实体 + 6 种关系 | CSV + import.cypher（离线文件） | ❌ 不直连（人工触发导入） |
+| nrt-graph-builder | 手动 / discover 发现模式增量建图 | 直接写入 Neo4j | ✅ |
+| nrt-narrative-grower | analyze → generate → apply 叙事自增长 | `02_剧情数据/` 草案 MD（frontmatter status） | ✅（apply 写回） |
 
-### 游戏开发阶段 (图2)
+### 角色美术层（Character → IllusDesign）
 
-| Skill | 说明 |
-|-------|------|
-| **叙事设计** | 查询关系图/事件链/信息层级/场景序列 → 叙事节奏.md、角色声线.md |
-| **角色设计** | 查询角色属性/关系/标签/参与事件 → 角色美术设定.md、角色语言风格.md |
-| **场景设计** | 查询 Location 节点环境叙事属性 → 游戏场景.md、对话背景.md、UI背景.md |
-| **剧本组装** | 查询 Chapter/Location/Event 层次结构 → 剧本.json |
-| **解决方案设计** | 基于代码需求进行技术方案分析 → 需求分析文档、测试用例设计 |
-| **美术提示词** | 根据角色美术设定 → 设计图提示词.md、立绘提示词.md |
-| **文生图 (api)** | 调用 seedream API → 角色设计图/场景装饰/对话背景/UI背景 .png |
-| **图生图 (api)** | 调用 seedream API → 立绘.png、过场.png |
-| **装饰裁剪** | 切割宫格图片 → 装饰切片.png |
-| **音频实现** | 根据音频需求 → BGM.mp3、音效.mp3 |
-| **代码生成** | 根据需求分析文档 → 游戏代码 |
-| **资源搬运** | 将终稿资源同步到 assets 目录 |
-| **游戏组装** | 将剧本、代码、资源组装为游戏成品 |
+| Skill | 阶段 | 功能 | 主要产出 | 读写图 / 写 status |
+|-------|------|------|---------|-------------------|
+| char-concept-designer | ① 概念 | 外貌 + 语言风格设计 | AppearanceStyle / LanguageStyle 字段 | ✅ |
+| char-costume-designer | ② 着装 | 着装设计 | CostumeStyle 字段 | ✅ |
+| char-design-sheet | ③ 三视图 | 外貌底图设计（文生图） | DesignSheet prompt + 图 | ✅ |
+| char-illus-designer | ④ 立绘设计图 | 着装适配立绘（图生图） | IllusDesign prompt + 图 | ✅ |
+| char-stand-designer | ⑤ 立绘变体 | 表情/动作变体（图生图） | StandingIllustration prompt + 图 | ✅（🔧 调用方迁至 plot-design） |
+| char-prompt-assembler | 纯产出 | 组装角色提示词（Mode A/B/C） | prompt 文件 | ❌ |
+
+### 场景美术层（Location → SceneLayer）
+
+| Skill | 阶段 | 功能 | 主要产出 | 读写图 / 写 status |
+|-------|------|------|---------|-------------------|
+| scene-designer | ① 场景 | 场景设计 | Scene 字段 | ✅ |
+| scene-layer-designer | ② 图层 | 场景图层（文生图/图生图） | SceneLayer prompt + 图 | ✅ |
+| scene-prompt-assembler | 纯产出 | 组装场景提示词 | prompt 文件 | ❌ |
+
+### 剧情层（Chapter → 运行时）
+
+| Skill | 阶段 | 功能 | 主要产出 | 读写图 / 写 status |
+|-------|------|------|---------|-------------------|
+| screenwriter | 过渡 | 一次性产整个剧本（将被拆分取代） | `25_剧本/` JSON | ✅ |
+| chapter-structurer 🔧 | ① 建章节 | 建 Chapter + 统合 N 个 Scene | Chapter + contains 边 | ✅（TODO） |
+| chapter-outliner 🔧 | ② 提纲 | 为章节出提纲 | 提纲 | ✅（TODO） |
+| chapter-dialoguer 🔧 | ③ 细节对话 | 基于提纲创作细节对话 | 定稿剧本 `25_剧本/` | ✅（TODO） |
+| chapter-publisher | 发布 | 发布剧本 + 立绘/背景到运行时 | `99_game/` 资源 + manifest | ✅ |
+
+### 基础设施 & 元工具
+
+| 组件 | 功能 | 说明 |
+|------|------|------|
+| infra-image-generator | 读 prompt 调 OfoxAI API 出图（纯产出） | 文生图 / 图生图；不写图、不写 status |
+| cypher_exec.py | 执行 Cypher（统一图读写入口） | 所有 skill 读写 Neo4j 的唯一脚本，支持 `-c`/`-f`/`--stdin`/`--multi`/`--json` |
+| skill-creator | 新建 / 编辑 skill 本身 | 元工具，不属于生产链 |
+
+> 🔧 = 待实现 / 调用方变更目标态。纯产出层（`char-prompt-assembler` / `scene-prompt-assembler` / `infra-image-generator`）只产文件，节点字段与 status 一律由调用方生产 skill 在「保存结果」步用 MERGE 兜底写入。
 
 ---
 
 ## 项目文件夹结构
 
+> 目录前缀的数字是**流水线阶段编号**（创作输入 `00_` → 叙事数据 `01_` → 剧情数据 `02_` → 美术 `06_/07_` → 剧本 `25_` → 后台 `55_` → 成品 `99_`），按编号即可判断某产物在链路中的位置。`.claude/` 是 Claude Code 自动化层（skill / agent / 脚本）。
+
 ```
 他者之镜/
-├── 00_init/                          # 创作输入层 (图1)
-│   ├── 游戏概览.md
-│   ├── 世界设定.md
-│   ├── 剧本大纲.md
-│   ├── 人物设定.md
-│   └── Schema.md                     # Neo4j Schema 规则
+├── .claude/                          # Claude Code 自动化层
+│   ├── agents/                       # 编排 agent：char-design / scene-design / plot-design
+│   ├── scripts/                      # cypher_exec.py · snowflake_base62.py（图读写 + ID 生成）
+│   └── skills/                       # 全部生产 skill（见 §6 全部 Skill 功能概述）
 │
-├── 01_叙事数据/                      # 事件提取器产出 (图1)
-│   ├── 实体/
-│   │   ├── 角色实体.md
-│   │   ├── 事件实体.md
-│   │   └── 地点实体.md
-│   ├── entities.csv
-│   └── relations.csv
+├── 00_init/                          # 创作输入 + Schema（唯一事实来源）
+│   ├── Schema/                       # Neo4j Schema（叙事基础 / 角色美术 / 场景美术 / 剧情）
+│   └── migration/
 │
-├── 05_角色设计/                      # 角色设计 [图] (图2)
-│   ├── 角色设计总览.md
-│   └── char/
-│       └── char_001/
-│           ├── 美术设定.md
-│           └── 语言风格.md
+├── 01_叙事数据/                      # nrt-narrative-extractor 离线产出
+│   └── csv/                          # 实体/关系 CSV + import.cypher
 │
-├── 06_角色美术/                      # 美术提示词 + 文生图 + 图生图
-│   ├── 角色美术总览.md
-│   └── char_001/
-│       ├── 设计图提示词.md
-│       ├── 设计图.png
-│       └── 立绘/
-│           ├── 立绘提示词.md
-│           └── *.png
+├── 02_剧情数据/                      # nrt-narrative-grower 叙事草案（frontmatter status 驱动审批）
 │
-├── 10_场景设计/                      # 场景设计 [图] (图2)
-│   ├── 场景设计总览.md
-│   ├── 游戏场景/
-│   │   └── scene_xxx_场景名/
-│   │       ├── 概览.md
-│   │       └── room_xxx_房间名/
-│   │           └── 提示词.md
-│   ├── 对话背景/
-│   │   └── dialog_xxx_场景名/
-│   │       └── 提词.md
-│   └── UI背景/
-│       └── ui_xxx_界面名/
-│           └── 提示词.md
+├── 06_角色美术/                      # 角色美术产出（DesignSheet / IllusDesign / StandingIllustration）
+│   ├── 沈暮雪/
+│   │   ├── 沈暮雪-电竞经理职业装/    # 每套着装 = 一个 IllusDesign，含 prompt.md + 立绘设计图.png
+│   │   └── …                         # 同角色其余着装（咖啡店休闲装 / 西餐厅约会装 / 路边摊日常 …）
+│   ├── 陆择/
+│   └── …                             # 其余角色（林梦 / 苏晓禾 / 陈默 / 顾盈 …）
 │
-├── 11_场景美术/                      # 文生图产出 + 装饰裁剪
-│   ├── 场景美术总览.md
-│   ├── 游戏场景/
-│   │   └── scene_xxx_场景名/
-│   │       └── room_xxx_房间名/
-│   │           ├── 场景装饰.png
-│   │           └── 装饰切片/
-│   │               └── *.png
-│   ├── 对话背景/
-│   │   └── *.png
-│   └── UI背景/
-│       └── *.png
+├── 07_场景美术/                      # 场景美术产出（Scene / SceneLayer）
+│   └── 酒店/
+│       └── 酒店-客房/
+│           └── background/           # 各图层背景图
 │
-├── 15_叙事设计/                      # 叙事设计 [图] (图2)
-│   ├── 叙事节奏.md
-│   └── 角色声线.md
+├── 25_剧本/                          # 剧本产出（screenwriter / chapter-dialoguer → 章节 JSON）
 │
-├── 20_剧本/                          # 剧本组装 [图] (图2)
-│   ├── 剧本总览.md
-│   ├── 剧本.json
-│   └── 章节/
-│       └── 第一章.md
+├── 55_dashboard/                     # 人工治理后台（Streamlit，http://localhost:8501）
+│   ├── config/                       # settings.py（凭证来源）
+│   ├── core/                         # schema_loader · status · cascade · graph_repo
+│   ├── repo/                         # 后台层 Cypher 读写封装（cypher_exec.py 的等价物）
+│   ├── tests/                        # core 层单测（纯单测，不连真实 Neo4j）
+│   └── ui/                           # 页面 + components/
 │
-├── 25_解决方案设计/                  # 解决方案设计 [图] (图2)
-│   ├── 需求分析文档.md
-│   └── 测试用例设计.md
-│
-├── 30_音频/                          # 音频实现 (图2)
-│   ├── BGM/
-│   └── 音效/
-│
-├── 89_game/                          # 代码生成 + 资源搬运 + 游戏组装
-│   └── AllCooper/
-│       ├── project.godot
-│       ├── scenes/
-│       ├── scripts/
-│       ├── assets/
-│       │   ├── sprites/
-│       │   ├── backgrounds/
-│       │   ├── ui/
-│       │   └── audio/
-│       └── addons/
-│
-├── 99_流程管理/
-│
-└── .claude/skills/
+└── 99_game/                          # Godot 4.3+ 游戏运行时（chapter-publisher 发布目标）
+    ├── assets/                       # portraits / scenes / bgm
+    ├── data/chapters/                # 发布后的章节剧本 JSON（ScriptInterpreter 消费）
+    ├── scenes/                       # Godot 场景
+    ├── scripts/                      # autoload / data / scenes / ui / util
+    ├── tools/                        # validate_chapter.py（数据校验，无需 Godot）
+    └── tests/
 ```
