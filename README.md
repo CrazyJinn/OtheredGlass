@@ -210,7 +210,7 @@ sequenceDiagram
 >
 > 创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**：
 > 1. 创作侧拆为 `chapter-structurer`（建结构）→ `chapter-outliner`（提纲）→ `chapter-dialoguer`（定稿），原 `screenwriter` 已删除。
-> 2. 立绘侧：**StandingIllustration 由 plot-design 直接调 `char-stand-designer <stand_id>`**（按需）；`char-design` 只负责把上游 `IllusDesign` 推进到 `11`。
+> 2. 立绘侧：**StandingIllustration 由 plot-design 直接调 `char-stand-designer <stand_id>`**（按需）；上游 `IllusDesign` 未就绪时**报警跳过**（不跨链调 `char-design`，角色美术链由人工单独跑）。
 
 ### 创作侧三阶段（对应 3 个 skill）
 
@@ -223,14 +223,13 @@ sequenceDiagram
 > **门控**：① 建章节结构 → 结构审通过 → 才进入 ②③ 创作；细节对话定稿终审通过 + 立绘全 `11` → 才发布。
 > **Chapter status 三段**：结构 `0→1→10→11` / 提纲 `→20` / 定稿 `→30→31`（两道审批：结构审 + 定稿审）。
 
-### 节点 → Skill/Agent 映射（目标态）
+### 节点 → Skill 映射
 
 | 图节点 | 委派对象 | 工具 | Status 流程（示意） | 审批 |
 |--------|---------|------|-------------------|------|
 | Chapter（章节结构） | `chapter-structurer` | Skill | -1/0→1→10→11 | ✅ 结构审 |
 | Chapter（提纲） | `chapter-outliner` | Skill | →20 | — |
 | Chapter（细节对话） | `chapter-dialoguer` | Skill | →30→31 | ✅ 定稿审 |
-| IllusDesign（立绘上游） | `char-design` | Agent | -1/0→…→11 | ✅ |
 | StandingIllustration | `char-stand-designer` | **Skill（plot-design 直调 stand_id）** | -1/0→1→2→10→11 | ✅ |
 | Chapter 发布 | `chapter-publisher` | Skill | 仅 Chapter=31 且 立绘全 11 后 | — |
 
@@ -244,7 +243,6 @@ sequenceDiagram
     participant ST as chapter-structurer
     participant OL as chapter-outliner
     participant DG as chapter-dialoguer
-    participant CD as char-design Agent
     participant Stand as char-stand-designer
     participant Pub as chapter-publisher
 
@@ -281,15 +279,16 @@ sequenceDiagram
     rect rgb(255, 240, 245)
     Note over A,Stand: ③ 立绘（plot-design 按 depicts 直调 char-stand-designer）
     loop 每个 depicts 立绘
-        opt 上游 IllusDesign ≠ 11
-            A->>CD: Agent char-design char_id（仅推进到 IllusDesign）
-            Note right of CD: concept→costume→sheet→illus<br/>不含 Standing（已剥离）
-            CD-->>A: IllusDesign → 11
+        A->>DB: 查该 stand 上游 IllusDesign.status（只读）
+        DB-->>A: illus_status
+        alt IllusDesign = 11
+            A->>Stand: Skill char-stand-designer stand_id 2
+            Note right of Stand: 基于 IllusDesign 产出立绘变体
+            Stand-->>A: StandingIllustration → 10 待审
+            Note over A: ⏸ 待审 → 11（见 §2 审批流程）
+        else IllusDesign ≠ 11
+            Note over A: 🚨 报警：角色美术链未就绪，跳过该立绘<br/>请人工跑 char-design（plot-design 不跨链）
         end
-        A->>Stand: Skill char-stand-designer stand_id 2
-        Note right of Stand: 基于 IllusDesign 产出立绘变体
-        Stand-->>A: StandingIllustration → 10 待审
-        Note over A: ⏸ 待审 → 11（见 §2 审批流程）
     end
     end
 
@@ -350,7 +349,6 @@ sequenceDiagram
 |------|------|------|
 | infra-image-generator | 读 prompt 调 OfoxAI API 出图（纯产出） | 文生图 / 图生图；不写图、不写 status |
 | cypher_exec.py | 执行 Cypher（统一图读写入口） | 所有 skill 读写 Neo4j 的唯一脚本，支持 `-c`/`-f`/`--stdin`/`--multi`/`--json` |
-| skill-creator | 新建 / 编辑 skill 本身 | 元工具，不属于生产链 |
 
 > 纯产出层（`char-prompt-assembler` / `scene-prompt-assembler` / `infra-image-generator`）只产文件，节点字段与 status 一律由调用方生产 skill 在「保存结果」步用 MERGE 兜底写入。
 

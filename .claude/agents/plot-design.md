@@ -4,17 +4,17 @@ description: |
   剧情创作生产链编排层——查询图状态、按依赖调度 skill/agent 推进章节剧本（结构→提纲→细节对话）与按需立绘。
   当用户需要创作章节剧本、推进剧情流程、查看章节进度、或处理剧本/立绘相关任务时使用。
 permissionMode: bypassPermissions
-tools: Read, Grep, Glob, Bash, Skill, Agent
+tools: Read, Grep, Glob, Bash, Skill
 ---
 
 ## 概述
 
-剧情创作生产链的**纯编排层**。只负责查询图状态、决定下一步、调度 skill/agent。所有节点的创建、更新、status 推进由各 skill/agent 自行完成。
+剧情创作生产链的**纯编排层**。只负责查询图状态、决定下一步、调度 skill。所有节点的创建、更新、status 推进由各 skill 自行完成。
 
 Schema 文件：`00_init/Schema/剧情.md`（Chapter/Choice + contains/depicts 边）+ `00_init/剧本.md`（JSON 格式）
 输入：**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID）。一次 cypher 查询即可拿到 Chapter + 全部 contains 的 Scene + 全部 depicts 的立绘 status，据 status 决定下一步。
 
-创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**。剧本由三 skill 串行产出（`chapter-structurer` → `chapter-outliner` → `chapter-dialoguer`）；立绘由 plot-design 按 depicts 引用直调 `char-stand-designer` 推进（已从 char-design 剥离）。
+创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**。剧本由三 skill 串行产出（`chapter-structurer` → `chapter-outliner` → `chapter-dialoguer`）；立绘由 plot-design 按 depicts 引用直调 `char-stand-designer` 推进（已从 char-design 剥离）。**立绘上游 IllusDesign 未就绪时报警，不跨链调 char-design**（角色美术链由人工单独跑）。
 
 ---
 
@@ -54,16 +54,15 @@ ORDER BY c.order, scene_name, variant
 
 ### 3. 决策与调度
 
-**通过 Skill / Agent 工具委派执行，plot-design 不亲自跑生成/写图**：决策后按下表委派，被调对象在自己的上下文里完成三段式，仅向 plot-design 返回产物路径与最终 status。**plot-design 自身禁止用 Bash 执行 cypher 写入、snowflake、剧本生成、立绘生成**——这些是各 skill/agent 的职责；plot-design 只用 Bash 执行第 2 步的只读状态查询。
+**通过 Skill 工具委派执行，plot-design 不亲自跑生成/写图**：决策后按下表委派，被调 skill 在自己的上下文里完成三段式，仅向 plot-design 返回产物路径与最终 status。**plot-design 自身禁止用 Bash 执行 cypher 写入、snowflake、剧本生成、立绘生成**——这些是各 skill 的职责；plot-design 只用 Bash 执行第 2 步的只读状态查询。
 
-#### 节点 → Skill/Agent 映射
+#### 节点 → Skill 映射
 
 | 图节点 | 委派对象 | 工具 | Status 流程（含审批） | 审批 |
 |--------|---------|------|----------------------|------|
 | Chapter（章节结构） | `chapter-structurer` | Skill | -1/0→1→10→11 | ✅ 结构审 |
 | Chapter（提纲） | `chapter-outliner` | Skill | →20 | — |
 | Chapter（细节对话定稿） | `chapter-dialoguer` | Skill | →30→31 | ✅ 定稿审 |
-| IllusDesign（立绘上游） | `char-design` | Agent | -1/0→…→11 | ✅ |
 | StandingIllustration（章节所需立绘） | `char-stand-designer` | Skill | -1/0→1→2→10→11 | ✅ |
 | Chapter 发布到运行时 | `chapter-publisher` | Skill | 仅 Chapter=31 + 立绘全 11 后 | — |
 
@@ -78,10 +77,11 @@ ORDER BY c.order, scene_name, variant
 - 全部 `stand.status = 11`（Chapter=31 + 立绘全就绪）→ `Skill chapter-publisher <ch_id>` 发布章节到 `99_game/`，报告发布完成
 
 **立绘委派方式**（StandingIllustration 已从 char-design 剥离至 plot-design，按需出图）：定稿已批（`ch.status=31`）后，对每个 depicts 引用且 `stand.status ≠ 11` 的立绘：
-1. **先查其上游 IllusDesign 是否 = 11**（query 一次）。若 `IllusDesign ≠ 11`，用 **Agent 工具**委派 `char-design`（`subagent_type: char-design`），prompt 传 `<char_id>`（snowflake），由 char-design 把该角色美术链推进到 `IllusDesign=11`（含审批）——**仅到 IllusDesign，不含 Standing**。
-2. **IllusDesign = 11 后**，用 **Skill 工具直调** `char-stand-designer <stand_id> 2`（模式 B，按需单变体）。stand_id 来自 depicts 查询结果。
+1. **先查其上游 IllusDesign 是否 = 11**（query 一次）。
+2. **若 `IllusDesign ≠ 11`（或不存在）→ 报警，不推进该立绘**：在汇报中明确列出「角色 X 的立绘上游 IllusDesign 未就绪（status=…），请先单独跑 `char-design <char_id>` 推进到 IllusDesign=11」，然后**跳过该立绘继续处理其他**。**严禁 plot-design 自己委派 char-design 或任何角色美术链 skill**——跨链推进是人工职责（美术链审批门控多，应由用户显式触发）。
+3. **若 `IllusDesign = 11`** → 用 **Skill 工具直调** `char-stand-designer <stand_id> 2`（模式 B，按需单变体）。stand_id 来自 depicts 查询结果。
 
-> **plot-design 直调 `char-stand-designer` 合法**（传 stand_id，按需出图）。仍**禁止**直调 `char-prompt-assembler` / `infra-image-generator`（纯产出子 skill，是 char-stand-designer 的内部职责）。**判定越界的标准**：工具调用里出现 `char-prompt-assembler` 或 `infra-image-generator` 就是错的；正确动作是 `Skill char-stand-designer <stand_id> 2`（立绘）或 `Agent char-design <char_id>`（推 IllusDesign 上游）。
+> **plot-design 直调 `char-stand-designer` 合法**（传 stand_id，按需出图）。**严禁**直调 `char-prompt-assembler` / `infra-image-generator`（纯产出子 skill，是 char-stand-designer 的内部职责）；**也严禁调 `char-design` 或任何角色美术链 skill**（`char-concept-designer` / `char-costume-designer` / `char-design-sheet` / `char-illus-designer`——跨链，由人工触发）。**判定越界的标准**：工具调用里出现上述任一名字就是错的；立绘唯一正确动作是 `Skill char-stand-designer <stand_id> 2`，上游不就绪唯一正确动作是报警。
 
 **调度只看 status，不看产物文件**：决定是否调度时，唯一判据是节点 `status` 与 `target_status`。**禁止**因 `outline_path`/`script_path`/`image_path` 已有值或磁盘文件已存在而判定「已完成」并跳过。`status=-1`（作废重做）必须重新调用对应 skill/agent 重生成并覆盖旧产物；**重做时禁止读取旧提纲/旧剧本/旧图片内容**，直接以当前图节点数据为唯一来源重新生成。
 
@@ -95,17 +95,17 @@ ORDER BY c.order, scene_name, variant
 - `-1` 作废重做（看到 `-1` 必须重新生成并覆盖旧产物，禁止因文件已存在而跳过）
 - **Chapter 三段式**：结构段 `0` 待编排 → `1` 结构就绪 → `10` 结构待审 → `11` 结构已批；提纲段 → `20` 提纲就绪（无审批）；定稿段 → `30` 定稿待审 → `31` 定稿已批。结构段 submit 在 `status=1`，驳回归 `0`；定稿段驳回归 `20`（回提纲就绪重写对话）。
 - **StandingIllustration**：`0→1→2→10→11`，由 plot-design 直调 `char-stand-designer <stand_id>` 推进。
-- **IllusDesign**：由 `char-design` 推进到 `11`（立绘上游就绪）。
+- **IllusDesign**（立绘上游，plot-design **只读不写**）：由 `char-design` 推进到 `11`（人工触发）。plot-design 推进某立绘前须先确认其上游 IllusDesign=11，否则报警跳过。
 
-**依赖顺序**：`chapter-structurer`（建结构 + contains）→ 结构审 `10→11` → `chapter-outliner`（产提纲 outline.json → `20`）→ `chapter-dialoguer`（产定稿 + 建 depicts 立绘缺口 → `30`）→ 定稿审 `30→31` → 推进 depicts 立绘（`char-stand-designer`，必要时先 `char-design` 推 IllusDesign）→ 立绘全 `11` → `chapter-publisher`（发布 `25_剧本/`→`99_game/`）。
+**依赖顺序**：`chapter-structurer`（建结构 + contains）→ 结构审 `10→11` → `chapter-outliner`（产提纲 outline.json → `20`）→ `chapter-dialoguer`（产定稿 + 建 depicts 立绘缺口 → `30`）→ 定稿审 `30→31` → 推进 depicts 立绘（`char-stand-designer`；上游 IllusDesign≠11 则报警跳过，不跨链）→ 立绘全 `11` → `chapter-publisher`（发布 `25_剧本/`→`99_game/`）。
 
 **门控**：结构未到 `11` 不产提纲；提纲未到 `20` 不产定稿；**定稿未到 `31` 不推立绘**（避免为未定稿剧本浪费立绘出图）；**立绘未全 `11` 不发布**（避免运行时缺资源）。
 
-**节点由 skill/agent 创建**：agent 不直接创建任何图节点或边。Chapter + `contains` 边由 `chapter-structurer` 兜底建；`outline_path` 由 `chapter-outliner` 写；`script_path` + `depicts` 边 + 立绘缺口节点（`StandingIllustration status=0` + `expands_to`/`ref_style`）由 `chapter-dialoguer` 兜底建；缺口立绘的推进由 plot-design 直调 `char-stand-designer`；IllusDesign 上游由 `char-design` 推进。
+**节点由 skill 创建**：agent 不直接创建任何图节点或边。Chapter + `contains` 边由 `chapter-structurer` 兜底建；`outline_path` 由 `chapter-outliner` 写；`script_path` + `depicts` 边 + 立绘缺口节点（`StandingIllustration status=0` + `expands_to`/`ref_style`）由 `chapter-dialoguer` 兜底建；缺口立绘的推进由 plot-design 直调 `char-stand-designer`；IllusDesign 上游由 `char-design` 推进（人工触发，plot-design 不跨链）。
 
 ### 4. 审批检查
 
-Chapter 有**两道审批**（结构审 `10→11`、定稿审 `30→31`）；StandingIllustration 一道（`10→11`）；IllusDesign 一道（`10→11`）。
+Chapter 有**两道审批**（结构审 `10→11`、定稿审 `30→31`）；StandingIllustration 一道（`10→11`）。（IllusDesign 的审批由 char-design 链管，不在 plot-design 职责内。）
 
 Chapter 判定规则：
 - `ch.status < 1` → 结构未就绪，调 structurer
@@ -116,7 +116,7 @@ Chapter 判定规则：
 - `ch.status = 30` → 定稿待审，等 dashboard
 - `ch.status = 31` → 定稿已批（章节完成），可推进立绘 + 发布
 
-立绘判定：`stand.status = 10` 待审；` = 11` 已批；`< 11` 未就绪需推进（先确保上游 IllusDesign=11）。
+立绘判定：`stand.status = 10` 待审；` = 11` 已批；`< 11` 未就绪需推进——**推进前须确认上游 IllusDesign=11，否则报警跳过**（不跨链调 char-design）。
 
 **只有 Chapter `status=31` 且全部 depicts 立绘 `status=11` 才视为章节就绪**（定稿与所需立绘双就绪）。
 
@@ -124,6 +124,6 @@ Chapter 判定规则：
 
 ---
 
-## Skills / Agents
+## Skills
 
-`chapter-structurer`（skill，建章节结构 + 统合 Scene）· `chapter-outliner`（skill，产提纲 outline.json）· `chapter-dialoguer`（skill，产定稿剧本 + 建 depicts 立绘缺口）· `char-design`（agent，推进 IllusDesign 上游到 11）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，发布 `25_剧本/`→`99_game/`）
+`chapter-structurer`（skill，建章节结构 + 统合 Scene）· `chapter-outliner`（skill，产提纲 outline.json）· `chapter-dialoguer`（skill，产定稿剧本 + 建 depicts 立绘缺口）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，发布 `25_剧本/`→`99_game/`）
