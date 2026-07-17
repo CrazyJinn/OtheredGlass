@@ -1,8 +1,8 @@
 ---
 name: chapter-outliner
 description: |
-  推进 Chapter 图节点的提纲段：读结构段统合的 Scene + 角色性格/分支骨架 → 产出章节提纲 JSON（meta + scenes 骨架 + 分支拓扑，lines 留空）→ 落盘 25_剧本/*.outline.json + 写 outline_path + status=20（提纲就绪）。
-  前驱：Chapter status=11（结构已批）。在章节结构审批通过、需要产出提纲时使用。
+  推进 Chapter 图节点的提纲段：读结构段统合的 Scene + 角色性格/分支骨架 → 自检 event 丰满度 →（够）产出章节提纲 JSON（meta + scenes 骨架 + 分支拓扑，lines 留空）→ 落盘 25_剧本/*.outline.json + 写 outline_path + status=20。
+  前驱：Chapter status=11（结构已批）。若 event 素材不足以支撑提纲，**拒绝产出**并报告缺口（不写 status），交 plot-design 转探索补素材。
 argument-hint: <chapter_id_or_title>
 arguments:
   - chapter_id_or_title
@@ -13,7 +13,9 @@ allowed-tools: Read, Bash, Write, Edit
 
 # 章节提纲（Chapter 提纲段 · status 11→20）
 
-剧情创作三段式的**第二段**（结构段之后、定稿段之前）。读结构段统合好的 Scene + 出场角色性格 + 分支骨架，产出**提纲 JSON**——确定「章节分几段、每段场景/时间/bgm、choice 分叉与汇合、ending 位置」，但 `lines` 留空（细节对话由 `chapter-dialoguer` 填）。提纲无审批，产出即 `status=20`（提纲就绪）。
+剧情创作三段式的**第二段**（结构段之后、定稿段之前）。读结构段统合好的 Scene + 出场角色性格 + 分支骨架，**先自检本章 event 丰满度**；够丰满才产出**提纲 JSON**——确定「章节分几段、每段场景/时间/bgm、choice 分叉与汇合、ending 位置」，`lines` 留空（细节对话由 `chapter-dialoguer` 填）。提纲无审批，产出即 `status=20`（提纲就绪）。
+
+> **素材不足门控**：若本章 event 不够丰满（事件数过少 / 事件链断裂 / Choice 指向的事件缺失 / 出场角色在本章无 involved 事件），**拒绝产出提纲**——不写 status、不落盘，只产出「素材不足报告」（列缺口）返回。由 plot-design 接住后转 `nrt-narrative-grower` + `nrt-graph-builder` 探索补素材，审批写回后重调本 skill 复查。
 
 ## 参数
 
@@ -75,6 +77,41 @@ RETURN e.title AS event_title, e.time AS event_time, e.ending_kind AS ending_kin
        target.title AS target_event, target.ending_kind AS target_ending
 ORDER BY e.time LIMIT 100
 ```
+
+#### 1c. event 丰满度自检（素材不足门控）
+
+本章提纲的剧情密度靠 event 支撑。进入段 2 创作前，先体检本章范围内 event 的丰满度——**不足则拒绝产出提纲**，避免为空洞骨架浪费后续立绘出图。聚焦本章 Scene 所属 Location 的 Event：
+
+```cypher
+// (1) 本章涉及的 Event 数量 + 清单（Chapter→contains→Scene<-has_scene-Location<-occurred_at-Event）
+MATCH (ch:Chapter {id:'<chapter_id>'})-[:contains]->(s:Scene)<-[:has_scene]-(loc:Location)
+MATCH (e:Event)-[:occurred_at]->(loc)
+RETURN count(DISTINCT e) AS event_count, collect(DISTINCT e.title) AS events;
+
+// (2) Event 之间的 evt_relation 链（事件是否连贯，非孤岛）
+MATCH (ch:Chapter {id:'<chapter_id>'})-[:contains]->(s:Scene)<-[:has_scene]-(loc:Location)<-[:occurred_at]-(e1:Event)
+MATCH (e1)-[:evt_relation]->(e2:Event)
+RETURN count(*) AS relation_count;
+
+// (3) Choice option 指向的 target Event 是否存在（分支是否有落点）
+MATCH (ch:Chapter {id:'<chapter_id>'})-[:contains]->(s:Scene)<-[:has_scene]-(loc:Location)<-[:occurred_at]-(e:Event)
+MATCH (e)-[:presents]->(c:Choice)-[op:option]->(target:Event)
+RETURN c.name AS choice, collect(op.label) AS options, collect(target.title) AS targets;
+
+// (4) 出场角色在本章地点的 involved Event 数（角色弧有着落否）
+MATCH (ch:Chapter {id:'<chapter_id>'})-[:contains]->(s:Scene)<-[:has_scene]-(loc:Location)<-[:occurred_at]-(e:Event)<-[:involved]-(char:Character)
+RETURN char.name AS char, count(DISTINCT e) AS event_count;
+```
+
+**判断（定性，不硬编码阈值）**：综合体检结果判定 event 是否够支撑本章剧情密度。命中任一即判「素材不足」：
+- **event_count 明显过少**（本章每个 Scene 平均不足 ~1 个 Event，撑不起段落）
+- **事件链断裂**（Event 间几乎无 evt_relation，关键转折无承接）
+- **Choice 分支无落点**（option 指向的 target Event 缺失）
+- **出场角色无着落**（主要角色在本章 involved 的 Event = 0，角色弧空转）
+
+**素材不足时**：**停止——不进入段 2，不写 status、不落盘 outline.json**。产出「素材不足报告」返回，列出具体缺口（哪个维度不足 + 涉及的 Scene/角色/Choice），供 plot-design 转探索补全。**禁止硬凑提纲**——空洞提纲会让后续 dialoguer 产出的对话无据可依。
+
+**素材够时**：进入段 2 产出提纲。
 
 ### 2. 完成任务（产出提纲 JSON）
 

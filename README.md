@@ -211,6 +211,7 @@ sequenceDiagram
 > 创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**：
 > 1. 创作侧拆为 `chapter-structurer`（建结构）→ `chapter-outliner`（提纲）→ `chapter-dialoguer`（定稿），原 `screenwriter` 已删除。
 > 2. 立绘侧：**StandingIllustration 由 plot-design 直接调 `char-stand-designer <stand_id>`**（按需）；上游 `IllusDesign` 未就绪时**报警跳过**（不跨链调 `char-design`，角色美术链由人工单独跑）。
+> 3. 探索门控：**outliner 自检 event 不够丰满时拒绝产出提纲**，plot-design 转 `nrt-narrative-grower` + `nrt-graph-builder`（聚焦本章）补叙事基础，产建议后退出——用户 dashboard 审批写回补 event 再重调（不自动衔接 char/scene 生产，只建议）。
 
 ### 创作侧三阶段（对应 3 个 skill）
 
@@ -243,6 +244,8 @@ sequenceDiagram
     participant ST as chapter-structurer
     participant OL as chapter-outliner
     participant DG as chapter-dialoguer
+    participant Gro as nrt-narrative-grower
+    participant Gb as nrt-graph-builder
     participant Stand as char-stand-designer
     participant Pub as chapter-publisher
 
@@ -264,9 +267,19 @@ sequenceDiagram
         Note over A: ⏸ 结构审 → 11（见 §2 审批流程）
     end
     opt 结构 11 且提纲未出
-        A->>OL: Skill chapter-outliner ch_id
-        Note right of OL: 为章节产出提纲
-        OL-->>A: 提纲就绪
+        A->>OL: Skill chapter-outliner ch_id（自检 event 丰满度）
+        alt event 素材够
+            OL-->>A: 提纲就绪（status=20）
+        else event 素材不足
+            OL-->>A: 报缺口（不写 status）
+            Note over A: 🔄 转探索（聚焦本章角色/地点/时间）
+            A->>Gro: Skill nrt-narrative-grower
+            Gro-->>A: _建议.json（叙事缺口 + cypher）
+            A->>Gb: Skill nrt-graph-builder discover
+            Gb-->>A: 数据缺口建议
+            A-->>U: 📋 素材不足 + 建议清单<br/>请 dashboard 审批补 event 后重调
+            Note over A,U: 退出（不阻塞）；新角色/地点只建议另调 char/scene-design
+        end
     end
     opt 提纲就绪且细节对话未定稿（含 -1 重做）
         A->>DG: Skill chapter-dialoguer ch_id
