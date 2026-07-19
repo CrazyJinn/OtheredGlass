@@ -2,7 +2,7 @@
 name: chapter-publisher
 description: |
   把定稿已批（status=31）的 Chapter 从创作区 `25_剧本/` 发布到运行时 `99_game/`：
-  拷贝剧本 JSON + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest。
+  把剧本 YAML 转换为 JSON 拷到 99_game/data/chapters/ + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest。
   在 Chapter 已定稿审批通过且所需立绘就绪、需发布到 Godot 运行时时使用。
 argument-hint: <chapter_id>
 arguments:
@@ -13,8 +13,8 @@ allowed-tools: Read, Bash, Write, Edit
 # 章节发布（Chapter → 99_game）
 
 把审阅通过的章节从**创作/审阅区**（`25_剧本/`）发布到**运行时区**（`99_game/`）：
-拷贝剧本 JSON + 章节涉及的立绘/背景图片到 `99_game/assets/`，并更新 `manifest.json`。
-发布是**确定性拷贝**（非 LLM 创作），幂等——重复发布覆盖旧文件，无副作用。
+**把剧本 YAML 转换为 JSON** 落到 `99_game/data/chapters/`（Godot 只读 JSON），拷贝章节涉及的立绘/背景图片到 `99_game/assets/`，并更新 `manifest.json`。
+发布是**确定性转换+拷贝**（非 LLM 创作），幂等——重复发布覆盖旧文件，无副作用。
 
 ## 参数
 
@@ -49,14 +49,16 @@ RETURN DISTINCT char.name AS char_name, stand.variant_label AS variant, stand.im
 
 ### 2. 拷贝资源到 99_game/
 
-剧本文件名取自 `script_path` 的 basename（如 `chapter00_序章.json`）。资源目标路径用逻辑名（与 manifest 一致）。
+剧本 stem 取自 `script_path`（如 `chapter00_序章.yaml` → stem `chapter00_序章`），运行时文件名用 `<stem>.json`（**不能直接 basename**——`.yaml` 后缀泄漏到运行时目录会让 ChapterLoader 找不到）。资源目标路径用逻辑名（与 manifest 一致）。
 
 ```bash
 # 确保目标目录存在
 mkdir -p 99_game/data/chapters 99_game/assets/portraits 99_game/assets/scenes
 
-# (a) 剧本：25_剧本/ → 99_game/data/chapters/
-cp '<script_path>' '99_game/data/chapters/<basename>'
+# (a) 剧本：25_剧本/<stem>.yaml → 转换为 99_game/data/chapters/<stem>.json（Godot 只读 JSON）
+python 99_game/tools/yaml_to_chapter_json.py '<script_path>' '99_game/data/chapters/<stem>.json'
+python 99_game/tools/validate_chapter.py '99_game/data/chapters/<stem>.json' 99_game/data/剧本.schema.json
+#   validate FAIL → 中断发布，报警（剧本 schema 不合，先回 25_剧本/ 修定稿 YAML）
 
 # (b) 立绘：image_path（项目根相对）→ 99_game/assets/portraits/<角色>.<变体>.png
 cp '<image_path>' '99_game/assets/portraits/<char_name>.<variant>.png'
@@ -79,7 +81,7 @@ python 99_game/tools/manifest_builder.py
 ### 4. 汇报
 
 列出：发布的剧本路径（`99_game/data/chapters/<basename>`）、拷贝的立绘清单（`<角色>.<变体>`）、背景清单（`<Scene.name>`）、跳过/缺失的资源警告、manifest 更新结果。
-附运行时入口提示：`GameManager.start_new_game('<basename 不含 .json>', '<首场景段 id>')`。
+附运行时入口提示：`GameManager.start_new_game('<stem>', '<首场景段 id>')`（stem = 不含后缀的章节名，如 `chapter00_序章`）。
 
 ## 参考文档
 

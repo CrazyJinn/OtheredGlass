@@ -218,7 +218,7 @@ sequenceDiagram
 | 阶段 | Skill | 状态 | 职责 |
 |------|-------|------|------|
 | ① 建章节 | `chapter-structurer` | ✅ 已实现 | 在图中建 Chapter 节点，把 N 个 Scene 统合进来（contains 边） |
-| ② 出提纲 | `chapter-outliner` | ✅ 已实现 | 为章节产出提纲（`25_剧本/*.outline.json`） |
+| ② 出提纲 | `chapter-outliner` | ✅ 已实现 | 为章节产出提纲（`25_剧本/*.outline.yaml`） |
 | ③ 细节对话 | `chapter-dialoguer` | ✅ 已实现 | 基于提纲创作细节对话，产出定稿剧本到 `25_剧本/` |
 
 > **门控**：① 建章节结构 → 结构审通过 → 才进入 ②③ 创作；细节对话定稿终审通过 + 立绘全 `11` → 才发布。
@@ -352,7 +352,7 @@ sequenceDiagram
 | Skill | 阶段 | 功能 | 主要产出 | 读写图 / 写 status |
 |-------|------|------|---------|-------------------|
 | chapter-structurer | ① 建章节 | 建 Chapter + 统合 N 个 Scene | Chapter + contains 边 | ✅ |
-| chapter-outliner | ② 提纲 | 为章节出提纲 | `25_剧本/*.outline.json` | ✅ |
+| chapter-outliner | ② 提纲 | 为章节出提纲 | `25_剧本/*.outline.yaml` | ✅ |
 | chapter-dialoguer | ③ 细节对话 | 基于提纲创作细节对话 + 建 depicts 立绘缺口 | 定稿剧本 `25_剧本/` | ✅ |
 | chapter-publisher | 发布 | 发布剧本 + 立绘/背景到运行时 | `99_game/` 资源 + manifest | ✅ |
 
@@ -399,7 +399,7 @@ sequenceDiagram
 │       └── 酒店-客房/
 │           └── background/           # 各图层背景图
 │
-├── 25_剧本/                          # 剧本产出（chapter-structurer/outliner/dialoguer → outline + 定稿 JSON）
+├── 25_剧本/                          # 剧本产出（chapter-structurer/outliner/dialoguer → outline.yaml + 定稿 YAML）
 │
 ├── 55_dashboard/                     # 人工治理后台（Streamlit，http://localhost:8501）
 │   ├── config/                       # settings.py（凭证来源）

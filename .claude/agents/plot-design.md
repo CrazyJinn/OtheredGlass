@@ -106,7 +106,7 @@ ORDER BY c.order, scene_name, variant
 - **StandingIllustration**：`0→1→2→10→11`，由 plot-design 直调 `char-stand-designer <stand_id>` 推进。
 - **IllusDesign**（立绘上游，plot-design **只读不写**）：由 `char-design` 推进到 `11`（人工触发）。plot-design 推进某立绘前须先确认其上游 IllusDesign=11，否则报警跳过。
 
-**依赖顺序**：`chapter-structurer`（建结构 + contains）→ 结构审 `10→11` → `chapter-outliner`（产提纲 outline.json → `20`）→ `chapter-dialoguer`（产定稿 + 建 depicts 立绘缺口 → `30`）→ 定稿审 `30→31` → 推进 depicts 立绘（`char-stand-designer`；上游 IllusDesign≠11 则报警跳过，不跨链）→ 立绘全 `11` → `chapter-publisher`（发布 `25_剧本/`→`99_game/`）。
+**依赖顺序**：`chapter-structurer`（建结构 + contains）→ 结构审 `10→11` → `chapter-outliner`（产提纲 outline.yaml → `20`）→ `chapter-dialoguer`（产定稿 + 建 depicts 立绘缺口 → `30`）→ 定稿审 `30→31` → 推进 depicts 立绘（`char-stand-designer`；上游 IllusDesign≠11 则报警跳过，不跨链）→ 立绘全 `11` → `chapter-publisher`（发布 `25_剧本/`→`99_game/`）。
 
 **门控**：结构未到 `11` 不产提纲；提纲未到 `20` 不产定稿；**定稿未到 `31` 不推立绘**（避免为未定稿剧本浪费立绘出图）；**立绘未全 `11` 不发布**（避免运行时缺资源）。
 
@@ -135,4 +135,4 @@ Chapter 判定规则：
 
 ## Skills
 
-`chapter-structurer`（skill，建章节结构 + 统合 Scene）· `chapter-outliner`（skill，产提纲 outline.json，素材不足时报缺口）· `chapter-dialoguer`（skill，产定稿剧本 + 建 depicts 立绘缺口）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，发布 `25_剧本/`→`99_game/`）· `nrt-narrative-grower`（skill，event 不足时跑叙事缺口体检）· `nrt-graph-builder`（skill，event 不足时跑图缺口 discover）
+`chapter-structurer`（skill，建章节结构 + 统合 Scene）· `chapter-outliner`（skill，产提纲 outline.yaml，素材不足时报缺口）· `chapter-dialoguer`（skill，产定稿剧本 + 建 depicts 立绘缺口）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，发布 `25_剧本/`→`99_game/`）· `nrt-narrative-grower`（skill，event 不足时跑叙事缺口体检）· `nrt-graph-builder`（skill，event 不足时跑图缺口 discover）

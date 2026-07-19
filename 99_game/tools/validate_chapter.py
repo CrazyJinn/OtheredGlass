@@ -1,4 +1,4 @@
-"""剧本章节 JSON Schema 校验。本环境（bash + python）可立即运行。"""
+"""剧本章节 Schema 校验。支持 JSON 与 YAML 输入（按后缀分流加载）。本环境（bash + python）可立即运行。"""
 import json
 import sys
 from pathlib import Path
@@ -9,16 +9,32 @@ except ImportError:
     sys.stderr.write("缺少依赖：pip install -r tools/requirements.txt\n")
     raise
 
+try:
+    import yaml
+except ImportError:
+    sys.stderr.write("缺少依赖：pip install -r tools/requirements.txt (PyYAML)\n")
+    raise
+
+
+def _load_doc(path: str):
+    """按后缀分流加载文档：.json→json.load，.yaml/.yml→yaml.safe_load。其余后缀报错。"""
+    suffix = Path(path).suffix.lower()
+    with open(path, "r", encoding="utf-8") as f:
+        if suffix in (".yaml", ".yml"):
+            return yaml.safe_load(f)
+        if suffix == ".json":
+            return json.load(f)
+        raise ValueError(f"不支持的文件格式: {suffix}（仅支持 .json/.yaml/.yml）")
+
 
 def validate_chapter(path: str, schema_path: str) -> tuple[bool, list[str]]:
     """返回 (是否通过, 错误消息列表)。"""
     errors: list[str] = []
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            doc = json.load(f)
+        doc = _load_doc(path)
         with open(schema_path, "r", encoding="utf-8") as f:
             schema = json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, ValueError, json.JSONDecodeError, yaml.YAMLError) as e:
         return False, [f"读取/解析失败: {e}"]
 
     validator = jsonschema.Draft202012Validator(schema)
@@ -44,7 +60,7 @@ def validate_chapter(path: str, schema_path: str) -> tuple[bool, list[str]]:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
-        sys.stderr.write("用法: python validate_chapter.py <chapter.json> <schema.json>\n")
+        sys.stderr.write("用法: python validate_chapter.py <chapter.json|chapter.yaml> <schema.json>\n")
         return 2
     ok, errors = validate_chapter(argv[1], argv[2])
     if ok:

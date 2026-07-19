@@ -46,7 +46,7 @@
 | SceneLayer | snowflake Base62 | 场景的单一图层（背景/地面/陈设/遮罩） |
 
 | Choice | snowflake Base62 | 玩家选择分叉点（galgame 选项） |
-| Chapter | snowflake Base62 | 剧本章节编排单元（锚定剧本 JSON） |
+| Chapter | snowflake Base62 | 剧本章节编排单元（锚定剧本文件 script_path） |
 
 ---
 
