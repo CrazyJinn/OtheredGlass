@@ -118,4 +118,4 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit   # GUT 单
 - 要推进某场景的美术 → 调 `scene-design` agent。
 - 要从创作文本提取叙事实体/关系 → `nrt-narrative-extractor`（离线产 CSV + import.cypher）。
 - 要手动加节点/边或发现图缺口 → `nrt-graph-builder`。
-- 要分析叙事缺口、生成/应用创意草案 → `nrt-narrative-grower`（analyze→generate→apply，草案存 `02_剧情数据/`，frontmatter `status` 10/11/0 驱动审批）。
+- 要给叙事图做体检/补全缺口、按角色聚焦多轮增长 → `nrt-narrative-grower`（可选聚焦入参 + 多轮迭代，产 `02_剧情数据/<日期>_round<N>_建议.json`，dashboard 审批写回；范围限定基础节点 Character/Event/Location/Info/Choice）。

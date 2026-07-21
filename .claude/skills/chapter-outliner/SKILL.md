@@ -2,7 +2,7 @@
 name: chapter-outliner
 description: |
   推进 Chapter 图节点的提纲段：读 structurer 的设计简报 + 结构段统合的 Scene + 分支骨架 → 自检 event 丰满度 →（够）按分支节点图先行/本质差异/节奏门控产出章节提纲 YAML（拓扑骨架 + authoring 人读引导块，lines 仅含拓扑占位）→ 落盘 25_剧本/*.outline.yaml + 写 outline_path + status=20。
-  前驱：Chapter status=11（结构已批，且 25_剧本/chapter<NN>_设计简报.md 已产出）。若 event 素材不足以支撑提纲，**拒绝产出**并报告缺口（不写 status），交 plot-design 转探索补素材。
+  前驱：Chapter status=11（结构已批，且 25_剧本/chapter<NN>_设计简报.md 已产出）。若 event 素材不足以支撑提纲，**拒绝产出**并报告缺口（不写 status），由用户补全叙事基础后重调本 skill。
 argument-hint: <chapter_id_or_title>
 arguments:
   - chapter_id_or_title
@@ -15,7 +15,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 剧情创作三段式的**第二段**（结构段之后、定稿段之前）。读 `chapter-structurer` 产出的设计简报 + 结构段统合好的 Scene + 分支骨架，**先自检本章 event 丰满度**；够丰满才按**分支节点图先行 / 本质差异 / 节奏**三门控产出**提纲 JSON**——确定「章节分几段、每段场景/时间/bgm、choice 分叉与汇合、ending 位置」，`lines` 留空（细节对话由 `chapter-dialoguer` 填）。提纲无审批，产出即 `status=20`（提纲就绪）。
 
-> **素材不足门控**：若本章 event 不够丰满（事件数过少 / 事件链断裂 / Choice 指向的事件缺失 / 出场角色在本章无 involved 事件），**拒绝产出提纲**——不写 status、不落盘，只产出「素材不足报告」（列缺口）返回。由 plot-design 接住后转 `nrt-narrative-grower` + `nrt-graph-builder` 探索补素材，审批写回后重调本 skill 复查。
+> **素材不足门控**：若本章 event 不够丰满（事件数过少 / 事件链断裂 / Choice 指向的事件缺失 / 出场角色在本章无 involved 事件），**拒绝产出提纲**——不写 status、不落盘，只产出「素材不足报告」（列缺口）返回。用户可手动跑 `nrt-narrative-grower`（独立自增长流程）补全叙事基础后，重调本 skill 复查。
 
 ## 参数
 
@@ -104,7 +104,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 - **Choice 分支无落点**（option 指向的 target Event 缺失）
 - **出场角色无着落**（主要角色在本章 involved 的 Event = 0，角色弧空转）
 
-**素材不足时**：**停止——不进入段 2，不写 status、不落盘 outline.yaml**。产出「素材不足报告」返回，列出具体缺口（哪个维度不足 + 涉及的 Scene/角色/Choice），供 plot-design 转探索补全。**禁止硬凑提纲**——空洞提纲会让后续 dialoguer 产出的对话无据可依。
+**素材不足时**：**停止——不进入段 2，不写 status、不落盘 outline.yaml**。产出「素材不足报告」返回，列出具体缺口（哪个维度不足 + 涉及的 Scene/角色/Choice），供用户参考补全（可手动跑 `nrt-narrative-grower`）。**禁止硬凑提纲**——空洞提纲会让后续 dialoguer 产出的对话无据可依。
 
 **素材够时**：进入段 2 产出提纲。
 
@@ -125,7 +125,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 
 对每个 `choice` 的 options 做**有意义选择测试**：选项之间必须是**戏剧本质不同**（不同价值观取向 / 不同后果路径 / 不同信息揭示），不是 flavor 级文案差异（"我来帮" vs "我晚点帮"不算）。
 
-- 命中 flavor 级差异（表面文案不同、剧情本质相同）→ **标注问题**，在产出报告里建议上游（plot-design 转 nrt-graph-builder）补 Choice 的戏剧分化；本次先按现状产出但标记待补。
+- 命中 flavor 级差异（表面文案不同、剧情本质相同）→ **标注问题**，在产出报告里建议用户手动补 Choice 的戏剧分化；本次先按现状产出但标记待补。
 
 > 详见 [references/分支结构方法论.md](references/分支结构方法论.md)「分支本质差异门控」。
 

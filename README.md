@@ -211,7 +211,7 @@ sequenceDiagram
 > 创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**：
 > 1. 创作侧拆为 `chapter-structurer`（建结构）→ `chapter-outliner`（提纲）→ `chapter-dialoguer`（定稿），原 `screenwriter` 已删除。
 > 2. 立绘侧：**StandingIllustration 由 plot-design 直接调 `char-stand-designer <stand_id>`**（按需）；上游 `IllusDesign` 未就绪时**报警跳过**（不跨链调 `char-design`，角色美术链由人工单独跑）。
-> 3. 探索门控：**outliner 自检 event 不够丰满时拒绝产出提纲**，plot-design 转 `nrt-narrative-grower` + `nrt-graph-builder`（聚焦本章）补叙事基础，产建议后退出——用户 dashboard 审批写回补 event 再重调（不自动衔接 char/scene 生产，只建议）。
+> 3. 素材门控：**outliner 自检 event 不够丰满时拒绝产出提纲并报告缺口**，plot-design 汇报后退出（剧情链不内置自增长）——用户手动跑 `nrt-narrative-grower`（可选聚焦入参 + 多轮迭代）补全叙事基础后重调 plot-design。
 
 ### 创作侧三阶段（对应 3 个 skill）
 
@@ -244,8 +244,6 @@ sequenceDiagram
     participant ST as chapter-structurer
     participant OL as chapter-outliner
     participant DG as chapter-dialoguer
-    participant Gro as nrt-narrative-grower
-    participant Gb as nrt-graph-builder
     participant Stand as char-stand-designer
     participant Pub as chapter-publisher
 
@@ -272,13 +270,8 @@ sequenceDiagram
             OL-->>A: 提纲就绪（status=20）
         else event 素材不足
             OL-->>A: 报缺口（不写 status）
-            Note over A: 🔄 转探索（聚焦本章角色/地点/时间）
-            A->>Gro: Skill nrt-narrative-grower
-            Gro-->>A: _建议.json（叙事缺口 + cypher）
-            A->>Gb: Skill nrt-graph-builder discover
-            Gb-->>A: 数据缺口建议
-            A-->>U: 📋 素材不足 + 建议清单<br/>请 dashboard 审批补 event 后重调
-            Note over A,U: 退出（不阻塞）；新角色/地点只建议另调 char/scene-design
+            A-->>U: 📋 素材不足 + 缺口清单<br/>请手动跑 nrt-narrative-grower 补全叙事基础后重调
+            Note over A,U: 退出（剧情链不内置自增长，用户手动跑 grower）
         end
     end
     opt 提纲就绪且细节对话未定稿（含 -1 重做）
@@ -326,7 +319,7 @@ sequenceDiagram
 |-------|------|---------|-------------------|
 | nrt-narrative-extractor | 从创作文本提取结构化实体 + 6 种关系 | CSV + import.cypher（离线文件） | ❌ 不直连（人工触发导入） |
 | nrt-graph-builder | 手动 / discover 发现模式增量建图 | 直接写入 Neo4j | ✅ |
-| nrt-narrative-grower | analyze → generate → apply 叙事自增长 | `02_剧情数据/` 草案 MD（frontmatter status） | ✅（apply 写回） |
+| nrt-narrative-grower | 叙事图体检 + 修改建议（可选聚焦 + 多轮迭代，限定基础节点） | `02_剧情数据/<日期>_round<N>_建议.json` | ✅（dashboard 审批写回） |
 
 ### 角色美术层（Character → IllusDesign）
 
@@ -385,7 +378,7 @@ sequenceDiagram
 ├── 01_叙事数据/                      # nrt-narrative-extractor 离线产出
 │   └── csv/                          # 实体/关系 CSV + import.cypher
 │
-├── 02_剧情数据/                      # nrt-narrative-grower 叙事草案（frontmatter status 驱动审批）
+├── 02_剧情数据/                      # nrt-narrative-grower 建议 JSON（<日期>_round<N>_建议.json + _reviewed.json 审批留痕）
 │
 ├── 06_角色美术/                      # 角色美术产出（DesignSheet / IllusDesign / StandingIllustration）
 │   ├── 沈暮雪/

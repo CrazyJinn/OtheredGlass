@@ -14,7 +14,7 @@ tools: Read, Grep, Glob, Bash, Skill
 Schema 文件：`00_init/Schema/剧情.md`（Chapter/Choice + contains/depicts 边）+ `00_init/剧本.md`（JSON 格式）
 输入：**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID）。一次 cypher 查询即可拿到 Chapter + 全部 contains 的 Scene + 全部 depicts 的立绘 status，据 status 决定下一步。
 
-创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**。剧本由三 skill 串行产出（`chapter-structurer` → `chapter-outliner` → `chapter-dialoguer`）；立绘由 plot-design 按 depicts 引用直调 `char-stand-designer` 推进（已从 char-design 剥离）。**立绘上游 IllusDesign 未就绪时报警，不跨链调 char-design**（角色美术链由人工单独跑）。**event 素材不足时（outliner 自检报缺口）转探索**——调 `nrt-narrative-grower` + `nrt-graph-builder` 补叙事基础，审批写回后重试。
+创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**。剧本由三 skill 串行产出（`chapter-structurer` → `chapter-outliner` → `chapter-dialoguer`）；立绘由 plot-design 按 depicts 引用直调 `char-stand-designer` 推进（已从 char-design 剥离）。**立绘上游 IllusDesign 未就绪时报警，不跨链调 char-design**（角色美术链由人工单独跑）。**event 素材不足时 outliner 拒绝产出并报告缺口**，plot-design 汇报后退出——剧情链不内置自增长，用户需用独立流程 `nrt-narrative-grower` 补全叙事基础后重调 plot-design。
 
 ---
 
@@ -72,18 +72,11 @@ ORDER BY c.order, scene_name, variant
 - `ch.status = 10` → 等待 dashboard 结构审批，不可推进下游
 - `ch.status = 11`（结构已批）且 `outline_path` 空 → `Skill chapter-outliner <ch_id>`：
   - 返回 `status=20`（提纲就绪）→ 进下一段；
-  - 返回「**素材不足**」（未写 status、带缺口报告）→ **转探索**（见「探索编排」），不进下一段、不阻塞等待。
+  - 返回「**素材不足**」（未写 status、带缺口报告）→ **汇报缺口并退出**（提示用户可手动跑 `nrt-narrative-grower <缺口实体>` 补全叙事基础后重调 plot-design），不进下一段、不阻塞、不自动转探索。
 - `ch.status = 20`（提纲就绪）且定稿未产出 → `Skill chapter-dialoguer <ch_id>`（产定稿 + 跑 validate + 建 depicts 立绘缺口 → `status=30`）
 - `ch.status = 30` → 等待 dashboard 定稿审批
 - `ch.status = 31`（定稿已批）→ 检查 depicts 立绘：对每个 `stand.status ≠ 11` 的立绘推进（见下方「立绘委派方式」）
 - 全部 `stand.status = 11`（Chapter=31 + 立绘全就绪）→ `Skill chapter-publisher <ch_id>` 发布章节到 `99_game/`，报告发布完成
-
-**探索编排**（outliner 报「素材不足」时触发——event 不够丰满，需补叙事基础）：outliner 自检发现本章 event 素材不足并返回缺口报告后，plot-design 聚焦本章涉及的实体（角色/地点/时间段）调探索 skill：
-1. `Skill nrt-narrative-grower`（10 种叙事创意缺口检查，产 `02_剧情数据/<日期>_建议.json`，每条含可执行 cypher）。
-2. `Skill nrt-graph-builder discover`（7 种数据质量缺口检查）。
-3. 汇总建议 + outliner 的缺口报告，**汇报后退出**：「本章 event 素材不足（缺口：…），已产建议 `<日期>_建议.json`，请到 dashboard 审批写回补 event，然后重调 plot-design。新出现的角色/地点可另调 char-design / scene-design。」
-
-> **不阻塞、不自动衔接生产**：探索产建议后 plot-design 即退出——审批是人工异步的（dashboard `narrative_review` 执行 cypher 写回），plot-design 不等待。审批写回后由用户重调 plot-design → outliner 复查素材通过才继续创作。探索写回的新 Character/Location，plot-design **只建议**人工调 char-design / scene-design，不自动触发。
 
 **立绘委派方式**（StandingIllustration 已从 char-design 剥离至 plot-design，按需出图）：定稿已批（`ch.status=31`）后，对每个 depicts 引用且 `stand.status ≠ 11` 的立绘：
 1. **先查其上游 IllusDesign 是否 = 11**（query 一次）。
@@ -135,4 +128,4 @@ Chapter 判定规则：
 
 ## Skills
 
-`chapter-structurer`（skill，建章节结构 + 统合 Scene）· `chapter-outliner`（skill，产提纲 outline.yaml，素材不足时报缺口）· `chapter-dialoguer`（skill，产定稿剧本 + 建 depicts 立绘缺口）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，发布 `25_剧本/`→`99_game/`）· `nrt-narrative-grower`（skill，event 不足时跑叙事缺口体检）· `nrt-graph-builder`（skill，event 不足时跑图缺口 discover）
+`chapter-structurer`（skill，建章节结构 + 统合 Scene）· `chapter-outliner`（skill，产提纲 outline.yaml，素材不足时报缺口）· `chapter-dialoguer`（skill，产定稿剧本 + 建 depicts 立绘缺口）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，发布 `25_剧本/`→`99_game/`）

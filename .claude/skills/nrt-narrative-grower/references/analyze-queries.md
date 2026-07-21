@@ -8,6 +8,43 @@
 
 ---
 
+## 聚焦模式（focus 子图限定）
+
+传入 `focus`（角色名/id 或其他基础实体）时，本轮检查收窄到锚点的 1-2 跳子图，而非全图。通用模式：先 `MATCH` 锚点，再沿基础层边扩展到相关实体，检查只在该子图内进行。下文各检查给「全图版」查询；focus 版按下列代表模式改写。
+
+**代表 1 · character_arcs（聚焦角色 X 的弧）**——只看 X 的事件：
+
+```cypher
+MATCH (c:Character) WHERE c.name='<focus>' OR c.id='<focus>'
+OPTIONAL MATCH (c)-[:involved]->(e:Event)
+RETURN c.id AS id, c.name AS name, c.priority AS priority,
+       count(e) AS events, collect(e.time) AS times
+```
+
+若 X 的 events 少或时间断层 → 建议为 X 补 Event（补节点类）。这正是「第 2 轮聚焦新角色 X → 为 X 补事件」的实现。
+
+**代表 2 · implicit_relations（聚焦 X 的隐含关系）**——只看与 X 共现的角色：
+
+```cypher
+MATCH (c:Character) WHERE c.name='<focus>' OR c.id='<focus>'
+MATCH (c)-[:involved]->(e:Event)<-[:involved]-(b:Character)
+WHERE NOT (c)-[:relation]-(b)
+RETURN b.name AS b, collect(e.title) AS shared_events, count(e) AS shared
+ORDER BY shared DESC LIMIT 50
+```
+
+shared ≥ 2 → 建议补 X→b 的 relation 边（补边类）。
+
+**其余检查的 focus 收窄规则**：
+- temporal_gaps / event_chains / narrative_density：限定到 focus 参与的事件（`MATCH (c:Character{...})-[:involved]->(e:Event)` 后以这些 e 为范围）。
+- subgraph_connectivity / relationship_evolution：限定到 focus 角色。
+- info_depth：限定到 focus 关联的 Info（`MATCH (c)-[:link]->(i:Info)` 或 focus 事件的 Info）。
+- scene_utilization / bridge_scenes：限定到 focus 出现的 Location。
+
+未传 focus 时，全部走下文「全图版」查询（等价于首轮全图体检）。
+
+---
+
 ## 1. temporal_gaps（时间线缺口）
 
 找出事件时间线上的大间隔（叙事空白期，可能需要补过渡事件）。
@@ -167,6 +204,8 @@ analyze 结果归纳为 JSON 数组（顶层 `[...]`），落盘 `02_剧情数�
 | reason | 提出建议的原因：analyze 发现了什么缺口/问题 |
 | content | 建议内容：做什么补全；含 LLM 推断建议值时标注「可调整」 |
 | cypher | 开箱可执行的单条 cypher（`;` 结尾）。纯统计型检查无补全动作时该条不产出 |
+| round（可选） | 本轮轮次（文件名 `round<N>` 的 N），便于跨轮溯源 |
+| focus（可选） | 本轮聚焦实体名；未聚焦时为「全图」 |
 
 **筛选原则**：只对「确实可操作」的发现产出建议。补边/补节点类检查（implicit_relations、event_chains、info_depth、subgraph_connectivity、temporal_gaps、character_arcs）产出 cypher；纯统计型（scene_utilization、bridge_scenes、narrative_density）默认不产出，避免噪声。
 
@@ -189,3 +228,14 @@ analyze 结果归纳为 JSON 数组（顶层 `[...]`），落盘 `02_剧情数�
    ```
 
 3. **通用**：`MERGE` 幂等、内联值（不用 `$param`）、必须指定标签、字符串单引号（内部 `'` 转义 `\'`）、`;` 结尾。
+
+---
+
+## 范围限定（基础节点）
+
+自增长只动**基础层**，产出的 cypher 只能操作：
+
+- **节点**：`Character` / `Event` / `Location` / `Info` / `Choice`
+- **边**：`relation` / `involved` / `occurred_at` / `at` / `link` / `evt_relation` / `presents` / `option`
+
+**禁止**在建议 cypher 里出现美术层（AppearanceStyle/CostumeStyle/DesignSheet/IllusDesign/StandingIllustration）、场景层（Scene/SceneLayer）、剧情编排层（Chapter）的节点或边——这些走各自的生产链，不在自增长范围。Choice 现属基础层，`presents`/`option` 边可纳入自增长（如补 Choice 的戏剧分化、补 option 落点事件）。

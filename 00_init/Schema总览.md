@@ -16,10 +16,10 @@
 
 | 文件 | 内容 | 核心节点 |
 |------|------|---------|
-| [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么 | Character, Event, Location, Info |
+| [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么、在哪选择 | Character, Event, Location, Info, Choice |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
 | [场景美术.md](Schema/场景美术.md) | 场景如何从地点变成画面 | Scene, SceneLayer |
-| [剧情.md](Schema/剧情.md) | 剧情节奏、分支、章节编排 | Choice, Chapter |
+| [剧情.md](Schema/剧情.md) | 剧本章节编排（结构/提纲/定稿） | Chapter |
 
 ---
 
@@ -34,18 +34,15 @@
 | Event | snowflake Base62 | 某时某刻发生的某件事 |
 | Location | snowflake Base62 | 具体地点/游戏场景 |
 | Info | snowflake Base62 | 一条有意义的认知碎片 |
+| Choice | snowflake Base62 | 玩家选择分叉点（galgame 选项） |
 | LanguageStyle | snowflake Base62 | 角色说话方式、语气、口头禅 |
-
 | AppearanceStyle | snowflake Base62 | 角色固定外貌（脸、体型、发色） |
 | CostumeStyle | snowflake Base62 | 角色默认着装（衣物、配饰） |
 | DesignSheet | snowflake Base62 | 角色三视图设计稿 |
 | IllusDesign | snowflake Base62 | 着装适配立绘设计图 |
 | StandingIllustration | snowflake Base62 | 具体表情/动作的单张立绘 |
-
 | Scene | snowflake Base62 | 地点内的子场景视觉设定 |
 | SceneLayer | snowflake Base62 | 场景的单一图层（背景/地面/陈设/遮罩） |
-
-| Choice | snowflake Base62 | 玩家选择分叉点（galgame 选项） |
 | Chapter | snowflake Base62 | 剧本章节编排单元（锚定剧本文件 script_path） |
 
 ---
@@ -61,8 +58,9 @@
 | at | Character → Location | N:N | ❌ | 人物—场景 |
 | link | Character/Event/Location → Info | N:N | ❌ | 信息关联（仅 3 大实体） |
 | evt_relation | Event → Event | N:N | ❌ | 事件因果/时序 |
+| presents | Event → Choice | N:N | ❌ | 事件触发选择 |
+| option | Choice → Event | N:N | ❌ | 选项导向后续事件 |
 | **角色美术** | | | | |
-
 | has_appearance | Character → AppearanceStyle | 1:1 | ✅ | 角色外貌 |
 | has_costume | Character → CostumeStyle | 1:N | ✅ | 角色着装 |
 | has_voice_style | Character → LanguageStyle | 1:1 | ✅ | 角色语言风格 |
@@ -76,8 +74,6 @@
 | has_scene | Location → Scene | 1:N | ✅ | 地点→场景 |
 | has_layer | Scene → SceneLayer | 1:N | ✅ | 场景→图层 |
 | **剧情** | | | | |
-| presents | Event → Choice | N:N | ❌ | 事件触发选择 |
-| option | Choice → Event | N:N | ❌ | 选项导向后续事件 |
 | contains | Chapter → Scene | N:M | ❌ | 章节编排场景顺序 |
 | depicts | Scene → StandingIllustration | N:N | ❌ | 场景需要的立绘变体（按需出图门控） |
 
@@ -92,6 +88,7 @@ flowchart LR
         Event["Event"]
         Location["Location"]
         Info["Info"]
+        Choice["Choice"]
     end
 
     subgraph 角色数据["角色数据"]
@@ -112,7 +109,6 @@ flowchart LR
     end
 
     subgraph 剧情["剧情"]
-        Choice["Choice"]
         Chapter["Chapter"]
     end
 
