@@ -90,10 +90,13 @@ ORDER BY char_name, variant LIMIT 200
 - **声音支柱一致性回检**：对照 1b 查到的 LanguageStyle 字段，检查产出 lines 是否真的用了该角色的 `vocabulary`（词汇偏好）/ `rhythm`（句式节奏）/ `habits`（口头禅）/ `emotion_patterns`（情绪模式）。不符则改。
 
 > 声音标准与声音支柱模板详见 [references/对话写作方法论.md](references/对话写作方法论.md)。
+> 句子层面是否**真的像角色在说话、有无机械感**（句长均匀 / 价值拔高 / 假口语化 / 心理判断腔等），按 [references/日常对白自然度技巧.md](references/日常对白自然度技巧.md) 的反模式清单自查。**反模式服从角色声音支柱**——命中角色 LanguageStyle 的说法不算机械。
 
 #### 第三轮·精简（删多余的词）
 
 删每个不值得存在的词。旁白不啰嗦、台词不留水分。精简后每条 say/narrate 都有其存在的必要。
+
+精简收尾做两遍回读：保真回读（忠于 outline / 声音一致 / 潜台词没被说破）+ 残留味回读（句长过匀 / narrator 残留 / 价值拔高收尾等 5 类）。见 [references/日常对白自然度技巧.md](references/日常对白自然度技巧.md) 第 5 章。
 
 #### 创作技术要求（格式正确性）
 
@@ -179,6 +182,7 @@ MERGE (s)-[r:depicts]->(stand) SET r.sync = false;
 ## 参考文档
 
 - 创作方法论：[references/对话写作方法论.md](references/对话写作方法论.md) — 写作标准/声音支柱/三轮打磨/潜台词
+- 自然度技巧：[references/日常对白自然度技巧.md](references/日常对白自然度技巧.md) — 句子层面去机械感/反模式清单/回读检查（第二轮声音、第三轮精简时查）
 - 剧本格式：[00_init/剧本.md](../../../00_init/剧本.md) — YAML/JSON 结构、11 指令、跳转寻址（创作区 YAML / 运行时 JSON）
 - 剧本 schema：[99_game/data/剧本.schema.json](../../../99_game/data/剧本.schema.json) — 校验门
 - 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Chapter/depicts 边
