@@ -108,17 +108,18 @@ RETURN ch.name AS char_name, ch.id AS char_id,
   "stand": { "tags": {"variant_label":"...","eye":"...","brow":"...","mouth":"...","head_angle":"...","hand":"...","foot":"..."} },
   "voice": { "emotion_patterns":"...", "description":"..." },
   "character": { "id":"<char_id>", "name":"<char_name>" },
-  "node": { "id":"<stand_id>" }
+  "node": { "id":"<stand_id>" },
+  "output_path": "06_角色美术/<char_name>/<cos_name>/立绘/<variant_label>.md"
 }
 ```
 
-char-prompt-assembler 组装 prompt 文件到 `06_角色美术/<char_name>/prompts/<stand_id>.md` 并返回路径 `PROMPT_PATH`。
+char-prompt-assembler 组装 prompt 文件到 `06_角色美术/<char_name>/<cos_name>/立绘/<variant_label>.md`（与图片同目录同名）并返回路径 `PROMPT_PATH`。
 
 #### 推进到图片（status → 2，仅 target_status=2）
 
 使用 Skill 工具调用 `infra-image-generator`，参数 `<PROMPT_PATH> <OUTPUT_PATH> <illus_image>`（图生图，以 IllusDesign 图片为参考）：
 
-`OUTPUT_PATH = 06_角色美术/<char_name>/<cos_name>/<variant_label>立绘.png`。infra-image-generator 返回路径 `IMAGE_PATH`。
+`OUTPUT_PATH = 06_角色美术/<char_name>/<cos_name>/立绘/<variant_label>.png`。infra-image-generator 返回路径 `IMAGE_PATH`。
 
 ### 3. 保存结果（MERGE 兜底 + 写产物 + 推进 status）
 

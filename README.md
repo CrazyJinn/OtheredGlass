@@ -382,7 +382,7 @@ sequenceDiagram
 │
 ├── 06_角色美术/                      # 角色美术产出（DesignSheet / IllusDesign / StandingIllustration）
 │   ├── 沈暮雪/
-│   │   ├── 沈暮雪-电竞经理职业装/    # 每套着装 = 一个 IllusDesign，含 prompt.md + 立绘设计图.png
+│   │   ├── 沈暮雪-电竞经理职业装/    # 每套着装 = 一个 IllusDesign，含 prompt.md + 立绘设计图.png；其下 立绘/ 子目录 = StandingIllustration 立绘变体（<变体>.png + <变体>.md 同名配对）
 │   │   └── …                         # 同角色其余着装（咖啡店休闲装 / 西餐厅约会装 / 路边摊日常 …）
 │   ├── 陆择/
 │   └── …                             # 其余角色（林梦 / 苏晓禾 / 陈默 / 顾盈 …）

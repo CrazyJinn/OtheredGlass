@@ -41,7 +41,7 @@ allowed-tools: Read, Bash, Write, Edit
 1. 解析 data，提取 tags（分号分隔串，需 split）、自由文本字段、`node.id`，以及调用方声明的 `output_path`
 2. 从 `00_init/美术风格.md` 读取全局风格参数（背景色、线条、上色、色调等）
 3. 按模式规则组装 markdown prompt（见下方各模式 + reference 模板的维度结构）
-4. 用 **Write 工具**写 prompt 文件到调用方在 data 中声明的 `output_path`（不经 shell，markdown 无损；目录不存在时 Write 自动创建）。**路径由调用方决定，assembler 透传，不自行拼接**。若调用方未提供 `output_path`（当前 Mode C 暂未传），回退 `06_角色美术/<character.name>/prompts/<node.id>.md`，TODO：待立绘统一处理时改为入参声明
+4. 用 **Write 工具**写 prompt 文件到调用方在 data 中声明的 `output_path`（不经 shell，markdown 无损；目录不存在时 Write 自动创建）。**路径由调用方决定，assembler 透传，不自行拼接；三种模式均要求调用方在 `data` 中提供 `output_path`**
 5. **返回 prompt 文件路径**给调用方（由调用方写入节点 `prompt_path` 字段）
 
 > prompt 文件路径由调用方在 `output_path` 入参中声明，assembler 透传使用；每个节点的路径唯一性由调用方保证。
@@ -96,11 +96,12 @@ allowed-tools: Read, Bash, Write, Edit
   },
   "voice": {"emotion_patterns":"...","description":"..."},
   "character": {"id":"<char_id>","name":"..."},
-  "node": {"id":"<standing_node_id>"}
+  "node": {"id":"<standing_node_id>"},
+  "output_path": "06_角色美术/<char_name>/<CostumeStyle.name>/立绘/<variant_label>.md"
 }
 ```
 
-组装：固定前缀 `[角色名]立绘，[背景色]背景，全身像，`，从 `stand.tags` 展开表情（eye/brow/mouth/head_angle）与动作（hand/foot）为自然语言，结合 `voice.emotion_patterns` 补充情绪，画风放末尾。
+组装：固定前缀 `[角色名]立绘，[背景色]背景，全身像，`，随后**依据变体氛围自主决定身体面对镜头的朝向**（正视镜头/3/4侧身/全侧身/背影——默认/微笑倾向正视镜头，战斗/愤怒等动态倾向 3/4侧身，回眸/悲伤等倾向全侧身或背影）写在「全身像」之后；再从 `stand.tags` 展开表情（eye/brow/mouth/head_angle）与动作（hand/foot）为自然语言，结合 `voice.emotion_patterns` 补充情绪；**动态/强情绪变体的动作幅度应更大、更有张力**（见 [references/template-立绘提示词.md](references/template-立绘提示词.md) 编写要点）。画风放末尾。**身体朝向与动作幅度均由 LLM 据氛围自主生成，不来自 data 字段**。
 
 ## 参考文档
 
