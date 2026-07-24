@@ -92,6 +92,7 @@ allowed-tools: Read, Bash, Write, Edit
 ```json
 {
   "stand": {
+    "description":"...(自由文本:该变体在剧情该时刻的氛围/情绪情境，出图的首要依据)",
     "tags": {"variant_label":"...","eye":"...","brow":"...","mouth":"...","head_angle":"...","hand":"...","foot":"..."}
   },
   "voice": {"emotion_patterns":"...","description":"..."},
@@ -101,7 +102,7 @@ allowed-tools: Read, Bash, Write, Edit
 }
 ```
 
-组装：固定前缀 `[角色名]立绘，[背景色]背景，全身像，`，随后**依据变体氛围自主决定身体面对镜头的朝向**（正视镜头/3/4侧身/全侧身/背影——默认/微笑倾向正视镜头，战斗/愤怒等动态倾向 3/4侧身，回眸/悲伤等倾向全侧身或背影）写在「全身像」之后；再从 `stand.tags` 展开表情（eye/brow/mouth/head_angle）与动作（hand/foot）为自然语言，结合 `voice.emotion_patterns` 补充情绪；**动态/强情绪变体的动作幅度应更大、更有张力**（见 [references/template-立绘提示词.md](references/template-立绘提示词.md) 编写要点）。画风放末尾。**身体朝向与动作幅度均由 LLM 据氛围自主生成，不来自 data 字段**。
+组装：**首要依据 `stand.description`（变体氛围/情绪情境）定调表情强度、身体朝向、动作张力**；固定前缀 `[角色名]立绘，[背景色]背景，全身像，`，随后**据 description 氛围自主决定身体面对镜头的朝向**（正视镜头/3/4侧身/全侧身/背影——默认/微笑倾向正视镜头，战斗/愤怒等动态倾向 3/4侧身，回眸/悲伤等倾向全侧身或背影）写在「全身像」之后；再从 `stand.tags` 展开表情（eye/brow/mouth/head_angle）与动作（hand/foot）为自然语言，结合 `voice.emotion_patterns` 补充情绪；**动态/强情绪变体的动作幅度应更大、更有张力**（见 [references/template-立绘提示词.md](references/template-立绘提示词.md) 编写要点）。画风放末尾。**身体朝向与动作幅度由 LLM 据 `stand.description` 氛围自主生成**（data 里无硬编码朝向字段，description 是氛围依据）。
 
 ## 参考文档
 

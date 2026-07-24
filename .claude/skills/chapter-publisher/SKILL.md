@@ -2,7 +2,7 @@
 name: chapter-publisher
 description: |
   把定稿已批（status=31）的 Chapter 从创作区 `25_剧本/` 发布到运行时 `99_game/`：
-  把剧本 YAML 转换为 JSON 拷到 99_game/data/chapters/ + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest。
+  把剧本 YAML 转换为 JSON 拷到 99_game/data/chapters/ + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest + 产出章资源清单 chapter_packs.json（Web 按章分包依据）。
   在 Chapter 已定稿审批通过且所需立绘就绪、需发布到 Godot 运行时时使用。
 argument-hint: <chapter_id>
 arguments:
@@ -13,7 +13,7 @@ allowed-tools: Read, Bash, Write, Edit
 # 章节发布（Chapter → 99_game）
 
 把审阅通过的章节从**创作/审阅区**（`25_剧本/`）发布到**运行时区**（`99_game/`）：
-**把剧本 YAML 转换为 JSON** 落到 `99_game/data/chapters/`（Godot 只读 JSON），拷贝章节涉及的立绘/背景图片到 `99_game/assets/`，并更新 `manifest.json`。
+**把剧本 YAML 转换为 JSON** 落到 `99_game/data/chapters/`（Godot 只读 JSON），拷贝章节涉及的立绘/背景图片到 `99_game/assets/`，更新 `manifest.json`，并产出**章资源清单** `chapter_packs.json`（Web 按章分包导出依据）。
 发布是**确定性转换+拷贝**（非 LLM 创作），幂等——重复发布覆盖旧文件，无副作用。
 
 ## 参数
@@ -78,13 +78,43 @@ cp '<bg_image>' '99_game/assets/scenes/<scene_name>.png'
 python 99_game/tools/manifest_builder.py
 ```
 
-### 4. 汇报
+### 4. 产出章资源清单 chapter_packs.json（Web 分包依据）
 
-列出：发布的剧本路径（`99_game/data/chapters/<basename>`）、拷贝的立绘清单（`<角色>.<变体>`）、背景清单（`<Scene.name>`）、跳过/缺失的资源警告、manifest 更新结果。
+把本章用到的立绘/背景逻辑名记入 `99_game/data/chapter_packs.json`，供导出工具按章把资源分组打成 `<stem>.pck`（pck 内路径与全局 manifest 一致，挂载后 `res://` 全局路径命中）。
+
+数据源 = 第 1 步查到的结果：
+- `portraits`：`<char_name>.<variant>`（status=11 的 depicts 立绘，与上一步拷贝目标对齐）
+- `scenes`：`<Scene.name>`（has_layer background）
+
+```bash
+python 99_game/tools/chapter_packs_updater.py '<stem>' \
+  --portraits '<char1>.<var1>,<char2>.<var2>' --scenes '<scene1>,<scene2>'
+```
+
+工具幂等：覆盖该 stem 条目，保留其他章。空列表（该章无立绘/背景）也要写入，保持清单完整。
+
+### 5. 汇报
+
+列出：发布的剧本路径（`99_game/data/chapters/<stem>.json`）、拷贝的立绘清单（`<角色>.<变体>`）、背景清单（`<Scene.name>`）、跳过/缺失的资源警告、manifest 更新结果、章清单更新结果（该章 portraits/scenes 条数）。
 附运行时入口提示：`GameManager.start_new_game('<stem>', '<首场景段 id>')`（stem = 不含后缀的章节名，如 `chapter00_序章`）。
+
+## Web 发布前的额外步骤（导出阶段，非本 skill）
+
+剧本加密 + 按章分包在**导出时**做（本 skill 只产明文 + 清单，保持桌面/开发期可读）：
+
+1. **加密剧本**（挡自动扒包，可选但 Web 推荐）：覆盖式加密，运行时 ChapterLoader 检测 magic 头自动解密。
+   ```bash
+   pip install -r 99_game/tools/requirements.txt   # 需 cryptography
+   python 99_game/tools/encrypt_chapter.py '99_game/data/chapters/<stem>.json' '99_game/data/chapters/<stem>.json'
+   ```
+   ⚠️ 加密后无法再 `validate_chapter.py`（明文），故加密必须在本 skill 流程之后。
+2. **按章分包**：参考 `chapter_packs.json` + `manifest.json`，把每章资源打进 `<stem>.pck`（pck 内用全局 `assets/...` 路径），Web 预设主包不含这些资源，运行时由 ChapterPackLoader 按需下载挂载。详见 [99_game/docs](../../../99_game/docs/)。
 
 ## 参考文档
 
 - 剧本格式与 manifest 映射：[00_init/剧本.md](../../../00_init/剧本.md)
 - manifest 生成器：[99_game/tools/manifest_builder.py](../../../99_game/tools/manifest_builder.py)
+- 章资源清单更新器：[99_game/tools/chapter_packs_updater.py](../../../99_game/tools/chapter_packs_updater.py)
+- 剧本加密（Web）：[99_game/tools/encrypt_chapter.py](../../../99_game/tools/encrypt_chapter.py) ↔ 运行时 [99_game/scripts/util/ScriptCipher.gd](../../../99_game/scripts/util/ScriptCipher.gd)
+- 章包加载（运行时）：[99_game/scripts/autoload/ChapterPackLoader.gd](../../../99_game/scripts/autoload/ChapterPackLoader.gd)
 - 剧情 Schema（Chapter/contains/depicts）：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md)

@@ -5,7 +5,7 @@
 > - **审批流程独立成节**（[§2](#2-审批流程)），不在各 Agent 时序图里展开——时序图只画"生产调度"主线，遇到待审就用 `⏸ 待审 → 批准 11` 一行带过并引用 §2。
 > - **两处架构改动（已落地）**：
 >   1. plot-design 创作侧拆为 `chapter-structurer` → `chapter-outliner` → `chapter-dialoguer` 三步（已替代原一次性 `screenwriter`，后者已删除）。
->   2. **StandingIllustration 的调用从 `char-design` 剥离，改由 `plot-design` 直接调度**——`char-design` 终点收窄到 `IllusDesign`；`char-stand-designer` 新增 stand_id 入参模式支持按需出图。
+>   2. **StandingIllustration 的调用从 `char-design` 剥离，改由 `plot-design` 直接调度**——`char-design` 终点收窄到 `IllusDesign`；`char-stand-designer` 改为 stand_id 按需模式（按剧情 depicts 引用逐个出图，移除角色级批量备货与 P0/P1/P2 数量限制），变体需求由 chapter-dialoguer 据剧本 `say.portrait` 提出。
 >
 > 互补文档：[refer.md](refer.md)（节点治理手册：status / sync 级联 / 审批规则）。子项目指南：[55_dashboard/CLAUDE.md](55_dashboard/CLAUDE.md)（后台）、[99_game/README.md](99_game/README.md)（Godot 工程）。
 
@@ -329,7 +329,7 @@ sequenceDiagram
 | char-costume-designer | ② 着装 | 着装设计 | CostumeStyle 字段 | ✅ |
 | char-design-sheet | ③ 三视图 | 外貌底图设计（文生图） | DesignSheet prompt + 图 | ✅ |
 | char-illus-designer | ④ 立绘设计图 | 着装适配立绘（图生图） | IllusDesign prompt + 图 | ✅ |
-| char-stand-designer | ⑤ 立绘变体 | 表情/动作变体（图生图）；支持 stand_id 按需模式 | StandingIllustration prompt + 图 | ✅（plot-design 直调） |
+| char-stand-designer | ⑤ 立绘变体 | 表情/动作变体（图生图），stand_id 按需模式（变体需求由 chapter-dialoguer 据剧情提出） | StandingIllustration prompt + 图 | ✅（plot-design 直调） |
 | char-prompt-assembler | 纯产出 | 组装角色提示词（Mode A/B/C） | prompt 文件 | ❌ |
 
 ### 场景美术层（Location → SceneLayer）
@@ -346,7 +346,7 @@ sequenceDiagram
 |-------|------|------|---------|-------------------|
 | chapter-structurer | ① 建章节 | 建 Chapter + 统合 N 个 Scene | Chapter + contains 边 | ✅ |
 | chapter-outliner | ② 提纲 | 为章节出提纲 | `25_剧本/*.outline.yaml` | ✅ |
-| chapter-dialoguer | ③ 细节对话 | 基于提纲创作细节对话 + 建 depicts 立绘缺口 | 定稿剧本 `25_剧本/` | ✅ |
+| chapter-dialoguer | ③ 细节对话 | 基于提纲创作细节对话，按情绪节拍规划立绘 portrait + 建 depicts 缺口 | 定稿剧本 `25_剧本/` | ✅ |
 | chapter-publisher | 发布 | 发布剧本 + 立绘/背景到运行时 | `99_game/` 资源 + manifest | ✅ |
 
 ### 基础设施 & 元工具

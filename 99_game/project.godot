@@ -16,7 +16,8 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="他者之镜"
 run/main_scene="res://scenes/Title.tscn"
-config/features=PackedStringArray("4.6", "Forward Plus")
+; 统一用 GL Compatibility：Galgame 不吃高级渲染，且 Web 端只支持此渲染器；桌面/移动端共用，省维护。
+config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [autoload]
 
@@ -24,6 +25,8 @@ GameManager="*res://scripts/autoload/GameManager.gd"
 ScriptInterpreter="*res://scripts/autoload/ScriptInterpreter.gd"
 AudioManager="*res://scripts/autoload/AudioManager.gd"
 SaveManager="*res://scripts/autoload/SaveManager.gd"
+; 章节资源包下载挂载层（Web 分包地基；桌面端 no-op）
+ChapterPackLoader="*res://scripts/autoload/ChapterPackLoader.gd"
 
 [display]
 

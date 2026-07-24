@@ -31,6 +31,9 @@ func start(file: String, scene_id: String = "", label: String = "") -> void:
 	# GUT 适配：测试用 .new() 创建、未入树时 _ready 不触发，此处兜底初始化
 	if _loader == null:
 		_loader = _ChapterLoader.new()
+	# Web 端按需挂载该章资源包（桌面/首章为 no-op）。含 await 使本方法变 async：
+	# 调用方（Game._ready）不 await 亦可——协程会自行继续到 _run_from_current 并发信号。
+	await ChapterPackLoader.ensure_chapter(file)
 	_file = file
 	_chapter = _loader.load_chapter(file)
 	if _chapter.is_empty():
@@ -210,6 +213,7 @@ func restore(snapshot_data: Dictionary) -> void:
 	var file: String = snapshot_data.get("file", "")
 	var scene_id: String = snapshot_data.get("scene_id", "")
 	var line_idx: int = int(snapshot_data.get("line_idx", 0))
+	await ChapterPackLoader.ensure_chapter(file)
 	_chapter = _loader.load_chapter(file)
 	if _chapter.is_empty():
 		push_error("ScriptInterpreter: restore 无法加载 %s" % file)

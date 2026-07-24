@@ -2,7 +2,7 @@
 name: chapter-dialoguer
 description: |
   推进 Chapter 图节点的定稿段：读 structurer 的设计简报 + outliner 的提纲 → 三轮打磨（功能→声音→精简）创作逐句对话填入骨架 → 跑 validate 校验 → 写定稿 script_path + status=30（定稿待审）。
-  前驱 status=20（提纲就绪）。创作中若发现 outline 戏剧性破碎（分支无本质差异/scene 无情绪推进），产出「结构性问题报告」回退 outliner，不写 status。立绘缺口兜底建 depicts 节点为副作用（交 plot-design 推进）。
+  前驱 status=20（提纲就绪）。创作中若发现 outline 戏剧性破碎（分支无本质差异/scene 无情绪推进），产出「结构性问题报告」回退 outliner，不写 status。按情绪节拍规划每条 say 的 portrait（同一角色随情绪转折切换变体，避免一表情撑全场），立绘缺口兜底建 depicts 节点（交 plot-design 按 depicts 逐个推进出图）。
 argument-hint: <chapter_id_or_title> [target_status]
 arguments:
   - chapter_id_or_title
@@ -102,9 +102,11 @@ ORDER BY char_name, variant LIMIT 200
 
 1. **lines 指令**：用 11 条指令（`say`/`narrate`/`show`/`hide`/`bg`/`bgm`/`sfx`/`choice`/`label`/`jump`/`ending`）。每条 `say` 必带 `who`/`portrait`/`pos`/`text` 全四字段，`pos` ∈ `left`/`center`/`right`。
 2. **情感递进**：每个 scene 内部情绪有起伏（不是平铺），对齐设计简报情感弧线的该段位置。
-3. **变体选用规则**：
-   - 优先用 `status=11` 的已有变体。
-   - 剧情需要某个不存在/未批准的变体（如「陈默.沉重」），仍写入 `portrait` 字段，并记录为「缺口」——段 3c 兜底建 `StandingIllustration(status=0)` + `depicts` 边，交 `plot-design` 推进。
+3. **变体选用规则**（立绘表情密度——galgame 视觉叙事的核心）：
+   - **反模式（必须避免）**：同一 scene 同一角色用同一个 portrait 通铺全场（如一段戏 5 句全用「慵懒」、12 句全用「庄严」）。立绘表情是对话情绪的视觉锚点，一表情撑全场会让情绪弧无法视觉化、剧情显得单薄。
+   - **按情绪节拍切 portrait**：同一角色在该 scene 内的情绪转折、反应变化，应尽量体现在 portrait 切换上——情绪每转向一次就换一个变体。仅当情绪真正持平的连续短句才复用同一 portrait。
+   - **优先复用 `status=11` 已有变体**；剧情需要某个不存在/未批准的变体（如「陈默.沉重」），仍写入 `portrait` 字段并记录为「缺口」——段 3c 兜底建 `StandingIllustration(status=0)` + `depicts` 边，交 `plot-design` 按 depicts 逐个推进出图。
+   - 变体数量不设上下限、不按角色优先级——由剧情情绪节拍决定，用到几个就提几个。
 4. **分支与结局**：`choice.options[]` 每项含 `label` + `to`/`scene`/`file` 至少其一；结局用 `ending{kind:BE/TE/HE/NE}`，对齐 `Event.ending_kind` 与 `option.leads_to_ending`。
 5. **Write 落盘**：`25_剧本/chapter<NN>_<概述>.yaml`（定稿 YAML，命名同提纲文件名主体）。`Chapter.script_path` 指向此 `.yaml` 路径。
 6. **YAML 写作规则**（严格 schema 子集 1:1）：所有 string 双引号；多行文本用双引号 + `\n`，禁块标量；bool 小写 `true/false`；字段顺序对齐 schema properties；**不加任何额外字段**（schema `additionalProperties:false`，`authoring` 块绝不搬进定稿）；`meta.requires.portraits` 在定稿段补齐（提纲段无）。
@@ -160,11 +162,12 @@ RETURN illus.id AS illus_id, illus.status AS illus_status ORDER BY cos.id LIMIT 
 
 - 查不到任何 IllusDesign → 角色美术链未就绪，报告「需先推进 char-design 到 IllusDesign」，该变体 portrait 仍写入 JSON（运行时占位图兜底），但跳过建节点。
 
-**② 兜底建 StandingIllustration(status=0) + expands_to + ref_style + depicts**（生成新 stand_id：`snowflake_base62.py -n 1 -q`）：
+**② 兜底建 StandingIllustration(status=0) + expands_to + ref_style + depicts + description**（生成新 stand_id：`snowflake_base62.py -n 1 -q`）。description 由 dialoguer 据该 portrait 在剧本中出现的情境创作（一两句氛围/情绪/动机），**可选拔填、不参与 schema 校验**，缺则留空：
 
 ```cypher
 MERGE (stand:StandingIllustration {id:'<stand_id>'})
-  ON CREATE SET stand.status = 0, stand.variant_label = '<variant_label>';
+  ON CREATE SET stand.status = 0, stand.variant_label = '<variant_label>'
+SET stand.description = '<该变体在剧情该时刻的氛围/情绪情境：一两句，含情绪/动机/情境张力，供出图把握表情强度与动作张力；可选拔填，缺则留空>';
 MATCH (illus:IllusDesign {id:'<illus_id>'}), (stand:StandingIllustration {id:'<stand_id>'})
 MERGE (illus)-[r:expands_to]->(stand) SET r.sync = true, r.variant_label = '<variant_label>';
 MATCH (voice:LanguageStyle {id:'<voice_id>'}), (stand:StandingIllustration {id:'<stand_id>'})

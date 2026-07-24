@@ -81,7 +81,7 @@ ORDER BY c.order, scene_name, variant
 **立绘委派方式**（StandingIllustration 已从 char-design 剥离至 plot-design，按需出图）：定稿已批（`ch.status=31`）后，对每个 depicts 引用且 `stand.status ≠ 11` 的立绘：
 1. **先查其上游 IllusDesign 是否 = 11**（query 一次）。
 2. **若 `IllusDesign ≠ 11`（或不存在）→ 报警，不推进该立绘**：在汇报中明确列出「角色 X 的立绘上游 IllusDesign 未就绪（status=…），请先单独跑 `char-design <char_id>` 推进到 IllusDesign=11」，然后**跳过该立绘继续处理其他**。**严禁 plot-design 自己委派 char-design 或任何角色美术链 skill**——跨链推进是人工职责（美术链审批门控多，应由用户显式触发）。
-3. **若 `IllusDesign = 11`** → 用 **Skill 工具直调** `char-stand-designer <stand_id> 2`（模式 B，按需单变体）。stand_id 来自 depicts 查询结果。
+3. **若 `IllusDesign = 11`** → 用 **Skill 工具直调** `char-stand-designer <stand_id> 2`（按需单变体）。stand_id 来自 depicts 查询结果。
 
 > **plot-design 直调 `char-stand-designer` 合法**（传 stand_id，按需出图）。**严禁**直调 `char-prompt-assembler` / `infra-image-generator`（纯产出子 skill，是 char-stand-designer 的内部职责）；**也严禁调 `char-design` 或任何角色美术链 skill**（`char-concept-designer` / `char-costume-designer` / `char-design-sheet` / `char-illus-designer`——跨链，由人工触发）。**判定越界的标准**：工具调用里出现上述任一名字就是错的；立绘唯一正确动作是 `Skill char-stand-designer <stand_id> 2`，上游不就绪唯一正确动作是报警。
 
