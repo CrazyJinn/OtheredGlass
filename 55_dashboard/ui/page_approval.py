@@ -18,11 +18,14 @@ def render():
     for n in items:
         full = graph_repo.get_node(n["id"]) or {}
         with st.container(border=True):
-            # Chapter 有两道审批：status=10 结构审 / 30 定稿审，显式标注以便区分
+            # 显式标注审批类型：Chapter 结构审(10) / Section 定稿审(30)
             review_tag = ""
-            if n["label"] == "Chapter":
-                review_tag = "（结构审）" if n["status"] == 10 else "（定稿审）"
-            st.write(f"**{n['label']}** · {full.get('name', n['id'])}{review_tag}")
+            if n["label"] == "Chapter" and n["status"] == 10:
+                review_tag = "（结构审）"
+            elif n["label"] == "Section" and n["status"] == 30:
+                review_tag = "（定稿审）"
+            label_text = full.get("title") or full.get("name") or n["id"]
+            st.write(f"**{n['label']}** · {label_text}{review_tag}")
             status_badge.render(n["status"])
             if full.get("image_path"):
                 image_viewer.render(full["image_path"])

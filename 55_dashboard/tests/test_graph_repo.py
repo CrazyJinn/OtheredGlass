@@ -43,7 +43,7 @@ def test_get_pending_approvals_filters_status_10_and_30(monkeypatch):
     monkeypatch.setattr(graph_repo, "_session", lambda: sess)
     out = graph_repo.get_pending_approvals()
     assert out == recs
-    # status=10 通用待审（含 Chapter 结构审）+ status=30 Chapter 定稿待审
+    # status=10 通用待审（含 Chapter 结构审）+ status=30 Section 定稿待审
     assert "n.status IN [10, 30]" in sess.run.call_args[0][0]
 
 
@@ -134,3 +134,32 @@ def test_get_upstream_location_id_uses_scene_edges(monkeypatch):
     assert graph_repo.get_upstream_location_id("S1") == "LOC1"
     cypher = sess.run.call_args[0][0]
     assert "has_scene" in cypher and "Location" in cypher
+
+
+def test_get_chapter_graph_uses_plot_edges_with_has_section(monkeypatch):
+    """get_chapter_graph 沿 _PLOT_EDGES（含 has_section）遍历，起点 Chapter。"""
+    sess = MagicMock()
+    sess.__enter__.return_value = sess
+    r1, r2, r3 = MagicMock(), MagicMock(), MagicMock()
+    r1.__iter__ = lambda self: iter([{"id": "SEC1"}, {"id": "S1"}])
+    r2.__iter__ = lambda self: iter([
+        {"id": "SEC1", "label": "Section", "status": 20, "name": None},
+        {"id": "S1", "label": "Scene", "status": 1, "name": "酒店-客房"},
+    ])
+    r3.__iter__ = lambda self: iter([
+        {"f": "CH1", "t": "SEC1", "ty": "has_section", "sync": True},
+        {"f": "SEC1", "t": "S1", "ty": "contains", "sync": False},
+    ])
+    sess.run.side_effect = [r1, r2, r3]
+    monkeypatch.setattr(graph_repo, "_session", lambda: sess)
+
+    g = graph_repo.get_chapter_graph("CH1")
+    first_cypher = sess.run.call_args_list[0][0][0]
+    assert "has_section" in first_cypher
+    assert "contains" in first_cypher and "depicts" in first_cypher
+    assert "Chapter" in first_cypher
+    assert sess.run.call_args_list[0][1]["id"] == "CH1"
+    assert len(g["nodes"]) == 2
+    assert g["nodes"][0]["label"] == "Section"
+    assert len(g["edges"]) == 2
+    assert g["edges"][0]["type"] == "has_section"

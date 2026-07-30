@@ -64,17 +64,26 @@ def test_scene_enum_options_registered():
     assert status.ENUM_OPTIONS["layer_type"] == ["background", "floor", "decor", "mask"]
 
 
-def test_chapter_three_stage_status():
-    """Chapter 三段式：结构(1→10→11) + 提纲(20) + 定稿(30→31)，两道审批，completion=31。"""
-    assert status.completion_status("Chapter") == 31
+def test_chapter_structural_status():
+    """Chapter 章级结构段：0→1→10→11，一道结构审，completion=11。"""
+    assert status.completion_status("Chapter") == 11
     assert status.has_approval("Chapter") is True
-    # 结构段 status=1（结构就绪）可 submit（→10）；其他阶段不可
+    # 结构段 status=1（结构就绪）可 submit（→10）；其他不可
     assert status.can_submit("Chapter", 1) is True
     assert status.can_submit("Chapter", 0) is False
+    assert status.can_submit("Chapter", 10) is False   # 结构待审
     assert status.can_submit("Chapter", 11) is False   # 结构已批
-    assert status.can_submit("Chapter", 20) is False   # 提纲就绪（无审批）
-    assert status.can_submit("Chapter", 30) is False   # 定稿待审（dialoguer 直写，不经 submit）
-    assert status.can_submit("Chapter", 31) is False   # 定稿已批
+
+
+def test_section_status():
+    """Section 节级提纲/定稿段：0→20→30→31，一道定稿审，completion=31，不经 submit。"""
+    assert status.completion_status("Section") == 31
+    assert status.has_approval("Section") is True
+    # Section 定稿(30) 由 dialoguer 直写，不经 submit；completion=31 但禁止 submit
+    assert status.can_submit("Section", 0) is False
+    assert status.can_submit("Section", 20) is False
+    assert status.can_submit("Section", 30) is False
+    assert status.can_submit("Section", 31) is False   # 关键：已批节不可被 submit 回退
 
 
 def test_chapter_status_labels():

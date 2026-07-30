@@ -1,12 +1,14 @@
-"""剧情章节进度：列出 Chapter + 编排/立绘缺口 + 剧本预览 + 审批。
+"""剧情章节进度：列出 Chapter + 分节编排/立绘缺口 + 节级剧本预览 + 审批。
 
 结构与 page_scene_overview 对称：Chapter 代替 Location，get_chapter_graph 代替
-get_location_graph。dialog 复用同一 session_state["_dialog_node"] key。
+get_location_graph。dialog 复用同一 session_state["_dialog_node"] key（点 Section 行也进同
+一节点编辑器——Section 已被 schema_loader 自动注册）。
 
-剧本预览（读 script_path 的 JSON 渲染逐句对话）是剧情审批的核心——review 对白质量，
-区别于美术节点审批（看图片）。审批按钮 status=10→11（通过）/→0（驳回重做）。
+节级预览（读各 Section.script_path 的 YAML 渲染逐句对话）是剧情审批的核心——review 对白质量，
+区别于美术节点审批（看图片）。Chapter 审批按钮 status=10→11（结构审通过）/→0（驳回重做）；
+Section 定稿审(30→31)走审批中心（page_approval）。
 """
-import json
+import yaml
 from pathlib import Path
 
 import streamlit as st
@@ -46,9 +48,31 @@ def render(schema):
         _edit_dialog(schema, dn)
 
 
+def _sections_sorted(g):
+    """从章节子图取 Section 列表，按 section_no 排序，附完整节点字段（title/script_path/section_no）。
+
+    subgraph 的 nodes 只含 id/label/status/name，不含 section_no/title，故逐个 get_node 补全。
+    """
+    secs = [n for n in g["nodes"] if n["label"] == "Section"]
+    out = []
+    for s in secs:
+        full = graph_repo.get_node(s["id"]) or {}
+        no = full.get("section_no")
+        out.append({
+            "id": s["id"],
+            "status": s["status"],
+            "_full": full,
+            "_no": no if no is not None else 9999,
+        })
+    out.sort(key=lambda s: (s["_no"], s["id"]))
+    return out
+
+
 def _render_chapter_row(schema, ch):
     ch_id = ch["id"]
     status = ch.get("status")
+    g = graph_repo.get_chapter_graph(ch_id)
+    sections = _sections_sorted(g)
     with st.container(border=True):
         # 标题行：序号 + 标题 + status 徽章
         top = st.columns([4, 2, 2])
@@ -73,36 +97,45 @@ def _render_chapter_row(schema, ch):
         if ch.get("branch_summary"):
             st.caption(f"**分支骨架**：{ch['branch_summary']}")
 
-        # 审批按钮（status=10 待审）/ 发布提示（status=11 已批）
+        # 审批按钮（status=10 结构审）/ 生产提示（status=11）
         if status == 10:
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("通过（批准 11）", key=f"cok_{ch_id}", type="primary"):
-                    graph_repo.set_status(ch_id, approval.approve())
+                    graph_repo.set_status(ch_id, approval.approve(status))
                     # toast 而非 inline：紧随的 st.rerun() 会丢弃本轮 inline 输出
-                    st.toast("剧本已批准（status=11）", icon="✅")
+                    st.toast("结构已批准（status=11）", icon="✅")
                     st.rerun()
             with c2:
                 if st.button("驳回（重做 0）", key=f"cno_{ch_id}"):
-                    graph_repo.set_status(ch_id, approval.reject())
-                    st.toast("已驳回（status=0），剧本需重做", icon="❌")
+                    graph_repo.set_status(ch_id, approval.reject(status))
+                    st.toast("已驳回（status=0），结构需重做", icon="❌")
                     st.rerun()
         elif status == 11:
-            st.info(
-                "剧本已批准（11）。下方「立绘缺口」全部就绪后，点上方「推进剧情创作」"
-                "由 plot-design 自动委派 chapter-publisher 发布到 `99_game/`。"
-            )
+            done = [s for s in sections if s["_full"].get("status") == 31]
+            if sections and len(done) == len(sections):
+                st.info(
+                    "全章各节定稿已批（31）。下方「立绘缺口」全部就绪后，点上方「推进剧情创作」"
+                    "由 plot-design 自动委派 chapter-publisher 合并发布到 `99_game/`。"
+                )
+            else:
+                st.info(
+                    f"结构已批（11），节级生产中：{len(done)}/{len(sections)} 节定稿已批。"
+                    "逐节推进提纲 / 定稿（plot-design 按节委派 outliner / dialoguer）。"
+                )
 
-        # 剧本预览（核心：review 对白质量）
-        if ch.get("script_path"):
-            _render_script_preview(ch["script_path"])
+        # 各节剧本预览（核心：review 对白质量）——读 Section.script_path 的节级 YAML
+        for s in sections:
+            sp = s["_full"].get("script_path")
+            if sp:
+                _render_script_preview(sp, f"第{s['_no']}节 · {s['_full'].get('title') or s['id']}")
 
-        # 编排子图：contains 的 Scene + depicts 的立绘缺口
-        _render_chapter_subgraph(ch_id)
+        # 编排子图：has_section→Section→contains→Scene→depicts→立绘缺口
+        _render_chapter_subgraph(g, sections)
 
 
-def _render_script_preview(script_path):
-    """读 script_path 的剧本 JSON，渲染 meta + 每个 scene-block 的逐句对话，供 review。"""
+def _render_script_preview(script_path, label=""):
+    """读 script_path 的节级剧本 YAML，渲染 meta + 每个 scene-block 的逐句对话，供 review。"""
     p = Path(script_path)
     if not p.is_absolute():
         p = settings.PROJECT_ROOT / script_path
@@ -110,14 +143,14 @@ def _render_script_preview(script_path):
         st.caption(f"剧本文件不存在：{script_path}")
         return
     try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        st.error(f"剧本 JSON 解析失败：{e}")
+        data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as e:
+        st.error(f"剧本 YAML 解析失败：{e}")
         return
     meta = data.get("meta", {})
     req = meta.get("requires", {})
     scenes = data.get("scenes", [])
-    cap = f"📜 剧本预览：{script_path}（{len(scenes)} 场景段"
+    cap = f"📜 剧本预览：{label or script_path}（{len(scenes)} 场景段"
     if req.get("portraits"):
         cap += f"，{len(req['portraits'])} 立绘引用"
     cap += "）"
@@ -189,33 +222,44 @@ def _render_line(line):
         st.markdown(f"**【结局 {line.get('kind', '')}】{line.get('title', '')}**")
 
 
-def _render_chapter_subgraph(ch_id):
-    """渲染 contains 的 Scene + depicts 的立绘缺口（含就绪计数）。"""
-    g = graph_repo.get_chapter_graph(ch_id)
-    scenes = [n for n in g["nodes"] if n["label"] == "Scene"]
+def _render_chapter_subgraph(g, sections):
+    """渲染 has_section→Section→contains→Scene→depicts→立绘缺口（含就绪计数）。"""
+    nodes_by_id = {n["id"]: n for n in g["nodes"]}
+    scenes_of = {}   # sec_id -> [scene_id]
+    stands_of = {}   # scene_id -> [stand_id]
+    for e in g["edges"]:
+        if e["type"] == "contains":
+            scenes_of.setdefault(e["from"], []).append(e["to"])
+        elif e["type"] == "depicts":
+            stands_of.setdefault(e["from"], []).append(e["to"])
+
     stands = [n for n in g["nodes"] if n["label"] == "StandingIllustration"]
-    if not scenes and not stands:
+    st.markdown(f"**编排子图（{len(sections)} 节）**")
+    if stands:
+        ready = sum(1 for n in stands if n["status"] == 11)
+        st.caption(f"全章立绘就绪 {ready}/{len(stands)}")
+    if not sections:
+        st.caption("未分节（结构段尚未建立 Section）")
         return
-    cols = st.columns(2)
-    with cols[0]:
-        st.markdown("**场景编排（contains）**")
-        if not scenes:
-            st.caption("无（首次编排尚未建立 contains 边）")
-        else:
-            scenes.sort(key=lambda n: n.get("name") or "")
-            for n in scenes:
-                _badge_line(n.get("name") or n["id"], n["status"])
-    with cols[1]:
-        st.markdown("**立绘缺口（depicts）**")
-        if not stands:
-            st.caption("无")
-        else:
-            ready = sum(1 for n in stands if n["status"] == 11)
-            st.caption(f"{ready}/{len(stands)} 就绪")
-            for n in stands:
-                full = graph_repo.get_node(n["id"]) or {}
-                variant = full.get("variant_label", n["id"])
-                _badge_line(variant, n["status"])
+
+    for s in sections:
+        full = s["_full"]
+        title = full.get("title") or s["id"]
+        with st.expander(f"第{s['_no']}节 · {title}", expanded=False):
+            _badge_line("节状态", s["status"])
+            scene_ids = scenes_of.get(s["id"], [])
+            scene_nodes = [nodes_by_id[sid] for sid in scene_ids if sid in nodes_by_id]
+            scene_nodes.sort(key=lambda n: n.get("name") or "")
+            if not scene_nodes:
+                st.caption("无场景（contains 边未建立）")
+            for sn in scene_nodes:
+                _badge_line(sn.get("name") or sn["id"], sn["status"])
+                stand_ids = stands_of.get(sn["id"], [])
+                stand_nodes = [nodes_by_id[tid] for tid in stand_ids if tid in nodes_by_id]
+                for stn in stand_nodes:
+                    sfull = graph_repo.get_node(stn["id"]) or {}
+                    variant = sfull.get("variant_label", stn["id"])
+                    _badge_line(f"└ {variant}", stn["status"])
 
 
 def _badge_line(label, status):

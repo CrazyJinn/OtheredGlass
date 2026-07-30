@@ -19,7 +19,7 @@
 | [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么、在哪选择 | Character, Event, Location, Info, Choice |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
 | [场景美术.md](Schema/场景美术.md) | 场景如何从地点变成画面 | Scene, SceneLayer |
-| [剧情.md](Schema/剧情.md) | 剧本章节编排（结构/提纲/定稿） | Chapter |
+| [剧情.md](Schema/剧情.md) | 剧本章节编排（章→节→场景；结构/提纲/定稿） | Chapter, Section |
 
 ---
 
@@ -43,7 +43,8 @@
 | StandingIllustration | snowflake Base62 | 具体表情/动作的单张立绘 |
 | Scene | snowflake Base62 | 地点内的子场景视觉设定 |
 | SceneLayer | snowflake Base62 | 场景的单一图层（背景/地面/陈设/遮罩） |
-| Chapter | snowflake Base62 | 剧本章节编排单元（锚定剧本文件 script_path） |
+| Chapter | snowflake Base62 | 剧本章节编排单元（章级：结构 / 分节规划） |
+| Section | snowflake Base62 | 章节内的节编排单元（节级：提纲 / 定稿，锚定 outline_path / script_path） |
 
 ---
 
@@ -74,7 +75,8 @@
 | has_scene | Location → Scene | 1:N | ✅ | 地点→场景 |
 | has_layer | Scene → SceneLayer | 1:N | ✅ | 场景→图层 |
 | **剧情** | | | | |
-| contains | Chapter → Scene | N:M | ❌ | 章节编排场景顺序 |
+| has_section | Chapter → Section | 1:N | ✅ | 章→节（组成关系，级联重做） |
+| contains | Section → Scene | N:M | ❌ | 节编排场景顺序 |
 | depicts | Scene → StandingIllustration | N:N | ❌ | 场景需要的立绘变体（按需出图门控） |
 
 ---
@@ -110,6 +112,7 @@ flowchart LR
 
     subgraph 剧情["剧情"]
         Chapter["Chapter"]
+        Section["Section"]
     end
 
     Character -->|"has_appearance ✅ 1:1"| Appearance
@@ -125,6 +128,7 @@ flowchart LR
     Language -->|"ref_style ✅ 1:N"| StandingIllus
     Location -->|"has_scene ✅ 1:N"| Scene
     Scene -->|"has_layer ✅ 1:N"| SceneLayer
-    Chapter -->|"contains ❌ N:M"| Scene
+    Chapter -->|"has_section ✅ 1:N"| Section
+    Section -->|"contains ❌ N:M"| Scene
     Scene -->|"depicts ❌ N:N"| StandingIllus
 ```

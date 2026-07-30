@@ -1,0 +1,29 @@
+meta:
+  chapter: 0
+  title: "意外突生"
+  requires:
+    characters:
+      - "陆择"
+    scenes:
+      - "马路-路口"
+    portraits: []
+
+scenes:
+  - id: "路口"
+    scene: "马路-路口"
+    time: "阴天白天"
+    bgm:
+      track: "雨路"
+      mode: "play"
+      loop: true
+    lines:
+      - op: "narrate"
+        text: "阴雨。湿滑的路口，霓虹和车灯在积水洼里晕成冷光。"
+      - op: "narrate"
+        text: "红灯倒数。陆择撑着伞站在斑马线一侧。"
+      - op: "narrate"
+        text: "绿灯。人流涌出去。"
+      - op: "narrate"
+        text: "雨幕里冲出来的一样东西——"
+      - op: "narrate"
+        text: "撞击声。然后什么都没有了。"

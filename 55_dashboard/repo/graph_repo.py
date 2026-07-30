@@ -51,8 +51,8 @@ _ART_EDGES = "has_appearance|has_voice_style|has_costume|produces|outfit_for|exp
 # 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
 _SCENE_EDGES = "has_scene|has_layer"
 
-# 剧情编排边类型（限定章节子图遍历：Chapter→contains→Scene→depicts→StandingIllustration）
-_PLOT_EDGES = "contains|depicts"
+# 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→contains→Scene→depicts→StandingIllustration）
+_PLOT_EDGES = "has_section|contains|depicts"
 
 
 def get_character_graph(char_id):
@@ -112,7 +112,7 @@ def get_location_graph(loc_id):
 
 
 def get_chapter_graph(ch_id):
-    """取章节编排子图的全部节点与边（Chapter→contains→Scene→depicts→StandingIllustration）。
+    """取章节编排子图的全部节点与边（Chapter→has_section→Section→contains→Scene→depicts→StandingIllustration）。
 
     沿 contains/depicts 边遍历；depicts 指向的 StandingIllustration 一并纳入（供立绘缺口查看）。
     StandingIllustration 的上游美术链（expands_to/ref_style）不在本子图，仅看其 status 是否就绪。
@@ -177,7 +177,7 @@ def set_status_batch(node_ids, status):
 
 
 def get_pending_approvals():
-    # status=10 通用待审（含 Chapter 结构审）；status=30 Chapter 定稿待审
+    # status=10 通用待审（含 Chapter 结构审）；status=30 Section 定稿待审
     with _session() as s:
         rs = s.run(
             "MATCH (n) WHERE n.status IN [10, 30] "

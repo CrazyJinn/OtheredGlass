@@ -58,3 +58,19 @@ def test_on_edit_keeps_other():
     assert approval.on_edit(2) is None
     assert approval.on_edit(10) is None
     assert approval.on_edit(0) is None
+
+
+def test_section_approval_reuses_chapter_final_stage():
+    """Section 定稿审复用 30→31 / reject(30)→20（approval label 无关）。"""
+    assert approval.approve(30) == 31   # Section 定稿审通过
+    assert approval.reject(30) == 20    # Section 定稿驳回→回提纲就绪
+
+
+def test_submit_rejects_section():
+    """Section 禁止 submit（定稿 30 由 dialoguer 直写；completion=31 但 can_submit 恒 False）。"""
+    with pytest.raises(approval.IllegalTransition):
+        approval.submit("Section", 20)
+    with pytest.raises(approval.IllegalTransition):
+        approval.submit("Section", 30)
+    with pytest.raises(approval.IllegalTransition):
+        approval.submit("Section", 31)

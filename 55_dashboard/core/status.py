@@ -1,7 +1,7 @@
 """显式定义 status 流转规则与 enum 词表（不解析 .md）。"""
 
 # -1 作废重做（sync 级联重置后）；0 待处理；生产态 1/2；审批专属 10 待审 / 11 批准；驳回归 0。
-# Chapter 例外：拆为 结构(1→10→11) / 提纲(20) / 定稿(30→31) 三段，两道审批，completion=31。
+# 剧情两层：Chapter 章级结构段（1→10→11，completion=11）；Section 节级提纲/定稿段（20→30→31，completion=31）。
 NODE_STATUS = {
     "AppearanceStyle":     {"legal": [-1, 0, 1],          "completion": 1, "has_approval": False},
     "LanguageStyle":       {"legal": [-1, 0, 1],          "completion": 1, "has_approval": False},
@@ -12,8 +12,9 @@ NODE_STATUS = {
     # 场景美术
     "Scene":               {"legal": [-1, 0, 1],            "completion": 1, "has_approval": False},
     "SceneLayer":          {"legal": [-1, 0, 1, 2, 10, 11], "completion": 2, "has_approval": True},
-    # 剧情（Chapter 三段式：结构审 + 定稿审两道审批）
-    "Chapter":             {"legal": [-1, 0, 1, 10, 11, 20, 30, 31], "completion": 31, "has_approval": True},
+    # 剧情（Chapter 章级结构审 + Section 节级定稿审，各一道审批）
+    "Chapter":             {"legal": [-1, 0, 1, 10, 11],          "completion": 11, "has_approval": True},
+    "Section":             {"legal": [-1, 0, 20, 30, 31],         "completion": 31, "has_approval": True},
 }
 
 ENUM_OPTIONS = {
@@ -47,8 +48,9 @@ def is_approved(status):
 def can_submit(label, current_status):
     """只有有审批的节点，在完成态时才能提交审批。无 status 字段的节点（如 Character）返回 False。
 
-    Chapter 例外：结构段在 status=1（结构就绪）时 submit→10（结构待审）；
-    定稿段(30)由 chapter-dialoguer 直接写入，不经 submit。
+    Chapter：结构段在 status=1（结构就绪）时 submit→10（结构待审）。
+    Section：定稿段(30)由 chapter-dialoguer 直接写入，不经 submit；completion=31 但禁止 submit
+    （否则 status==31 时 can_submit 会返回 True，submit 把已批节回退到 10 毁数据）。
     """
     if not has_approval(label):
         return False
@@ -56,4 +58,6 @@ def can_submit(label, current_status):
         return False
     if label == "Chapter":
         return current_status == 1
+    if label == "Section":
+        return False
     return current_status == completion_status(label)
