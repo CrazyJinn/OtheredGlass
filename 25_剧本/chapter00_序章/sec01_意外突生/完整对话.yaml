@@ -4,11 +4,65 @@ meta:
   requires:
     characters:
       - "陆择"
+      - "小夏"
     scenes:
+      - "街角咖啡店-点餐台"
       - "马路-路口"
-    portraits: []
+    portraits:
+      - "陆择.慵懒"
+      - "陆择.玩味"
+      - "陆择.轻佻"
 
 scenes:
+  - id: "咖啡店"
+    scene: "街角咖啡店-点餐台"
+    time: "清晨"
+    bgm:
+      track: "晨咖"
+      mode: "play"
+      loop: true
+    lines:
+      - op: narrate
+        text: "推门声。咖啡机的蒸汽混着浅浅的背景乐。"
+      - op: narrate
+        text: "街角的小咖啡店，清晨没什么人，灯光暖黄。"
+      - op: show
+        who: "陆择"
+        portrait: "慵懒"
+        pos: "left"
+      - op: narrate
+        text: "点餐台后是个扎马尾的年轻女孩，正低头擦着杯子。"
+      - op: say
+        who: "陆择"
+        portrait: "慵懒"
+        pos: "left"
+        text: "美式，中杯。"
+      - op: narrate
+        text: "女孩抬起头，应了一声，手指在屏幕上点。"
+      - op: say
+        who: "陆择"
+        portrait: "玩味"
+        pos: "left"
+        text: "这么早上班，眼睛还挺亮。"
+      - op: narrate
+        text: "女孩的手指顿了一下，飞快地瞄他一眼，又低下头。"
+      - op: say
+        who: "陆择"
+        portrait: "轻佻"
+        pos: "left"
+        text: "夸你呢。别紧张。"
+      - op: narrate
+        text: "耳根红了起来。她把杯子递过来，指尖碰了一下他的手，又像烫到似的缩回去。"
+      - op: say
+        who: "陆择"
+        portrait: "玩味"
+        pos: "left"
+        text: "谢了。"
+      - op: narrate
+        text: "陆择接过咖啡，笑了笑，转身推门出去。"
+      - op: hide
+        who: "陆择"
+
   - id: "路口"
     scene: "马路-路口"
     time: "阴天白天"
@@ -17,13 +71,28 @@ scenes:
       mode: "play"
       loop: true
     lines:
-      - op: "narrate"
-        text: "阴雨。湿滑的路口，霓虹和车灯在积水洼里晕成冷光。"
-      - op: "narrate"
-        text: "红灯倒数。陆择撑着伞站在斑马线一侧。"
-      - op: "narrate"
-        text: "绿灯。人流涌出去。"
-      - op: "narrate"
+      - op: narrate
+        text: "门一推开，雨泼了下来。"
+      - op: narrate
+        text: "陆择没带伞。他举着咖啡杯挡了挡，缩在门檐下。"
+      - op: show
+        who: "陆择"
+        portrait: "慵懒"
+        pos: "left"
+      - op: say
+        who: "陆择"
+        portrait: "慵懒"
+        pos: "left"
+        text: "……真讨厌下雨天。"
+      - op: narrate
+        text: "马路对面，一辆机场巴士亮着灯停在站台。雨里像一团模糊的光。"
+      - op: narrate
+        text: "陆择盯着那辆车——赶飞机。跑过去，还来得及。"
+      - op: narrate
+        text: "他攥紧咖啡杯，一头扎进雨里。"
+      - op: hide
+        who: "陆择"
+      - op: narrate
         text: "雨幕里冲出来的一样东西——"
-      - op: "narrate"
+      - op: narrate
         text: "撞击声。然后什么都没有了。"
