@@ -51,8 +51,8 @@ _ART_EDGES = "has_appearance|has_voice_style|has_costume|produces|outfit_for|exp
 # 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
 _SCENE_EDGES = "has_scene|has_layer"
 
-# 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→contains→Scene→depicts→StandingIllustration）
-_PLOT_EDGES = "has_section|contains|depicts"
+# 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration）
+_PLOT_EDGES = "has_section|contains|depicts|expands_to"
 
 
 def get_character_graph(char_id):
@@ -112,14 +112,14 @@ def get_location_graph(loc_id):
 
 
 def get_chapter_graph(ch_id):
-    """取章节编排子图的全部节点与边（Chapter→has_section→Section→contains→Scene→depicts→StandingIllustration）。
+    """取章节编排子图的全部节点与边（Chapter→has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration）。
 
-    沿 contains/depicts 边遍历；depicts 指向的 StandingIllustration 一并纳入（供立绘缺口查看）。
-    StandingIllustration 的上游美术链（expands_to/ref_style）不在本子图，仅看其 status 是否就绪。
+    沿 has_section/contains/depicts/expands_to 边遍历；depicts 指向的 IllusDesign 及其 expands_to 立绘变体一并纳入（供立绘缺口查看）。
+    有向遍历（->）严格沿上游→下游，避免共享 IllusDesign 反向 depicts 蔓延到其他章 Scene 造成跨章子图污染。
     """
     with _session() as s:
         ids = [ch_id] + [r["id"] for r in s.run(
-            "MATCH (ch:Chapter)-[:%s*1..3]-(n) WHERE ch.id=$id RETURN DISTINCT n.id AS id" % _PLOT_EDGES,
+            "MATCH (ch:Chapter)-[:%s*1..4]->(n) WHERE ch.id=$id RETURN DISTINCT n.id AS id" % _PLOT_EDGES,
             id=ch_id,
         )]
         nodes = [

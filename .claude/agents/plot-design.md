@@ -38,12 +38,14 @@ Schema 文件：`00_init/Schema/剧情.md`（Chapter/Section + has_section/conta
 MATCH (ch:Chapter {id:'<章节ID>'})
 OPTIONAL MATCH (ch)-[:has_section]->(sec:Section)
 OPTIONAL MATCH (sec)-[c:contains]->(s:Scene)
-OPTIONAL MATCH (s)-[:depicts]->(stand:StandingIllustration)
+OPTIONAL MATCH (s)-[:depicts]->(illus:IllusDesign)
+OPTIONAL MATCH (illus)-[:expands_to]->(stand:StandingIllustration)
 OPTIONAL MATCH (char:Character)-[:has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style*1..5]->(stand)
 RETURN DISTINCT ch.id AS ch_id, ch.title AS title, ch.chapter_no AS chapter_no, ch.status AS ch_status,
        sec.id AS sec_id, sec.section_no AS sec_no, sec.title AS sec_title,
        sec.outline_path AS outline_path, sec.script_path AS script_path, sec.status AS sec_status,
        c.order AS scene_order, s.id AS scene_id, s.name AS scene_name, s.status AS scene_status,
+       illus.id AS illus_id, illus.status AS illus_status,
        stand.id AS stand_id, stand.variant_label AS variant, stand.status AS stand_status,
        char.id AS char_id, char.name AS char_name
 ORDER BY sec.section_no, c.order, scene_name, variant
@@ -56,7 +58,7 @@ ORDER BY sec.section_no, c.order, scene_name, variant
 - 用 `OPTIONAL MATCH` 保证首次编排（has_section/contains/depicts 边尚未建立）也能返回 Chapter 本身。
 - 限定边类型的变长路径回溯立绘所属角色（复用美术边类型集 `has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style`），既能明确范围，又能阻止遍历越界到叙事 Event / 其他角色。
 
-**写边严格按 Schema 方向（上游→下游）**，见 [00_init/Schema/剧情.md](00_init/Schema/剧情.md) 与 [00_init/Schema/角色美术.md](00_init/Schema/角色美术.md)。`has_section` 是 `Chapter→Section`；`contains` 是 `Section→Scene`（不再是 Chapter→Scene）；`depicts` 是 `Scene→StandingIllustration`；`StandingIllustration` 是 `expands_to`/`ref_style` 的**目标端**（入边），不是源——把方向写反会让 MATCH 静默返回空，进而误报「节点未创建」。
+**写边严格按 Schema 方向（上游→下游）**，见 [00_init/Schema/剧情.md](00_init/Schema/剧情.md) 与 [00_init/Schema/角色美术.md](00_init/Schema/角色美术.md)。`has_section` 是 `Chapter→Section`；`contains` 是 `Section→Scene`（不再是 Chapter→Scene）；`depicts` 是 `Scene→IllusDesign`（变体经 `IllusDesign-[:expands_to]->StandingIllustration` 枚举）；`StandingIllustration` 是 `expands_to`/`ref_style` 的**目标端**（入边），不是源——把方向写反会让 MATCH 静默返回空，进而误报「节点未创建」。
 
 ### 3. 决策与调度
 

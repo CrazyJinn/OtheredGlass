@@ -41,8 +41,8 @@ ORDER BY sec.section_no;
 MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(:Section)-[:contains]->(s:Scene)
 OPTIONAL MATCH (s)-[:has_layer]->(sl:SceneLayer {layer_type:'background'})
 RETURN DISTINCT s.name AS scene_name, sl.image_path AS bg_image, sl.status AS bg_status;
-// (4) 全章 depicts 立绘（深一跳：Chapter→Section→Scene→depicts→StandingIllustration + 角色回溯）
-MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(:Section)-[:contains]->(sc:Scene)-[:depicts]->(stand:StandingIllustration)
+// (4) 全章 depicts 立绘（深两跳：Chapter→Section→Scene→depicts→IllusDesign→expands_to→StandingIllustration + 角色回溯）
+MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(:Section)-[:contains]->(sc:Scene)-[:depicts]->(illus:IllusDesign)-[:expands_to]->(stand:StandingIllustration)
 MATCH (char:Character)-[:has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style*1..5]->(stand)
 RETURN DISTINCT char.name AS char_name, stand.variant_label AS variant, stand.image_path AS image_path, stand.status AS status;
 ```

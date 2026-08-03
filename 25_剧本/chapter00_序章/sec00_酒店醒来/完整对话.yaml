@@ -162,7 +162,7 @@ scenes:
         pos: "right"
         text: "那可惜了。"
       - op: narrate
-        text: "陆择套上裤子，顾盈也换回她那条裙子。"
+        text: "陆择套上裤子，顾盈换回裙子时把白衬衫丢还给他。"
       - op: say
         who: "陆择"
         portrait: "玩味"

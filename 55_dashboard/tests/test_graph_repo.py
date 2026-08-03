@@ -157,6 +157,8 @@ def test_get_chapter_graph_uses_plot_edges_with_has_section(monkeypatch):
     first_cypher = sess.run.call_args_list[0][0][0]
     assert "has_section" in first_cypher
     assert "contains" in first_cypher and "depicts" in first_cypher
+    assert "expands_to" in first_cypher          # 变体枚举走 expands_to
+    assert "*1..4" in first_cypher                # 深度从 3 提到 4（多一跳 expands_to）
     assert "Chapter" in first_cypher
     assert sess.run.call_args_list[0][1]["id"] == "CH1"
     assert len(g["nodes"]) == 2

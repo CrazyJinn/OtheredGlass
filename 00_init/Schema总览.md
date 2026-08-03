@@ -77,7 +77,7 @@
 | **剧情** | | | | |
 | has_section | Chapter → Section | 1:N | ✅ | 章→节（组成关系，级联重做） |
 | contains | Section → Scene | N:M | ❌ | 节编排场景顺序 |
-| depicts | Scene → StandingIllustration | N:N | ❌ | 场景需要的立绘变体（按需出图门控） |
+| depicts | Scene → IllusDesign | N:N | ❌ | 场景需要的着装立绘（按需出图门控；变体经 expands_to 跟踪） |
 
 ---
 
@@ -130,5 +130,5 @@ flowchart LR
     Scene -->|"has_layer ✅ 1:N"| SceneLayer
     Chapter -->|"has_section ✅ 1:N"| Section
     Section -->|"contains ❌ N:M"| Scene
-    Scene -->|"depicts ❌ N:N"| StandingIllus
+    Scene -->|"depicts ❌ N:N"| IllusDesign
 ```

@@ -223,14 +223,17 @@ def _render_line(line):
 
 
 def _render_chapter_subgraph(g, sections):
-    """渲染 has_section→Section→contains→Scene→depicts→立绘缺口（含就绪计数）。"""
+    """渲染 has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→立绘缺口（含就绪计数）。"""
     nodes_by_id = {n["id"]: n for n in g["nodes"]}
     scenes_of = {}   # sec_id -> [scene_id]
-    stands_of = {}   # scene_id -> [stand_id]
+    illus_of = {}    # scene_id -> [illus_id]   (via depicts)
+    stands_of = {}   # illus_id -> [stand_id]   (via expands_to)
     for e in g["edges"]:
         if e["type"] == "contains":
             scenes_of.setdefault(e["from"], []).append(e["to"])
         elif e["type"] == "depicts":
+            illus_of.setdefault(e["from"], []).append(e["to"])
+        elif e["type"] == "expands_to":
             stands_of.setdefault(e["from"], []).append(e["to"])
 
     stands = [n for n in g["nodes"] if n["label"] == "StandingIllustration"]
@@ -254,12 +257,18 @@ def _render_chapter_subgraph(g, sections):
                 st.caption("无场景（contains 边未建立）")
             for sn in scene_nodes:
                 _badge_line(sn.get("name") or sn["id"], sn["status"])
-                stand_ids = stands_of.get(sn["id"], [])
-                stand_nodes = [nodes_by_id[tid] for tid in stand_ids if tid in nodes_by_id]
-                for stn in stand_nodes:
-                    sfull = graph_repo.get_node(stn["id"]) or {}
-                    variant = sfull.get("variant_label", stn["id"])
-                    _badge_line(f"└ {variant}", stn["status"])
+                illus_ids = illus_of.get(sn["id"], [])
+                illus_nodes = [nodes_by_id[iid] for iid in illus_ids if iid in nodes_by_id]
+                for ind in illus_nodes:
+                    ifull = graph_repo.get_node(ind["id"]) or {}
+                    illus_name = ifull.get("name") or ind["id"]
+                    _badge_line(f"└ {illus_name}", ind["status"])
+                    stand_ids = stands_of.get(ind["id"], [])
+                    stand_nodes = [nodes_by_id[tid] for tid in stand_ids if tid in nodes_by_id]
+                    for stn in stand_nodes:
+                        sfull = graph_repo.get_node(stn["id"]) or {}
+                        variant = sfull.get("variant_label", stn["id"])
+                        _badge_line(f"   └ {variant}", stn["status"])
 
 
 def _badge_line(label, status):

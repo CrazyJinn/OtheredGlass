@@ -174,11 +174,11 @@ MATCH (illus:IllusDesign {id:'<illus_id>'}), (stand:StandingIllustration {id:'<s
 MERGE (illus)-[r:expands_to]->(stand) SET r.sync = true, r.variant_label = '<variant_label>';
 MATCH (voice:LanguageStyle {id:'<voice_id>'}), (stand:StandingIllustration {id:'<stand_id>'})
 MERGE (voice)-[r:ref_style]->(stand) SET r.sync = true;
-MATCH (s:Scene {name:'<scene_name>'}), (stand:StandingIllustration {id:'<stand_id>'})
-MERGE (s)-[r:depicts]->(stand) SET r.sync = false;
+MATCH (s:Scene {name:'<scene_name>'}), (illus:IllusDesign {id:'<illus_id>'})
+MERGE (s)-[r:depicts]->(illus) SET r.sync = false;
 ```
 
-> `expands_to`/`ref_style` 边 `sync=true`（上游更新会级联重置该立绘）；`depicts` 边 `sync=false`（编排引用，不级联）。depicts 绑在 **Scene** 上（与 Section 无关），Scene 节点不消失则引用持续生效。这些 `status=0` 的立绘缺口节点是 **plot-design 后续按 depicts 直调 `char-stand-designer <stand_id>` 推进**的输入。
+> `expands_to`/`ref_style` 边 `sync=true`（上游更新会级联重置该立绘）；`depicts` 边 `sync=false`（编排引用，不级联）。depicts 绑在 **Scene→IllusDesign**（同 Scene 同 IllusDesign 经 MERGE 去重），变体级缺口由 expands_to 跟踪。Scene 节点不消失则引用持续生效。这些 `status=0` 的立绘缺口节点是 **plot-design 后续按 `Scene-[:depicts]->IllusDesign-[:expands_to]->stand` 两跳枚举，对 status≠11 的 stand 直调 `char-stand-designer <stand_id>` 推进**的输入。
 
 **status 写入**：定稿+校验通过 → `Section.status=30`（定稿待审，等 dashboard 终审 `approve`→`31`）；schema 失败/草稿 → `20`；创作质量 FAIL → 不写 status（见段 2 末尾）。
 
