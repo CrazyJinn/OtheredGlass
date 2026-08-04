@@ -33,8 +33,49 @@ def _union(*lists):
     return out
 
 
-def merge(section_paths, chapter, title):
-    """读入各节定稿 YAML（按 section_no 顺序），返回合并后的 {meta, scenes} dict。"""
+_PORTRAIT_OPS = ("say", "show")
+
+
+def _rewrite_portraits(scenes, pmap):
+    """按 scene-block 的 scene 字段查 pmap，把 say/show.portrait 从纯变体改写为整键。
+
+    pmap = {scene_name: {char: {variant: 整键}}}（generate_portrait_map.py 产出）。
+    着装是 Scene 属性，同 scene_name 的所有 block 共享同一组绑定。
+    """
+    for blk in scenes:
+        char_map = pmap.get(blk.get("scene"))
+        if not char_map:
+            continue
+        for line in blk.get("lines", []) or []:
+            if line.get("op") in _PORTRAIT_OPS:
+                new = char_map.get(line.get("who"), {}).get(line.get("portrait"))
+                if new is not None:
+                    line["portrait"] = new
+
+
+def _derive_portraits_from_lines(scenes):
+    """从改写后的全章 say/show.portrait 字段保序去重收集（整键集合）。
+
+    带 portrait-map 时 requires.portraits 用此重推导，保证与 lines 内引用一致。
+    """
+    out, seen = [], set()
+    for blk in scenes:
+        for line in blk.get("lines", []) or []:
+            if line.get("op") in _PORTRAIT_OPS:
+                p = line.get("portrait")
+                if p and p not in seen:
+                    seen.add(p)
+                    out.append(p)
+    return out
+
+
+def merge(section_paths, chapter, title, portrait_map=None):
+    """读入各节定稿 YAML（按 section_no 顺序），返回合并后的 {meta, scenes} dict。
+
+    portrait_map 非 None 时：合并后按 scene 改写 say/show.portrait 为 guid 整键，
+    requires.portraits 从改写后的 lines 重推导（不再取各节并集）。
+    portrait_map 为 None 时行为不变（向后兼容）。
+    """
     sections = []
     for sp in section_paths:
         with open(sp, "r", encoding="utf-8") as f:
@@ -61,6 +102,11 @@ def merge(section_paths, chapter, title):
             seen_ids.add(bid)
             scenes.append(blk)
 
+    # portrait 整键改写（搬运层 guid 唯一键，解决同角色换装同名覆盖）
+    if portrait_map:
+        _rewrite_portraits(scenes, portrait_map)
+        requires["portraits"] = _derive_portraits_from_lines(scenes)
+
     return {"meta": {"chapter": chapter, "title": title, "requires": requires}, "scenes": scenes}
 
 
@@ -70,10 +116,21 @@ def main(argv):
     p.add_argument("--chapter", required=True, help="章节编号（meta.chapter）")
     p.add_argument("--title", required=True, help="章节标题（meta.title）")
     p.add_argument("-o", "--out", required=True, help="输出章 JSON 路径")
+    p.add_argument("--portrait-map", default=None,
+                   help="portrait-map JSON 路径（generate_portrait_map.py 产出）；"
+                        "传入则把 say/show.portrait 改写为 guid 整键")
     args = p.parse_args(argv)
 
+    portrait_map = None
+    if args.portrait_map:
+        try:
+            portrait_map = json.loads(Path(args.portrait_map).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as e:
+            sys.stderr.write(f"读取 portrait-map 失败: {e}\n")
+            return 1
+
     try:
-        doc = merge(args.inputs, args.chapter, args.title)
+        doc = merge(args.inputs, args.chapter, args.title, portrait_map)
     except (OSError, yaml.YAMLError, ValueError) as e:
         sys.stderr.write(f"合并失败: {e}\n")
         return 1

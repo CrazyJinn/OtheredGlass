@@ -2,13 +2,24 @@
   "portraits": {
     "陈默.沉重": "assets/portraits/陈默.沉重.png",
     "陈默.释然": "assets/portraits/陈默.释然.png",
-    "陈默.疲惫": "assets/portraits/陈默.疲惫.png"
+    "陈默.疲惫": "assets/portraits/陈默.疲惫.png",
+    "陆择-赤裸上身-慵懒-PHSE4iftNQ": "assets/portraits/陆择-赤裸上身-慵懒-PHSE4iftNQ.png",
+    "陆择-商务休闲着装-慵懒-PJajqyM6s4": "assets/portraits/陆择-商务休闲着装-慵懒-PJajqyM6s4.png",
+    "陆择-赤裸上身-玩味-PHSE4iftNR": "assets/portraits/陆择-赤裸上身-玩味-PHSE4iftNR.png",
+    "陆择-商务休闲着装-玩味-PJajqyM6s5": "assets/portraits/陆择-商务休闲着装-玩味-PJajqyM6s5.png",
+    "陆择-赤裸上身-轻佻-PHSE4iftNS": "assets/portraits/陆择-赤裸上身-轻佻-PHSE4iftNS.png",
+    "陆择-商务休闲着装-轻佻-PJajqyM6s6": "assets/portraits/陆择-商务休闲着装-轻佻-PJajqyM6s6.png",
+    "顾盈-酒店晨离着装-慵懒-P2vQL2d9da": "assets/portraits/顾盈-酒店晨离着装-慵懒-P2vQL2d9da.png",
+    "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc": "assets/portraits/顾盈-酒店晨离着装-挑眉-P2vQL2d9dc.png",
+    "顾盈-酒店晨离着装-玩味-P2vQL2d9db": "assets/portraits/顾盈-酒店晨离着装-玩味-P2vQL2d9db.png"
   },
   "scenes": {
     "长江大桥-栏杆": "assets/scenes/长江大桥-栏杆.png",
     "出租屋": "assets/scenes/出租屋.png",
     "酒店-客房": "assets/scenes/酒店-客房.png",
-    "马路-路口": "assets/scenes/马路-路口.png"
+    "马路-路口": "assets/scenes/马路-路口.png",
+    "灵魂夹缝-夹缝空间": "assets/scenes/灵魂夹缝-夹缝空间.png",
+    "街角咖啡店-点餐台": "assets/scenes/街角咖啡店-点餐台.png"
   },
   "bgm": {
     "夜风": "assets/bgm/夜风.ogg"

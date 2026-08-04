@@ -51,13 +51,21 @@ def test_submit_rejects_chapter_other_stages():
 
 
 def test_on_edit_reverts_approved():
-    assert approval.on_edit(11) == 0
+    assert approval.on_edit("DesignSheet", 11) == 0
+    assert approval.on_edit("Chapter", 11) == 0
+
+
+def test_on_edit_section_final_approved_reverts_to_outline():
+    """Section 定稿已批(31) 被编辑 → 回提纲就绪(20) 重做定稿（提纲保留）。"""
+    assert approval.on_edit("Section", 31) == 20
 
 
 def test_on_edit_keeps_other():
-    assert approval.on_edit(2) is None
-    assert approval.on_edit(10) is None
-    assert approval.on_edit(0) is None
+    assert approval.on_edit("DesignSheet", 2) is None
+    assert approval.on_edit("DesignSheet", 10) is None
+    assert approval.on_edit("DesignSheet", 0) is None
+    assert approval.on_edit("Section", 20) is None
+    assert approval.on_edit("Section", 30) is None
 
 
 def test_section_approval_reuses_chapter_final_stage():

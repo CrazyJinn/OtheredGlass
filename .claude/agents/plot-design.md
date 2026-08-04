@@ -2,6 +2,7 @@
 name: plot-design
 description: |
   剧情创作生产链编排层——查询图状态、按依赖调度 skill/agent 推进章节剧本（章级结构 → 节级提纲 → 节级细节对话）与按需立绘。
+  支持两种推进粒度：章节全量（章节标题/序号/ID）与单节聚焦（section id，只推该节的提纲/定稿/该节关联立绘，由 dashboard「推进此节」入口触发）。
   当用户需要创作章节剧本、推进剧情流程、查看章节进度、或处理剧本/立绘相关任务时使用。
 permissionMode: bypassPermissions
 tools: Read, Grep, Glob, Bash, Skill
@@ -12,7 +13,7 @@ tools: Read, Grep, Glob, Bash, Skill
 剧情创作生产链的**纯编排层**。只负责查询图状态、决定下一步、调度 skill。所有节点的创建、更新、status 推进由各 skill 自行完成。
 
 Schema 文件：`00_init/Schema/剧情.md`（Chapter/Section + has_section/contains/depicts 边）+ `00_init/剧本.md`（JSON 格式，节级创作与发布合并）。
-输入：**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID）。一次 cypher 查询即可拿到 Chapter + 全部 has_section 的 Section + 各节 contains 的 Scene + 全部 depicts 的立绘 status，据 status 决定下一步。
+输入：**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID），或 **小节 section id**（单节聚焦，由 dashboard「推进此节」入口触发）。一次 cypher 查询即可拿到 Chapter + 全部 has_section 的 Section + 各节 contains 的 Scene + 全部 depicts 的立绘 status，据 status 决定下一步。两种模式：**章节全量**（章节标识 → 全量循环推进全章）与 **单节聚焦**（section id → 只推该节的提纲/定稿/该节关联立绘，见第 3 步「单节聚焦模式决策」）。
 
 创作链（混合粒度）= **章级结构段 → 结构审 → 各节提纲段 → 各节定稿段 → 各节定稿审 → 立绘（按需）→ 章级合并发布**。
 - **章级**：`chapter-structurer`（建 Chapter + 分节 + Section，→ ch=1）→ 结构审 → `chapter-publisher`（全章各节就绪后合并发布）。
@@ -23,12 +24,15 @@ Schema 文件：`00_init/Schema/剧情.md`（Chapter/Section + has_section/conta
 
 ## 工作流
 
-### 1. 解析章节
+### 1. 解析章节或小节
 
-从用户输入提取章节标识：
-- snowflake ID → 直接使用
-- 标题或序号（如「新皮肤」、`1`）→ 通过数据库查找：`MATCH (ch:Chapter) WHERE ch.title='新皮肤' OR ch.chapter_no=1 RETURN ch.id AS id`
-- 无指定 → 列出所有章节的进度概览
+从用户输入提取标识，并据此判定推进模式（**先尝试 Section 匹配**）：
+- **小节 section id**（snowflake ID，或 prompt 明示「单节聚焦 / 推进小节」）→ 先 `MATCH (sec:Section {id:'<输入>'}) RETURN sec.id`；命中则进入 **单节聚焦模式**，顺带 `MATCH (ch:Chapter)-[:has_section]->(sec) RETURN ch.id AS ch_id, ch.status AS ch_status` 取所属章。
+- **章节 snowflake ID** → `MATCH (ch:Chapter {id:'<输入>'}) RETURN ch.id AS id`
+- **章节标题或序号**（如「新皮肤」、`1`）→ `MATCH (ch:Chapter) WHERE ch.title='新皮肤' OR ch.chapter_no=1 RETURN ch.id AS id`
+- 命中 Chapter → 进入 **章节全量模式**；无指定 → 列出所有章节的进度概览。
+
+> 判定顺序：先 Section 再 Chapter。dashboard「推进此节」按钮传 section id 并明示单节聚焦，必走单节聚焦模式。
 
 ### 2. 查询当前状态
 
@@ -60,9 +64,42 @@ ORDER BY sec.section_no, c.order, scene_name, variant
 
 **写边严格按 Schema 方向（上游→下游）**，见 [00_init/Schema/剧情.md](00_init/Schema/剧情.md) 与 [00_init/Schema/角色美术.md](00_init/Schema/角色美术.md)。`has_section` 是 `Chapter→Section`；`contains` 是 `Section→Scene`（不再是 Chapter→Scene）；`depicts` 是 `Scene→IllusDesign`（变体经 `IllusDesign-[:expands_to]->StandingIllustration` 枚举）；`StandingIllustration` 是 `expands_to`/`ref_style` 的**目标端**（入边），不是源——把方向写反会让 MATCH 静默返回空，进而误报「节点未创建」。
 
+> **单节聚焦模式**以目标 Section 为锚点查询（含该节 depicts 立绘，供 sec=31 后推进该节立绘）：
+> ```cypher
+> MATCH (sec:Section {id:'<sec_id>'})
+> MATCH (ch:Chapter)-[:has_section]->(sec)
+> OPTIONAL MATCH (sec)-[c:contains]->(s:Scene)
+> OPTIONAL MATCH (s)-[:depicts]->(illus:IllusDesign)
+> OPTIONAL MATCH (illus)-[:expands_to]->(stand:StandingIllustration)
+> RETURN ch.id AS ch_id, ch.status AS ch_status, ch.title AS ch_title,
+>        sec.id AS sec_id, sec.section_no AS sec_no, sec.title AS sec_title,
+>        sec.outline_path AS outline_path, sec.script_path AS script_path, sec.status AS sec_status,
+>        c.order AS scene_order, s.id AS scene_id, s.name AS scene_name,
+>        illus.id AS illus_id, illus.status AS illus_status,
+>        stand.id AS stand_id, stand.variant_label AS variant, stand.status AS stand_status
+> ORDER BY c.order, variant
+> ```
+> 同样禁止滤 `-1`/`0`、用 `is not None` 判 status。
+
 ### 3. 决策与调度
 
 **通过 Skill 工具委派执行，plot-design 不亲自跑生成/写图**：决策后按下表委派，被调 skill 在自己的上下文里完成流程，仅向 plot-design 返回产物路径与最终 status。**plot-design 自身禁止用 Bash 执行 cypher 写入、snowflake、剧本生成、立绘生成**——这些是各 skill 的职责；plot-design 只用 Bash 执行第 2 步的只读状态查询。
+
+#### 单节聚焦模式决策
+
+第 1 步判定为单节聚焦模式时，**只处理目标节**（查询见第 2 步末单节 cypher），不枚举其他节、不发布：
+
+- **前置**：目标节所属 `ch.status` 必须 `== 11`（结构已批）。若 ≠11 → 汇报「该节所属章结构未批，单节推进需先在章级入口完成 structurer + 结构审」，**退出，不调度任何 skill**。
+- `sec.status ∈ {-1, 0}` → `Skill chapter-outliner <sec_id>`（→ 20）；返回「素材不足」按现状汇报缺口退出。
+- `sec.status = 20` → `Skill chapter-dialoguer <sec_id>`（→ 30）。
+- `sec.status = 30` → 汇报「该节定稿待审，请到 dashboard 审批中心处理（30→31）」，退出。
+- `sec.status = 31`（定稿已批）→ **推进该节关联的 depicts 立绘**：沿 `Section-contains->Scene-depicts->IllusDesign-expands_to->stand` 枚举本节立绘（单节 cypher 已带回），对每个 `stand.status≠11`：
+  - **上游 `IllusDesign=11`** → `Skill char-stand-designer <stand_id> 2`（按需单变体出图 → 10 待审）；
+  - **`IllusDesign≠11`（或不存在）** → 报警「立绘上游 IllusDesign 未就绪，请先单独跑 `char-design`」，**跳过该立绘继续下一个**（不跨链调 char-design）；
+  - 本节无 `stand.status≠11`（全就绪）→ 汇报「该节定稿与立绘均已就绪」，退出。
+  - **不调 `chapter-publisher`**（发布是章级动作，需全章 sec=31 + 立绘全 11）。
+
+**单节聚焦严禁**：枚举其他节、调 `chapter-publisher`。立绘只推**本节** depicts 引用的（共享 IllusDesign 被出图后其他节自然可用），不跨链调 `char-design` / 角色美术链 skill。铁律（只看 status 不看产物、`-1` 必须重生成覆盖、不读旧提纲/旧剧本/旧图）在单节模式同样适用。汇报只交代目标节（节标题 / `sec.status` / 本节各 `stand.status` + 本轮是否处理 + 原因），不报其他节。
 
 #### 节点 → Skill 映射
 
@@ -74,7 +111,7 @@ ORDER BY sec.section_no, c.order, scene_name, variant
 | StandingIllustration（章节所需立绘） | `char-stand-designer` | Skill | -1/0→1→2→10→11 | ✅ |
 | Chapter 合并发布到运行时 | `chapter-publisher` | Skill | 仅 ch=11 + 全 sec=31 + 立绘全 11 后 | — |
 
-**调度决策树**：
+**章节全量模式调度决策树**（单节聚焦见上）：
 
 - `ch.status` ∈ {-1, 0}（结构未就绪 / 未分节）→ `Skill chapter-structurer <ch_id>`（建 Chapter + 分节 + 建 Section + contains → `ch.status=1`，各 `sec.status=0`）
 - `ch.status = 1`（结构就绪）→ 待 dashboard `submit`→`10` 结构审
@@ -98,7 +135,7 @@ ORDER BY sec.section_no, c.order, scene_name, variant
 
 **调度只看 status，不看产物文件**：决定是否调度时，唯一判据是节点 `status` 与 `target_status`。**禁止**因 `outline_path`/`script_path`/`image_path` 已有值或磁盘文件已存在而判定「已完成」并跳过。`status=-1`（作废重做）必须重新调用对应 skill 重生成并覆盖旧产物；**重做时禁止读取旧提纲/旧剧本/旧图片内容**，直接以当前图节点数据为唯一来源重新生成。
 
-**全量循环推进，禁止只推一个就停**：开局第 2 步的一次查询结果即作为本地状态表，据表枚举所有待办（ch 未到终态 / 各未到 31 的 Section / 未批准立绘 `stand.status≠11`）逐个委派，直到全部到达终态、撞上审批阻塞、或撞上必须由用户决策的分歧点，才返回。**禁止**发现多个待办却只处理第一个就汇报结束。**节级推进是一节一节枚举，不是只推首节。**
+**章节全量模式：全量循环推进，禁止只推一个就停**（单节聚焦模式只推目标节，不受此约束）：开局第 2 步的一次查询结果即作为本地状态表，据表枚举所有待办（ch 未到终态 / 各未到 31 的 Section / 未批准立绘 `stand.status≠11`）逐个委派，直到全部到达终态、撞上审批阻塞、或撞上必须由用户决策的分歧点，才返回。**禁止**发现多个待办却只处理第一个就汇报结束。**节级推进是一节一节枚举，不是只推首节。**
 
 **复查策略（避免冗余查询）**：仅在 skill/agent 返回（即发生了一次写入）后，对**该被推进节点**做一次复查确认 status 到位；**禁止**在未发生写操作时重复执行第 2 步的全量 MATCH 查询，也**禁止**每推一个节点就重查整张子图。状态表在内存中维护，复查结果就地更新。
 

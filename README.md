@@ -7,7 +7,7 @@
 >   1. plot-design 创作侧拆为 `chapter-structurer` → `chapter-outliner` → `chapter-dialoguer` 三步（已替代原一次性 `screenwriter`，后者已删除）。
 >   2. **StandingIllustration 的调用从 `char-design` 剥离，改由 `plot-design` 直接调度**——`char-design` 终点收窄到 `IllusDesign`；`char-stand-designer` 改为 stand_id 按需模式（按剧情 depicts 引用逐个出图，移除角色级批量备货与 P0/P1/P2 数量限制），变体需求由 chapter-dialoguer 据剧本 `say.portrait` 提出。
 >
-> 互补文档：[refer.md](refer.md)（节点治理手册：status / sync 级联 / 审批规则）。子项目指南：[55_dashboard/CLAUDE.md](55_dashboard/CLAUDE.md)（后台）、[99_game/README.md](99_game/README.md)（Godot 工程）。
+> 互补文档：节点 status / sync 级联 / 审批规则的权威源是 [55_dashboard/core/status.py](55_dashboard/core/status.py)（NODE_STATUS）、[core/cascade.py](55_dashboard/core/cascade.py)、[00_init/Schema/](00_init/Schema/)。子项目指南：[55_dashboard/CLAUDE.md](55_dashboard/CLAUDE.md)（后台）、[99_game/README.md](99_game/README.md)（Godot 工程）。
 
 ---
 
@@ -88,8 +88,8 @@ sequenceDiagram
 | IllusDesign | 图片完成 → 10 | StandingIllustration（plot-design 按 depicts 推进） |
 | StandingIllustration | 图片完成 → 10 | 无下游；作为发布前置（质量确认） |
 | SceneLayer | 图片完成 → 10 | 无下游；作为发布前置 |
-| Chapter（章节结构） | 结构就绪 → 10 | 创作（提纲 / 细节对话），批准→11 |
-| Chapter（定稿） | 定稿完成 → 30 | 立绘 + 发布，批准→31 |
+| Chapter | 结构就绪 → 10 | 各节提纲 / 定稿生产（批准→11 进入节级生产） |
+| Section | 定稿完成 → 30 | 立绘 + 全章合并发布（批准→31） |
 
 > AppearanceStyle / LanguageStyle / CostumeStyle / Scene 等数据节点完成值 `1`，**无审批**。
 
@@ -206,9 +206,9 @@ sequenceDiagram
 
 ## plot-design —— 剧情创作生产链
 
-> **唯一职责**：推进某章节从「建结构 → 创作（提纲 + 细节对话）→ 立绘 → 发布」全链到运行时。输入**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID）。
+> **唯一职责**：推进某章节从「建结构 → 创作（提纲 + 细节对话）→ 立绘 → 发布」全链到运行时。输入**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID），或**小节 section id**（单节聚焦，由 dashboard「推进此节」入口触发，只推该节的提纲/定稿）。
 >
-> 创作链 = **结构段 → 结构审 → 提纲段 → 定稿段 → 定稿审 → 立绘（按需）→ 发布**：
+> 创作链（混合粒度）= **章级结构段 → 结构审 → 各节提纲段 → 各节定稿段 → 各节定稿审 → 立绘（按需）→ 章级合并发布**。结构段与发布是**章级**，提纲/定稿是**节级**（各节独立推进、独立审批、独立重做）：
 > 1. 创作侧拆为 `chapter-structurer`（建结构）→ `chapter-outliner`（提纲）→ `chapter-dialoguer`（定稿），原 `screenwriter` 已删除。
 > 2. 立绘侧：**StandingIllustration 由 plot-design 直接调 `char-stand-designer <stand_id>`**（按需）；上游 `IllusDesign` 未就绪时**报警跳过**（不跨链调 `char-design`，角色美术链由人工单独跑）。
 > 3. 素材门控：**outliner 自检 event 不够丰满时拒绝产出提纲并报告缺口**，plot-design 汇报后退出（剧情链不内置自增长）——用户手动跑 `nrt-narrative-grower`（可选聚焦入参 + 多轮迭代）补全叙事基础后重调 plot-design。
@@ -217,22 +217,23 @@ sequenceDiagram
 
 | 阶段 | Skill | 状态 | 职责 |
 |------|-------|------|------|
-| ① 建章节 | `chapter-structurer` | ✅ 已实现 | 在图中建 Chapter 节点，把 N 个 Scene 统合进来（contains 边） |
-| ② 出提纲 | `chapter-outliner` | ✅ 已实现 | 为章节产出提纲（`25_剧本/*.outline.yaml`） |
-| ③ 细节对话 | `chapter-dialoguer` | ✅ 已实现 | 基于提纲创作细节对话，产出定稿剧本到 `25_剧本/` |
+| ① 建章节结构 | `chapter-structurer` | ✅ 已实现 | 建 Chapter + 按情感弧分节建 Section（has_section）+ 各节 `Section-contains->Scene`，预分配全章 scene-block id |
+| ② 出节级提纲 | `chapter-outliner` | ✅ 已实现 | 为**每节**产出提纲（入参 section_id，落盘 `25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.yaml`） |
+| ③ 节级细节对话 | `chapter-dialoguer` | ✅ 已实现 | 基于**本节**提纲创作逐句对话，产出定稿到 `25_剧本/.../sec<MM>_/完整对话.yaml` + 建 depicts 立绘缺口（入参 section_id） |
 
-> **门控**：① 建章节结构 → 结构审通过 → 才进入 ②③ 创作；细节对话定稿终审通过 + 立绘全 `11` → 才发布。
-> **Chapter status 三段**：结构 `0→1→10→11` / 提纲 `→20` / 定稿 `→30→31`（两道审批：结构审 + 定稿审）。
+> **门控**：① 建章节结构 → 结构审通过（ch=11）→ 才进入 ②③ 节级创作；**全章各节定稿终审通过（sec=31）+ 立绘全 `11` → 才发布**。
+> **两套 status**：Chapter 章级结构段 `0→1→10→11`（结构审，completion=11）；Section 节级 `0→20→30→31`（提纲就绪→定稿待审→定稿已批，定稿审 completion=31）。**提纲/定稿挂在 Section，不是 Chapter**。
+> **推进粒度**：dashboard 章行「推进剧情创作」= 章节全量（structurer/发布/全量循环）；各节「推进此节」（`ch.status==11` 且该节 `status∈{-1,0,20,31}` 时出现）= 单节聚焦（plot-design 只推该节的提纲/定稿；`sec=31` 时推该节关联立绘，不碰其他节、不发布）。
 
 ### 节点 → Skill 映射
 
 | 图节点 | 委派对象 | 工具 | Status 流程（示意） | 审批 |
 |--------|---------|------|-------------------|------|
-| Chapter（章节结构） | `chapter-structurer` | Skill | -1/0→1→10→11 | ✅ 结构审 |
-| Chapter（提纲） | `chapter-outliner` | Skill | →20 | — |
-| Chapter（细节对话） | `chapter-dialoguer` | Skill | →30→31 | ✅ 定稿审 |
+| Chapter（章级结构） | `chapter-structurer` | Skill | -1/0→1→10→11 | ✅ 结构审 |
+| Section（节级提纲） | `chapter-outliner` | Skill | -1/0→20 | — |
+| Section（节级定稿） | `chapter-dialoguer` | Skill | →30→31 | ✅ 定稿审 |
 | StandingIllustration | `char-stand-designer` | **Skill（plot-design 直调 stand_id）** | -1/0→1→2→10→11 | ✅ |
-| Chapter 发布 | `chapter-publisher` | Skill | 仅 Chapter=31 且 立绘全 11 后 | — |
+| Chapter 合并发布 | `chapter-publisher` | Skill | 仅 ch=11 + 全 sec=31 + 立绘全 11 后 | — |
 
 ### 时序图
 
@@ -247,38 +248,40 @@ sequenceDiagram
     participant Stand as char-stand-designer
     participant Pub as chapter-publisher
 
-    U->>A: 章节标题/序号/ID（如「新皮肤」）
+    U->>A: 章节标题/序号/ID（如「新皮肤」）<br/>或 section id（单节聚焦：只推该节）
 
     rect rgb(235, 245, 255)
     Note over A,DB: ① 解析 + 只读查全量状态
     A->>DB: MATCH (ch:Chapter{title/chapter_no}) RETURN ch.id
-    A->>DB: 一次查 Chapter + contains的Scene<br/>+ depicts的立绘 + 立绘所属角色（只读）
+    A->>DB: 一次查 Chapter + has_section的Section + 各节contains的Scene<br/>+ depicts的立绘 + 立绘所属角色（只读）
     DB-->>A: 本地状态表
     end
 
     rect rgb(255, 248, 240)
-    Note over A,DG: ② 创作（structurer → outliner → dialoguer 三 skill 串行）
+    Note over A,DG: ② 创作（structurer 建结构+分节 → 结构审 → 各节 outliner 提纲 → dialoguer 定稿）
     opt 章节结构未就绪（未建 / -1 重做）
         A->>ST: Skill chapter-structurer ch_id
-        Note right of ST: 建 Chapter + 统合 N 个 Scene（contains）
-        ST-->>A: 结构就绪（status=1）→ submit 10 结构待审
+        Note right of ST: 建 Chapter + 按情感弧分节建 Section（has_section）<br/>+ 各节 Section-contains->Scene，预分配 scene-block id
+        ST-->>A: 结构就绪（ch=1，各 sec=0）→ submit 10 结构待审
         Note over A: ⏸ 结构审 → 11（见 §2 审批流程）
     end
-    opt 结构 11 且提纲未出
-        A->>OL: Skill chapter-outliner ch_id（自检 event 丰满度）
-        alt event 素材够
-            OL-->>A: 提纲就绪（status=20）
-        else event 素材不足
-            OL-->>A: 报缺口（不写 status）
-            A-->>U: 📋 素材不足 + 缺口清单<br/>请手动跑 nrt-narrative-grower 补全叙事基础后重调
-            Note over A,U: 退出（剧情链不内置自增长，用户手动跑 grower）
+    loop 结构 11（已批）后，遍历各 Section（按 section_no 逐节推进）
+        opt sec ∈ {-1,0}（待提纲）
+            A->>OL: Skill chapter-outliner sec_id（自检本节 event 丰满度）
+            alt event 素材够
+                OL-->>A: 节级提纲就绪（sec=20）
+            else event 素材不足
+                OL-->>A: 报缺口（不写 status）
+                A-->>U: 📋 素材不足 + 缺口清单<br/>请手动跑 nrt-narrative-grower 补全叙事基础后重调
+                Note over A,U: 退出（剧情链不内置自增长，用户手动跑 grower）
+            end
         end
-    end
-    opt 提纲就绪且细节对话未定稿（含 -1 重做）
-        A->>DG: Skill chapter-dialoguer ch_id
-        Note right of DG: 基于提纲创作细节对话<br/>产出定稿 25_剧本/
-        DG-->>A: 定稿 → 30 定稿待审
-        Note over A: ⏸ 定稿审 → 31（见 §2 审批流程）
+        opt sec=20（提纲就绪，定稿未出 / -1 重做）
+            A->>DG: Skill chapter-dialoguer sec_id
+            Note right of DG: 基于本节提纲创作逐句对话<br/>产出定稿 25_剧本/.../sec<MM>/
+            DG-->>A: 定稿 → sec=30 定稿待审
+            Note over A: ⏸ 定稿审 → 31（见 §2 审批流程）
+        end
     end
     end
 
@@ -298,7 +301,7 @@ sequenceDiagram
     end
     end
 
-    opt 定稿 31 且立绘全 11
+    opt 全章各 sec=31 且 立绘全 11（章级发布门控）
         A->>Pub: Skill chapter-publisher ch_id
         Note right of Pub: 拷贝剧本+立绘/背景<br/>更新 manifest → 99_game/
         Pub-->>A: 发布完成 + 运行时入口
@@ -340,14 +343,14 @@ sequenceDiagram
 | scene-layer-designer | ② 图层 | 场景图层（文生图/图生图） | SceneLayer prompt + 图 | ✅ |
 | scene-prompt-assembler | 纯产出 | 组装场景提示词 | prompt 文件 | ❌ |
 
-### 剧情层（Chapter → 运行时）
+### 剧情层（Chapter + Section → 运行时）
 
 | Skill | 阶段 | 功能 | 主要产出 | 读写图 / 写 status |
 |-------|------|------|---------|-------------------|
-| chapter-structurer | ① 建章节 | 建 Chapter + 统合 N 个 Scene | Chapter + contains 边 | ✅ |
-| chapter-outliner | ② 提纲 | 为章节出提纲 | `25_剧本/*.outline.yaml` | ✅ |
-| chapter-dialoguer | ③ 细节对话 | 基于提纲创作细节对话，按情绪节拍规划立绘 portrait + 建 depicts 缺口 | 定稿剧本 `25_剧本/` | ✅ |
-| chapter-publisher | 发布 | 发布剧本 + 立绘/背景到运行时 | `99_game/` 资源 + manifest | ✅ |
+| chapter-structurer | ① 章级结构 | 建 Chapter + 按情感弧分节建 Section + 各节 `Section-contains->Scene` + 预分配 scene-block id | Chapter + has_section + Section + contains 边 | ✅ |
+| chapter-outliner | ② 节级提纲 | 为**每节**出提纲（入参 section_id） | `25_剧本/chapter<NN>_<概述>/sec<MM>_<概述>/outline.yaml` | ✅ |
+| chapter-dialoguer | ③ 节级定稿 | 基于**本节**提纲创作逐句对话，按情绪节拍规划立绘 portrait + 建 depicts 缺口（入参 section_id） | 定稿剧本 `25_剧本/.../sec<MM>_/完整对话.yaml` | ✅ |
+| chapter-publisher | 章级发布 | 全章各节定稿合并发布 + 立绘/背景到运行时 | `99_game/` 资源 + manifest | ✅ |
 
 ### 基础设施 & 元工具
 
@@ -392,7 +395,8 @@ sequenceDiagram
 │       └── 酒店-客房/
 │           └── background/           # 各图层背景图
 │
-├── 25_剧本/                          # 剧本产出（chapter-structurer/outliner/dialoguer → outline.yaml + 定稿 YAML）
+├── 25_剧本/                          # 剧本产出（章+节两层：structurer 出设计简报；outliner/dialoguer 按节产出）
+│   └── chapter<NN>_<章概述>/         # 每章一目录：设计简报.md + 各 sec<MM>_<节概述>/（outline.yaml + 完整对话.yaml）
 │
 ├── 55_dashboard/                     # 人工治理后台（Streamlit，http://localhost:8501）
 │   ├── config/                       # settings.py（凭证来源）

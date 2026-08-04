@@ -16,8 +16,11 @@ def test_has_approval():
 def test_is_approved():
     assert status.is_approved(11) is True
     assert status.is_approved(2) is False
-    # Chapter 定稿已批(31) 不被 is_approved 认定——on_edit 沿用 ==11，31 的精细回退未实现
+    # 无 label 时 31 不被认定（向后兼容）；Section 定稿已批(31) 带 label 才认定
     assert status.is_approved(31) is False
+    assert status.is_approved(31, "Section") is True
+    assert status.is_approved(11, "Section") is True
+    assert status.is_approved(20, "Section") is False
 
 
 def test_can_submit_only_at_completion():

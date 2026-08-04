@@ -80,3 +80,23 @@ def build_chapter_deeplink(ch_id, title=None):
 def render_chapter(ch_id, title=None, label="推进剧情创作"):
     import streamlit as st
     st.link_button(label, build_chapter_deeplink(ch_id, title))
+
+
+def build_section_deeplink(sec_id, sec_label=None):
+    """生成「推进此节」的 deeplink，调 plot-design agent 单节聚焦模式。
+
+    与章级入口互补：章级负责 structurer 分节 / 结构审 / 全章发布 / 全量推进；
+    节级只推进单节的提纲→定稿，不碰其他节、不触发立绘批量或发布。
+    """
+    name = sec_label or sec_id
+    prompt = (
+        f"使用 plot-design agent 推进小节 {name}（section id={sec_id}）的剧情创作。"
+        f"单节聚焦：推进该节的提纲/定稿，定稿已批(31)则推进该节关联的 depicts 立绘；"
+        f"不碰其他节、不发布。"
+    )
+    return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
+
+
+def render_section(sec_id, sec_label=None, label="推进此节"):
+    import streamlit as st
+    st.link_button(label, build_section_deeplink(sec_id, sec_label))

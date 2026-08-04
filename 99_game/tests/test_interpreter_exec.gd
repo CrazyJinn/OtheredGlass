@@ -33,3 +33,22 @@ func test_scene_block_bg_emitted_on_enter():
 	interp.bg_changed.connect(func(scene_name, time): bg = scene_name)
 	interp.start("chapter01_新皮肤", "桥上")
 	assert_eq(bg, "长江大桥-栏杆")
+
+func test_mid_scene_block_auto_advances_to_next():
+	"""中段 lines 执行完应顺序进下一段（套用其 bg），而非 chapter_finished。
+
+	序章 sec00（酒店）结尾无 jump，靠 scenes[] 顺序推进到 sec01（咖啡店）。
+	"""
+	var interp = preload("res://scripts/autoload/ScriptInterpreter.gd").new()
+	var bgs := []
+	var finished := false
+	interp.bg_changed.connect(func(s, t): bgs.append(s))
+	interp.chapter_finished.connect(func(): finished = true)
+	interp.start("chapter00_序章", "酒店")
+	assert_eq(bgs[-1], "酒店-客房", "首段 bg")
+	var safety := 200
+	while not finished and bgs.count("街角咖啡店-点餐台") == 0 and safety > 0:
+		interp.advance()
+		safety -= 1
+	assert_true("街角咖啡店-点餐台" in bgs, "酒店段完应自动推进到咖啡店段")
+	assert_false(finished, "中段段完不应触发 chapter_finished")

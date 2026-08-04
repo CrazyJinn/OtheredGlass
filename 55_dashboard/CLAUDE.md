@@ -55,10 +55,11 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 
 ## status 系统（治理的核心）
 
-`status` 值统一语义：`-1` 作废重做 / `0` 待处理 / `1` 已完成 / `2` 图片完成 / `10` 待审 / `11` 批准。每个 label 的合法值、完成态、是否走审批，在 [status.py](core/status.py) 的 `NODE_STATUS` 显式定义：
+`status` 值统一语义：`-1` 作废重做 / `0` 待处理 / `1` 已完成 / `2` 图片完成 / `10` 待审 / `11` 批准；剧情两层另用 `20` 提纲就绪 / `30` 定稿待审 / `31` 定稿已批。每个 label 的合法值、完成态、是否走审批，在 [status.py](core/status.py) 的 `NODE_STATUS` 显式定义：
 
-- 有审批（completion=2，可 submit→10→11）：`DesignSheet`/`IllusDesign`/`StandingIllustration`/`SceneLayer`
-- 无审批（completion=1）：`AppearanceStyle`/`LanguageStyle`/`CostumeStyle`/`Scene`
+- 美术有审批（completion=2，可 submit→10→11）：`DesignSheet`/`IllusDesign`/`StandingIllustration`/`SceneLayer`
+- 美术无审批（completion=1）：`AppearanceStyle`/`LanguageStyle`/`CostumeStyle`/`Scene`
+- **剧情两层**：`Chapter` 章级结构段（`0→1→10→11`，结构审，completion=11）；`Section` 节级提纲/定稿段（`0→20→30→31`，定稿审，completion=31；定稿 30 由 dialoguer 直写、不经 submit）
 - `Character`/`Location` **无 status 字段**，只作级联触发源。
 
 > 判断节点"有无 status"必须用 `is not None`——`status=0`（待处理）是合法 falsy，真值判断会误隐藏。
@@ -69,11 +70,23 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 
 [page_node_editor.py](ui/page_node_editor.py) 的保存后置流程是固定四步，改动顺序要谨慎：
 1. `update_node` 写属性；
-2. `approval.on_edit`：若该节点原 `status==11` → 自身回退到 `0`（审批失效）；
+2. `approval.on_edit(label, status)`：已批准则自身回退——通用 `11`→`0`；`Section` 定稿已批 `31`→`20`（保留提纲、重做定稿）；
 3. `cascade_reset` 重置下游为 `-1`；
 4. 弹 toast 反馈。
 
 > 注意：以代码为准，级联下游重置为 **`-1`**（设计文档 `docs/superpowers/specs/2026-06-17-dashboard-design.md` 验收标准里写成 `0` 是笔误）。
+
+## 剧情章节进度
+
+[page_chapter_overview.py](ui/page_chapter_overview.py) 是剧情模块唯一页面，按「章 + 节」两层展开：列出全部 `Chapter`（按 `chapter_no`），每章卡片下展示各 `Section`（按 `section_no`）的编排子图（`has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration`）与节级定稿 YAML 的逐句预览（review 对白质量，区别于美术节点审批看图）。
+
+两道审批落点不同：
+- **Chapter 结构审**（`10→11`）：就地按钮（章卡片内）。
+- **Section 定稿审**（`30→31`）：走全局「审批中心」（[page_approval.py](ui/page_approval.py)），不在本页。
+
+推进入口分两级（生成 `vscode://` deeplink 唤起 `plot-design` agent，见 [launch_button.py](ui/components/launch_button.py)）：
+- 章行「推进剧情创作」= **章节全量**（structurer 分节 / 结构审 / 全量循环推进 / 章级发布）。
+- 各节「推进此节」（`ch.status==11` 且该节 `status∈{-1,0,20,31}` 时出现）= **单节聚焦**（plot-design 只推该节的提纲/定稿；`sec=31` 时推该节关联的 depicts 立绘，不碰其他节、不发布）。
 
 ## 叙事审批（写 Cypher 进库）
 

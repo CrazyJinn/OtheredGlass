@@ -74,9 +74,14 @@ func _run_from_current() -> void:
 		var blk: Dictionary = _scenes[_scene_idx]
 		var lines: Array = blk["lines"]
 		if _line_idx >= len(lines):
-			# 当前段执行完且无 jump/ending：章节结束
-			chapter_finished.emit()
-			return
+			# 当前段执行完：顺序推进到下一段（套用其 scene+bgm）；末段完则章节结束。
+			# jump/choice 用于分支跳转，直线衔接靠 scenes[] 顺序，无需每段尾显式 jump。
+			_scene_idx += 1
+			if _scene_idx >= len(_scenes):
+				chapter_finished.emit()
+				return
+			_enter_scene_block()
+			continue
 		var line: Dictionary = lines[_line_idx]
 		var op: String = line["op"]
 		match op:

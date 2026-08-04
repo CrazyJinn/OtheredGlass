@@ -28,12 +28,15 @@ def reject(current_status):
     return 0
 
 
-def on_edit(current_status):
-    """编辑节点时：已批准(11)则回退到 0，否则不改（返回 None）。
+def on_edit(label, current_status):
+    """编辑节点时：已批准则回退，否则不改（返回 None）。
 
-    注意：Chapter 定稿已批(31) 的分阶段精细回退暂未实现，本次沿用 is_approved(==11) 判定，
-    故 31 态编辑不触发回退——列为后续完善。
+    - Section 定稿已批(31)→回提纲就绪(20)：保留提纲，重做定稿（Section 的 sync 出边 contains
+      为 sync=false，编辑 Section 不级联到 Scene，仅自身回退）。
+    - 其余已批准(11)→回 0（结构/美术重做）。
     """
-    if status.is_approved(current_status):
-        return 0
-    return None
+    if not status.is_approved(current_status, label):
+        return None
+    if label == "Section":
+        return 20
+    return 0

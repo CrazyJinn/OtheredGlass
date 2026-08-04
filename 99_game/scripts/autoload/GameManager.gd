@@ -37,9 +37,9 @@ func _add_action(action_name: String, keycodes: Array, mouse_buttons: Array) -> 
 		InputMap.action_add_event(action_name, em)
 
 ## 起始章节配置（Game 场景 _ready 时读这两个值启动解释器）。
-## start_new_game() 可传参覆盖；默认进 chapter01_新皮肤/桥上。
-var start_chapter := "chapter01_新皮肤"
-var start_scene := "桥上"
+## start_new_game() 可传参覆盖；默认进 chapter00_序章/酒店。
+var start_chapter := "chapter00_序章"
+var start_scene := "酒店"
 
 func start_new_game(chapter: String = "", scene: String = "") -> void:
 	# Game 场景 _ready 时自行调 ScriptInterpreter.start，避免跨场景 call_deferred 时序问题

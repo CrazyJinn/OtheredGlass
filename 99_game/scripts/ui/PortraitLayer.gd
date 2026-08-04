@@ -41,9 +41,14 @@ func apply_slots(slots: Dictionary) -> void:
 			tr.visible = true
 
 func _resolve(who: String, portrait: String) -> Texture2D:
-	var logical := "%s.%s" % [who, portrait]
+	# portrait 字段可能是：新格式 guid 整键（陆择-赤裸上身-慵懒-PHSE4iftNQ）或旧格式纯变体（慵懒）。
+	# 先按整键查（新章），空则拼 who 查旧二维键（旧章 fallback，如 chapter01）。
 	var man = Engine.get_singleton("Manifest") if Engine.has_singleton("Manifest") else null
-	var path: String = man.get_portrait(logical) if man else ""
+	var path: String = ""
+	if man:
+		path = man.get_portrait(portrait)
+		if path.is_empty():
+			path = man.get_portrait("%s.%s" % [who, portrait])
 	if path != "" and ResourceLoader.exists(path):
 		return load(path)
 	var pg = preload("res://scripts/util/PlaceholderGen.gd").new()

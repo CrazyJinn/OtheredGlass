@@ -41,8 +41,18 @@ def has_approval(label):
     return NODE_STATUS.get(label, {}).get("has_approval", False)
 
 
-def is_approved(status):
-    return status == 11
+def is_approved(status, label=None):
+    """已批准态：通用审批 11；Section 定稿已批 31。
+
+    注意美术节点（DesignSheet/IllusDesign/StandingIllustration/SceneLayer）的 completion=2
+    是历史遗留死值，实际审批走 10→11，故此处按「status==11」而非 completion_status 判定，
+    避免把 11 误判为未批准。
+    """
+    if status == 11:
+        return True
+    if label == "Section" and status == 31:
+        return True
+    return False
 
 
 def can_submit(label, current_status):

@@ -23,6 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from portrait_key import make_key
+
 ROOT = Path(__file__).resolve().parents[2]  # 99_game/tools/ → 项目根
 CYPHER_EXEC = ROOT / ".claude" / "scripts" / "cypher_exec.py"
 DEFAULT_MANIFEST = ROOT / "99_game" / "data" / "manifest.json"
@@ -52,21 +54,37 @@ def _run_cypher(cypher: str) -> list:
 
 
 def collect_portraits() -> dict:
-    """status=11 的立绘 → <char_name>.<variant_label>: assets/portraits/<...>.png"""
+    """status=11 的立绘 → guid 整键: assets/portraits/<整键>.png
+
+    整键 = make_key(char, variant, stand_id, costume) = <char>-<costume_short>-<variant>-<stand_id>。
+    stand_id（图 StandingIllustration.id）全局唯一，无需冲突检测；同角色换装两套图各得各键。
+    旧二维键（如陈默.沉重）由 build_manifest 的 existing 保留，供旧章 fallback。
+    """
     cypher = (
         "MATCH (char:Character)-[:" + CHAR_TO_STAND_EDGES + "*1..5]->"
         "(stand:StandingIllustration {status:11}) "
-        "RETURN DISTINCT char.name AS char_name, stand.variant_label AS variant "
+        "OPTIONAL MATCH (stand)<-[:expands_to]-(illus:IllusDesign)<-[:outfit_for]-(costume:CostumeStyle) "
+        "RETURN DISTINCT char.name AS char_name, stand.id AS stand_id, "
+        "stand.variant_label AS variant, costume.name AS costume_name "
         "ORDER BY char_name, variant"
     )
     portraits = {}
+    warned_orphan = []
     for r in _run_cypher(cypher):
         char_name = (r.get("char_name") or "").strip()
+        stand_id = (r.get("stand_id") or "").strip()
         variant = (r.get("variant") or "").strip()
-        if not char_name or not variant:
+        costume = r.get("costume_name")
+        if not char_name or not stand_id or not variant:
             continue
-        key = f"{char_name}.{variant}"
+        if not costume:
+            warned_orphan.append(f"{char_name}.{variant}({stand_id})")
+        key = make_key(char_name, variant, stand_id, costume)
         portraits[key] = f"{PORTRAIT_PREFIX}{key}.png"
+    if warned_orphan:
+        sys.stderr.write(
+            f"[warn] {len(warned_orphan)} 张立绘缺 CostumeStyle 绑定（整键去着装段）：{warned_orphan}\n"
+        )
     return portraits
 
 

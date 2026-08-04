@@ -1,6 +1,6 @@
 # 他者之镜（OtheredGlass）— Godot 工程
 
-2D Galgame 框架。集中式 `ScriptInterpreter` 解释器消费纯 JSON 剧本（`data/chapters/*.json`，格式见 `data/剧本.schema.json`），经 `data/manifest.json` 把逻辑名映射到资源；美术全部程序占位。本工程含一个现成示例剧本 `chapter01_新皮肤.json` 用于跑通管线。
+2D Galgame 框架。集中式 `ScriptInterpreter` 解释器消费纯 JSON 剧本（`data/chapters/*.json`，格式见 `data/剧本.schema.json`），经 `data/manifest.json` 把逻辑名映射到资源；美术默认程序占位兜底（真图经上游 `chapter-publisher` 搬运，见「资源」）。本工程现含序章 `chapter00_序章.json` 与示例剧本 `chapter01_新皮肤.json`。
 
 > 剧情格式权威定义：`00_init/剧本.md` + `00_init/剧本.schema.json`（本工程 `data/剧本.schema.json` 为其字节副本）。
 
@@ -15,9 +15,12 @@
 ## 打开 / 运行
 1. 安装 **Godot 4.3+**（4.4 亦可，仅 `Image.create` 有 deprecation 警告，不影响运行）。
 2. Godot 导入本目录（`project.godot`）。
-3. F5 从标题 → 「开始游戏」进入 `chapter01_新皮肤`。
+3. F5 从标题 → 「开始游戏」进入 `chapter00_序章`（起始章配置见 `scripts/autoload/GameManager.gd` 的 `start_chapter`/`start_scene`，默认 `chapter00_序章`/`酒店`）。
 
 ## 验收点
+
+> 以下以**示例章 `chapter01_新皮肤`** 为例（桥上陈默）；「开始游戏」默认进序章 `chapter00_序章`。
+
 1. 桥上：陈默.沉重(center) 占位立绘 + 打字机台词。
 2. choice「再想想」→ 经 `label keepgoing` → 陈默.释然 → `jump` 到「回出租屋」段（自动换背景）。
 3. choice「跳下去」→ `jump` 到「结局_BE」段 → `ending(BE)` 进结局画面。
@@ -52,7 +55,10 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit
 测试覆盖：Manifest、ChapterLoader、ScriptInterpreter（执行 / 跳转 / 立绘槽）、PlaceholderGen、SaveManager。
 
 ## 资源
-全部程序占位图（立绘 400×800 纯绿 `#00FF00`、场景 1536×1024、头像 128²），首次引用时生成缓存到 `user://placeholder_cache/`。换真图只改 `data/manifest.json`，不动剧本。
+- **占位兜底**：缺资源时程序生成占位图（立绘 400×800 纯绿 `#00FF00`、场景 1536×1024、头像 128²），首次引用时缓存到 `user://placeholder_cache/`。
+- **真图搬运**：真图由上游 `chapter-publisher` skill（`.claude/skills/chapter-publisher/`）从创作区（`06_角色美术/`、`07_场景美术/`）发布到 `data/chapters/`（剧本）与 `assets/`（图片），并更新 `manifest.json`。
+- **立绘缩放 + 去绿**：立绘原图是 `#00FF00` 绿幕，搬运时经 `tools/process_portrait.py` 先缩放到 800×1200（保 2:3）、再用 ffmpeg `colorkey` 抠去绿幕成透明 PNG，落到 `assets/portraits/<角色>.<变体>.png`；**原图不动**，处理只发生在搬运结果上。背景图是场景油画（非绿幕），原样拷贝。ffmpeg 路径读 `settings.json` 的 `ffmpeg_path`。
+- **改图不改剧本**：换真图只改 `manifest.json`（逻辑名→`assets/...` 路径），不动剧本 JSON。
 
 ## 已知 V1 边界 / 待办
 - **未运行验证**：本会话环境无 Godot CLI，GDScript/GUT 未运行；Python schema 校验是唯一已跑通的锚点。请在 Godot 编辑器中按「验收点」走一遍。

@@ -2,7 +2,7 @@
 name: chapter-publisher
 description: |
   把全章各节定稿已批（各 Section.status=31 且所属 Chapter.status=11）的章节从创作区 `25_剧本/` 合并发布到运行时 `99_game/`：
-  用 merge_sections_to_chapter.py 把各节定稿 YAML 拍平合并为单一章 JSON 拷到 99_game/data/chapters/ + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest + 产出章资源清单 chapter_packs.json（Web 按章分包依据）。
+  用 generate_portrait_map.py + merge_sections_to_chapter.py --portrait-map 把各节定稿 YAML 拍平合并为单一章 JSON（立绘引用改写为 guid 整键 `<char>-<costume>-<variant>-<stand_id>`，解决同角色换装同名覆盖）拷到 99_game/data/chapters/ + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest + 产出章资源清单 chapter_packs.json（Web 按章分包依据）。
   在全章各节定稿审批通过且所需立绘就绪、需发布到 Godot 运行时时使用。
 argument-hint: <chapter_id>
 arguments:
@@ -41,10 +41,12 @@ ORDER BY sec.section_no;
 MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(:Section)-[:contains]->(s:Scene)
 OPTIONAL MATCH (s)-[:has_layer]->(sl:SceneLayer {layer_type:'background'})
 RETURN DISTINCT s.name AS scene_name, sl.image_path AS bg_image, sl.status AS bg_status;
-// (4) 全章 depicts 立绘（深两跳：Chapter→Section→Scene→depicts→IllusDesign→expands_to→StandingIllustration + 角色回溯）
+// (4) 全章 depicts 立绘（深两跳：Chapter→Section→Scene→depicts→IllusDesign→expands_to→StandingIllustration + 角色回溯
+//     + CostumeStyle 回溯取着装名，用于算 guid 整键 <char>-<costume>-<variant>-<stand_id>）
 MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(:Section)-[:contains]->(sc:Scene)-[:depicts]->(illus:IllusDesign)-[:expands_to]->(stand:StandingIllustration)
 MATCH (char:Character)-[:has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style*1..5]->(stand)
-RETURN DISTINCT char.name AS char_name, stand.variant_label AS variant, stand.image_path AS image_path, stand.status AS status;
+OPTIONAL MATCH (costume:CostumeStyle)-[:outfit_for]->(illus)
+RETURN DISTINCT char.name AS char_name, stand.id AS stand_id, stand.variant_label AS variant, costume.name AS costume_name, stand.image_path AS image_path, stand.status AS status;
 ```
 
 **前驱校验**：
@@ -60,23 +62,31 @@ RETURN DISTINCT char.name AS char_name, stand.variant_label AS variant, stand.im
 # 确保目标目录存在
 mkdir -p 99_game/data/chapters 99_game/assets/portraits 99_game/assets/scenes
 
-# (a) 剧本：各节定稿 YAML 拍平合并 → 99_game/data/chapters/<stem>.json（scenes[] 按 section_no 拼接，requires 并集）
+# (a.0) 立绘 portrait-map：把 say/show.portrait 从纯变体改写为 guid 整键 <char>-<costume>-<variant>-<stand_id>
+#       （stand_id 全局唯一，解决同角色换装同名覆盖；创作区 YAML 与 variant_label 不动）
+python 99_game/tools/generate_portrait_map.py '<chapter_id>' -o '99_game/data/.cache/portrait-map-<stem>.json'
+
+# (a) 剧本：各节定稿 YAML 拍平合并 → 99_game/data/chapters/<stem>.json（scenes[] 按 section_no 拼接；
+#     --portrait-map 把 say/show.portrait 改写为整键，requires.portraits 随之重推导）
 python 99_game/tools/merge_sections_to_chapter.py \
   '<sec00_script_path>' '<sec01_script_path>' ... \
   --chapter <NN> --title '<章标题>' \
+  --portrait-map '99_game/data/.cache/portrait-map-<stem>.json' \
   -o '99_game/data/chapters/<stem>.json'
 python 99_game/tools/validate_chapter.py '99_game/data/chapters/<stem>.json' 99_game/data/剧本.schema.json
 #   validate FAIL → 中断发布，报警（剧本 schema 不合，先回 25_剧本/ 修对应节定稿 YAML）
 #   注：合并工具内置 scene-block id 章内唯一性校验（重复则报错）——若报 id 重复，说明 structurer 预分配 / outliner 落盘环节 id 冲突，需回上游修正。
 
-# (b) 立绘：image_path（项目根相对）→ 99_game/assets/portraits/<角色>.<变体>.png
-cp '<image_path>' '99_game/assets/portraits/<char_name>.<variant>.png'
+# (b) 立绘：绿幕原图 → 缩放+去绿透明 PNG → 99_game/assets/portraits/<整键>.png
+#     先 scale(800x1200 保 2:3) 再 colorkey(#00FF00)，输出带 alpha 的透明立绘；原图 06_/ 不动。
+#     <整键> = <char>-<costume_short>-<variant>-<stand_id>（与 portrait-map 产出、manifest 键、合并 JSON requires 一致）
+python 99_game/tools/process_portrait.py '<image_path>' -o '99_game/assets/portraits/<整键>.png'
 
 # (c) 背景：SceneLayer.image_path → 99_game/assets/scenes/<Scene.name>.png
 cp '<bg_image>' '99_game/assets/scenes/<scene_name>.png'
 ```
 
-> 源路径（`image_path`/各节 `script_path`）是项目根相对，`cp`/合并时 cwd 应在项目根。目标路径的 `<角色>.<变体>` 与 manifest 的 portraits 键、合并后 JSON 的 `meta.requires.portraits` 三处对齐。
+> 源路径（`image_path`/各节 `script_path`）是项目根相对，`cp`/合并时 cwd 应在项目根。立绘目标路径用 guid 整键 `<char>-<costume>-<variant>-<stand_id>`（来自 portrait-map 产出），与 manifest 的 portraits 键、合并后 JSON 的 `meta.requires.portraits` 三处对齐。整键由 generate_portrait_map.py / manifest_builder.py 经 [portrait_key.make_key](../../../99_game/tools/portrait_key.py) 同源生成。
 > 缺源文件（`image_path` 指向的图不存在）则**警告跳过**该资源，不中断。
 
 ### 3. 更新 manifest
@@ -91,8 +101,8 @@ python 99_game/tools/manifest_builder.py
 
 把本章用到的立绘/背景逻辑名记入 `99_game/data/chapter_packs.json`，供导出工具按章把资源分组打成 `<stem>.pck`（pck 内路径与全局 manifest 一致，挂载后 `res://` 全局路径命中）。**分包粒度仍是章 stem**（运行时不感知节层）。
 
-数据源 = 第 1 步查到的全章结果（跨节汇总）：
-- `portraits`：`<char_name>.<variant>`（status=11 的 depicts 立绘，与上一步拷贝目标对齐）
+数据源 = 合并后章 JSON 的 `meta.requires.portraits`（已随 portrait-map 改写为 guid 整键，最稳，与 lines 引用同源）+ 第 1 步全章背景：
+- `portraits`：guid 整键 `<char>-<costume>-<variant>-<stand_id>`（直接取合并 JSON 的 requires.portraits）
 - `scenes`：`<Scene.name>`（has_layer background）
 
 ```bash
@@ -104,7 +114,7 @@ python 99_game/tools/chapter_packs_updater.py '<stem>' \
 
 ### 5. 汇报
 
-列出：发布的章 JSON 路径（`99_game/data/chapters/<stem>.json`）、合并的节数、拷贝的立绘清单（`<角色>.<变体>`）、背景清单（`<Scene.name>`）、跳过/缺失的资源警告、manifest 更新结果、章清单更新结果（该章 portraits/scenes 条数）。
+列出：发布的章 JSON 路径（`99_game/data/chapters/<stem>.json`）、合并的节数、拷贝的立绘清单（guid 整键 `<char>-<costume>-<variant>-<stand_id>`）、背景清单（`<Scene.name>`）、跳过/缺失的资源警告、manifest 更新结果、章清单更新结果（该章 portraits/scenes 条数）。
 附运行时入口提示：`GameManager.start_new_game('<stem>', '<首节首 scene-block id>')`（stem = 不含后缀的章名，如 `chapter00_序章`；首 scene-block id 取 section_no=0 节的第一个段 id）。
 
 ## Web 发布前的额外步骤（导出阶段，非本 skill）

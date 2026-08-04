@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 「他者之镜」（OtheredGlass）是一个**以 Neo4j 图数据库为唯一事实来源、由 Claude Code skills/agents 驱动的 AI 游戏生产流水线**，最终产物是一个 Godot 2D Galgame（`99_game/`）。整条链路把"世界观文字 → 叙事图 → 美术提示词 → 文生图/图生图 → 剧本 JSON → 游戏成品"自动化，人工只在关键节点审批。
 
-两份互补的项目级文档，动手前按需读：
+项目级文档，动手前按需读：
 - [README.md](README.md) — **编排流程视角**：三大编排 Agent（`char-design` / `scene-design` / `plot-design`）的时序图、独立审批流程、全部 Skill 功能概述、项目文件夹结构。
-- [refer.md](refer.md) — **节点治理手册**：从节点视角讲每种节点的生命周期、status 流转、审批、sync 级联。**改任何节点/边/status 逻辑前必读。**
+- 节点 status 流转 / 审批规则 / sync 级联的权威源：[55_dashboard/core/status.py](55_dashboard/core/status.py)（`NODE_STATUS`）、[core/cascade.py](55_dashboard/core/cascade.py)、[00_init/Schema/](00_init/Schema/)。**改任何节点/边/status 逻辑前必读。**
 
 子项目各有自己的指南：[55_dashboard/CLAUDE.md](55_dashboard/CLAUDE.md)（人工治理后台）、[99_game/README.md](99_game/README.md)（Godot 工程）。
 

@@ -68,6 +68,32 @@ def _sections_sorted(g):
     return out
 
 
+def _render_section_row(s, ch_status):
+    """单节状态行 + 节级推进入口（显眼展示，区别于折叠的编排子图）。
+
+    ch_status=11 时按 sec.status 给出推进（plot-design 单节聚焦：outliner/dialoguer）
+    或审批指引；ch_status≠11 时提示待章结构审批。
+    """
+    full = s["_full"]
+    title = full.get("title") or s["id"]
+    sec_status = s["status"]
+    cols = st.columns([3, 2, 2])
+    cols[0].markdown(f"**第{s['_no']}节 · {title}**")
+    with cols[1]:
+        if sec_status is not None:
+            color = status_badge.badge_color(sec_status)
+            text = status_badge.badge_text(sec_status)
+            st.markdown(f":{color}[● {text}]")
+    with cols[2]:
+        if ch_status == 11:
+            if sec_status in (-1, 0, 20, 31):
+                launch_button.render_section(s["id"], f"第{s['_no']}节 · {title}")
+            elif sec_status == 30:
+                st.caption("定稿待审 → 审批中心")
+        else:
+            st.caption("待章结构审批")
+
+
 def _render_chapter_row(schema, ch):
     ch_id = ch["id"]
     status = ch.get("status")
@@ -121,8 +147,14 @@ def _render_chapter_row(schema, ch):
             else:
                 st.info(
                     f"结构已批（11），节级生产中：{len(done)}/{len(sections)} 节定稿已批。"
-                    "逐节推进提纲 / 定稿（plot-design 按节委派 outliner / dialoguer）。"
+                    "在各节点「推进此节」单独推进（定稿已批则推进该节立绘），或点上方「推进剧情创作」全量推进。"
                 )
+
+        # 各节状态 + 节级推进入口（以小节为载体：每节显眼展示状态与推进/审批入口）
+        if sections:
+            st.markdown("**各节进度**")
+            for s in sections:
+                _render_section_row(s, status)
 
         # 各节剧本预览（核心：review 对白质量）——读 Section.script_path 的节级 YAML
         for s in sections:
@@ -223,7 +255,10 @@ def _render_line(line):
 
 
 def _render_chapter_subgraph(g, sections):
-    """渲染 has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→立绘缺口（含就绪计数）。"""
+    """渲染 has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→立绘缺口（含就绪计数）。
+
+    节级状态与推进入口在 _render_section_row（显眼行）展示；本函数只画 Scene/立绘 子图徽章。
+    """
     nodes_by_id = {n["id"]: n for n in g["nodes"]}
     scenes_of = {}   # sec_id -> [scene_id]
     illus_of = {}    # scene_id -> [illus_id]   (via depicts)
@@ -248,7 +283,7 @@ def _render_chapter_subgraph(g, sections):
     for s in sections:
         full = s["_full"]
         title = full.get("title") or s["id"]
-        with st.expander(f"第{s['_no']}节 · {title}", expanded=False):
+        with st.expander(f"第{s['_no']}节 · {title}（场景/立绘）", expanded=False):
             _badge_line("节状态", s["status"])
             scene_ids = scenes_of.get(s["id"], [])
             scene_nodes = [nodes_by_id[sid] for sid in scene_ids if sid in nodes_by_id]

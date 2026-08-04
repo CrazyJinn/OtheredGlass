@@ -1,0 +1,455 @@
+{
+  "meta": {
+    "chapter": "0",
+    "title": "序章",
+    "requires": {
+      "characters": [
+        "陆择",
+        "顾盈",
+        "小夏"
+      ],
+      "scenes": [
+        "酒店-客房",
+        "街角咖啡店-点餐台",
+        "马路-路口"
+      ],
+      "portraits": [
+        "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+        "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
+        "陆择-赤裸上身-玩味-PHSE4iftNR",
+        "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+        "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+        "陆择-赤裸上身-轻佻-PHSE4iftNS",
+        "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+        "陆择-商务休闲着装-玩味-PJajqyM6s5",
+        "陆择-商务休闲着装-轻佻-PJajqyM6s6"
+      ]
+    }
+  },
+  "scenes": [
+    {
+      "id": "酒店",
+      "scene": "酒店-客房",
+      "time": "清晨",
+      "bgm": {
+        "track": "晨离",
+        "mode": "play",
+        "loop": true
+      },
+      "lines": [
+        {
+          "op": "narrate",
+          "text": "清晨。阳光从窗帘缝隙斜斜地落在凌乱的床铺上。"
+        },
+        {
+          "op": "narrate",
+          "text": "床头柜上倒着一只空酒瓶。地毯上散落着衣物——一条连衣裙，一件白衬衫。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择半靠在床头，揉了揉额角。"
+        },
+        {
+          "op": "show",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+          "pos": "left"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+          "pos": "left",
+          "text": "呵。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+          "pos": "left",
+          "text": "……有点过头了。"
+        },
+        {
+          "op": "narrate",
+          "text": "卫浴间里传来水声。"
+        },
+        {
+          "op": "narrate",
+          "text": "片刻，门开了。"
+        },
+        {
+          "op": "narrate",
+          "text": "顾盈走出来，身上套着他的白衬衫，下摆松松地盖到大腿，前襟敞着两颗扣子。"
+        },
+        {
+          "op": "show",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
+          "pos": "right"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
+          "pos": "right",
+          "text": "……哟。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
+          "pos": "right",
+          "text": "醒得挺早啊。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "left",
+          "text": "衬衫穿得挺顺手。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "嗯?"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "你的衬衫比我的裙子舒服。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "总不能空着身子走出酒店吧。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "left",
+          "text": "那倒也是。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "left",
+          "text": "穿着挺好看。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "right",
+          "text": "昨晚……挺能折腾的啊。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
+          "pos": "left",
+          "text": "您过奖。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
+          "pos": "left",
+          "text": "也是您配合得好。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "right",
+          "text": "嗯?"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "right",
+          "text": "嘴这么甜。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "right",
+          "text": "难怪昨晚那么会哄人。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "left",
+          "text": "那也是实话实说。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "留个微信呗。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "下次方便。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择看了她一眼，没动手机。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "left",
+          "text": "加微信干嘛。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
+          "pos": "left",
+          "text": "昨晚那么激烈，再约我怕这床先散架。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "啧。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "right",
+          "text": "那可惜了。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择套上裤子，顾盈换回裙子时把白衬衫丢还给他。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "left",
+          "text": "附近有好喝的咖啡店吗?"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "怎么?"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "right",
+          "text": "还要请我喝杯咖啡?"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
+          "pos": "left",
+          "text": "等下赶飞机。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
+          "pos": "left",
+          "text": "昨晚酒喝多了，找杯咖啡清醒一下。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "right",
+          "text": "啧。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "right",
+          "text": "那你自己找去吧。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "left",
+          "text": "走了。你慢慢收拾。"
+        },
+        {
+          "op": "hide",
+          "who": "顾盈"
+        },
+        {
+          "op": "hide",
+          "who": "陆择"
+        },
+        {
+          "op": "narrate",
+          "text": "门在身后轻轻合上。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择往电梯方向走去，盘算着先顺路找家咖啡店。"
+        }
+      ]
+    },
+    {
+      "id": "咖啡店",
+      "scene": "街角咖啡店-点餐台",
+      "time": "清晨",
+      "bgm": {
+        "track": "晨咖",
+        "mode": "play",
+        "loop": true
+      },
+      "lines": [
+        {
+          "op": "narrate",
+          "text": "推门声。咖啡机的蒸汽混着浅浅的背景乐。"
+        },
+        {
+          "op": "narrate",
+          "text": "街角的小咖啡店，清晨没什么人，灯光暖黄。"
+        },
+        {
+          "op": "show",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+          "pos": "left"
+        },
+        {
+          "op": "narrate",
+          "text": "点餐台后是个扎马尾的年轻女孩，正低头擦着杯子。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+          "pos": "left",
+          "text": "美式，中杯。"
+        },
+        {
+          "op": "narrate",
+          "text": "女孩抬起头，应了一声，手指在屏幕上点。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-玩味-PJajqyM6s5",
+          "pos": "left",
+          "text": "这么早上班，眼睛还挺亮。"
+        },
+        {
+          "op": "narrate",
+          "text": "女孩的手指顿了一下，飞快地瞄他一眼，又低下头。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-轻佻-PJajqyM6s6",
+          "pos": "left",
+          "text": "夸你呢。别紧张。"
+        },
+        {
+          "op": "narrate",
+          "text": "耳根红了起来。她把杯子递过来，指尖碰了一下他的手，又像烫到似的缩回去。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-玩味-PJajqyM6s5",
+          "pos": "left",
+          "text": "谢了。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择接过咖啡，笑了笑，转身推门出去。"
+        },
+        {
+          "op": "hide",
+          "who": "陆择"
+        }
+      ]
+    },
+    {
+      "id": "路口",
+      "scene": "马路-路口",
+      "time": "阴天白天",
+      "bgm": {
+        "track": "雨路",
+        "mode": "play",
+        "loop": true
+      },
+      "lines": [
+        {
+          "op": "narrate",
+          "text": "门一推开，雨泼了下来。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择没带伞。他举着咖啡杯挡了挡，缩在门檐下。"
+        },
+        {
+          "op": "show",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+          "pos": "left"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+          "pos": "left",
+          "text": "……真讨厌下雨天。"
+        },
+        {
+          "op": "narrate",
+          "text": "马路对面，一辆机场巴士亮着灯停在站台。雨里像一团模糊的光。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择盯着那辆车——赶飞机。跑过去，还来得及。"
+        },
+        {
+          "op": "narrate",
+          "text": "他攥紧咖啡杯，一头扎进雨里。"
+        },
+        {
+          "op": "hide",
+          "who": "陆择"
+        },
+        {
+          "op": "narrate",
+          "text": "雨幕里冲出来的一样东西——"
+        },
+        {
+          "op": "narrate",
+          "text": "撞击声。然后什么都没有了。"
+        }
+      ]
+    }
+  ]
+}

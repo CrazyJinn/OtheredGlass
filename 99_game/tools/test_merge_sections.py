@@ -108,3 +108,64 @@ def test_merge_handles_missing_requires(tmp_path):
     doc = merge([p], chapter=1, title="章")
     assert doc["meta"]["requires"] == {"characters": [], "scenes": [], "portraits": []}
     assert len(doc["scenes"]) == 1
+
+
+def test_merge_with_portrait_map_rewrites_portrait(tmp_path):
+    """带 portrait_map：say/show.portrait 从纯变体改写为 guid 整键，requires 重推导；同名变体跨着装得不同键。"""
+    sec1 = _sec(0, "sec00", "酒店", "酒店-客房", [
+        {"op": "say", "who": "陆择", "portrait": "慵懒", "pos": "left", "text": "呵。"},
+        {"op": "show", "who": "陆择", "portrait": "玩味", "pos": "left"},
+    ], characters=["陆择"], portraits=["陆择.慵懒", "陆择.玩味"])
+    sec2 = _sec(0, "sec01", "咖啡店", "街角咖啡店-点餐台", [
+        {"op": "say", "who": "陆择", "portrait": "慵懒", "pos": "left", "text": "美式。"},
+    ], characters=["陆择"], portraits=["陆择.慵懒"])
+    p1 = _write_yaml(tmp_path, "sec1.yaml", sec1)
+    p2 = _write_yaml(tmp_path, "sec2.yaml", sec2)
+
+    pmap = {
+        "酒店-客房": {"陆择": {"慵懒": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+                                  "玩味": "陆择-赤裸上身-玩味-PHSE4iftNR"}},
+        "街角咖啡店-点餐台": {"陆择": {"慵懒": "陆择-商务休闲着装-慵懒-PJajqyM6s4"}},
+    }
+    doc = merge([p1, p2], chapter=0, title="序章", portrait_map=pmap)
+
+    # sec00 陆择 portrait 改为赤裸上身整键
+    assert doc["scenes"][0]["lines"][0]["portrait"] == "陆择-赤裸上身-慵懒-PHSE4iftNQ"
+    assert doc["scenes"][0]["lines"][1]["portrait"] == "陆择-赤裸上身-玩味-PHSE4iftNR"
+    # sec01 陆择.慵懒 改为商务休闲整键（同名变体不同键 → 不冲突）
+    assert doc["scenes"][1]["lines"][0]["portrait"] == "陆择-商务休闲着装-慵懒-PJajqyM6s4"
+    # requires.portraits 从改写后 lines 重推导（保序去重）
+    assert doc["meta"]["requires"]["portraits"] == [
+        "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+        "陆择-赤裸上身-玩味-PHSE4iftNR",
+        "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+    ]
+    # 产物过 schema（整键含中文+字母数字，type:string 允许）
+    out = tmp_path / "ch.json"
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(doc, f, ensure_ascii=False)
+    ok, errors = validate_chapter(str(out), SCHEMA)
+    assert ok, errors
+
+
+def test_merge_portrait_map_unknown_scene_ignored(tmp_path):
+    """map 含本章不存在的 scene → 不报错、不影响（portrait 保持原值并进 requires）。"""
+    sec = _sec(0, "s", "s1", "室内", [
+        {"op": "say", "who": "陆择", "portrait": "慵懒", "pos": "center", "text": "x"},
+    ], characters=["陆择"], portraits=["陆择.慵懒"])
+    p = _write_yaml(tmp_path, "sec.yaml", sec)
+    pmap = {"不存在场景": {"陆择": {"慵懒": "X-Y-Z-I"}}}
+    doc = merge([p], chapter=0, title="x", portrait_map=pmap)
+    assert doc["scenes"][0]["lines"][0]["portrait"] == "慵懒"  # 未命中，不改写
+    assert doc["meta"]["requires"]["portraits"] == ["慵懒"]
+
+
+def test_merge_without_portrait_map_backward_compatible(tmp_path):
+    """无 portrait_map：行为与旧版一致（requires 取各节并集，portrait 不改写）。"""
+    sec = _sec(0, "s", "s1", "室内", [
+        {"op": "say", "who": "陆择", "portrait": "慵懒", "pos": "center", "text": "x"},
+    ], characters=["陆择"], portraits=["陆择.慵懒"])
+    p = _write_yaml(tmp_path, "sec.yaml", sec)
+    doc = merge([p], chapter=0, title="x")  # 不传 portrait_map
+    assert doc["scenes"][0]["lines"][0]["portrait"] == "慵懒"
+    assert doc["meta"]["requires"]["portraits"] == ["陆择.慵懒"]
