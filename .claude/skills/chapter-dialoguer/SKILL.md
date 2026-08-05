@@ -1,7 +1,7 @@
 ---
 name: chapter-dialoguer
 description: |
-  推进 Section 图节点的定稿段：读 structurer 的章级设计简报 + outliner 的本节提纲 → 三轮打磨（功能→声音→精简）创作逐句对话填入骨架 → 跑 validate 校验 → 写 Section.script_path + status=30（定稿待审）。
+  推进 Section 图节点的定稿段：读 structurer 的章级设计简报 + outliner 的本节提纲 outline.md → 三轮打磨（功能→声音→精简）创作逐句对话填入骨架 → 跑 validate 校验 → 写 Section.script_path + status=30（定稿待审）。
   前驱 Section status=20（提纲就绪）。创作中若发现 outline 戏剧性破碎（分支无本质差异/scene 无情绪推进），产出「结构性问题报告」回退 outliner，不写 status。按情绪节拍规划每条 say 的 portrait（同一角色随情绪转折切换变体，避免一表情撑全场），立绘缺口兜底建 depicts 节点（交 plot-design 按 depicts 逐个推进出图）。
 argument-hint: <section_id> [target_status]
 arguments:
@@ -10,11 +10,11 @@ arguments:
 allowed-tools: Read, Bash, Write, Edit
 ---
 
-> **status=-1 = 作废重做**：当 Section 被重置为 `status=-1` 时（如所属 Chapter 属性变更沿 has_section 级联），即使定稿 `.yaml` 已落盘，也**必须重新创作并覆盖**（重走 20→30）。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧剧本内容**，直接以当前图节点数据 + 本节 outline.yaml + 章级设计简报为唯一来源重新创作。重做时 depicts 边 MERGE 幂等，不主动删。
+> **status=-1 = 作废重做**：当 Section 被重置为 `status=-1` 时（如所属 Chapter 属性变更沿 has_section 级联），即使定稿 `.yaml` 已落盘，也**必须重新创作并覆盖**（重走 20→30）。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧剧本内容**，直接以当前图节点数据 + 本节 outline.md + 章级设计简报为唯一来源重新创作。重做时 depicts 边 MERGE 幂等，不主动删。
 
 # 节细节对话（Section 定稿段 · status 20→30）
 
-剧情创作流程的**第三段**（节级）。读 `chapter-structurer` 的**章级设计简报**（情感弧/戏剧意图）+ `chapter-outliner` 的**本节提纲 YAML**，用**三轮打磨**（功能→声音→精简）创作逐句对话填入骨架，产出节级完整剧本 **YAML**（schema 子集 1:1，格式见 [00_init/剧本.md](../../../00_init/剧本.md)），落盘 `25_剧本/`（**创作/审阅区，非运行时**；本节定稿审通过后，全章各节由 `chapter-publisher` 合并拍平为单一章 JSON 发布到 `99_game/`）。
+剧情创作流程的**第三段**（节级）。读 `chapter-structurer` 的**章级设计简报**（情感弧/戏剧意图）+ `chapter-outliner` 的**本节提纲 outline.md**，用**三轮打磨**（功能→声音→精简）创作逐句对话填入骨架，产出节级完整剧本 **YAML**（schema 子集 1:1，格式见 [00_init/剧本.md](../../../00_init/剧本.md)），落盘 `25_剧本/`（**创作/审阅区，非运行时**；本节定稿审通过后，全章各节由 `chapter-publisher` 合并拍平为单一章 JSON 发布到 `99_game/`）。
 
 ## 参数
 
@@ -47,7 +47,7 @@ LIMIT 1
 
 **先读两份创作依据**：
 - Read `25_剧本/chapter<NN>_<章概述>/设计简报.md`（NN = chapter_no 零填充，<章概述> 取章 title）——取出情感弧线 / 戏剧意图 / 设计支柱（本节在弧线中的位置靠分节规划定位），本节对话的情感基调全靠它。
-- Read **本节** `outline.yaml`（`sec.outline_path`，拓扑骨架 + `authoring` 引导块）。**区分**：拓扑骨架字段（meta/scenes/lines）必须原样搬到定稿；`authoring` 块（direction/beats/constraints 等）是创作指引，**不进定稿**。
+- Read **本节** `outline.md`（`sec.outline_path`，拓扑骨架契约值 + `authoring` 散文）。**区分**：拓扑骨架里反引号标注的契约值（资源清单、场景段 id/scene/time/bgm、分支拓扑 choice/jump/ending）必须原样搬到定稿 YAML，不得改写；`authoring` 散文（方向/情感弧/约束/职责/节拍/母题锚点/衔接）是创作指引，**不进定稿**。
 
 任一缺失则停止并提示先跑上游（structurer / outliner）。
 
@@ -77,7 +77,7 @@ ORDER BY char_name, variant LIMIT 200
 
 ### 2. 完成任务（三轮打磨创作细节对话）
 
-读本节 outline.yaml 每个 scene 骨架，**以 `authoring.beats` 为节拍依据**（beats 是引导不是约束），据章级设计简报（情感弧/戏剧意图）+ 角色 LanguageStyle，**三轮打磨**创作逐句 `lines` 填入（覆盖空的 lines 数组，保留提纲里的 choice/jump/ending 拓扑）。三轮打磨与声音标准详见 [references/对话写作方法论.md](references/对话写作方法论.md)——创作前读它。
+读本节 outline.md 每个场景段骨架，**以「节拍（beats）」章节为节拍依据**（beats 是引导不是约束），据章级设计简报（情感弧/戏剧意图）+ 角色 LanguageStyle，**三轮打磨**创作逐句 `lines` 填入（覆盖空的 lines 数组，保留提纲里的 choice/jump/ending 拓扑）。三轮打磨与声音标准详见 [references/对话写作方法论.md](references/对话写作方法论.md)——创作前读它。
 
 #### 第一轮·功能（戏剧职责）
 
@@ -110,8 +110,8 @@ ORDER BY char_name, variant LIMIT 200
    - **优先复用 `status=11` 已有变体**；剧情需要某个不存在/未批准的变体（如「陈默.沉重」），仍写入 `portrait` 字段并记录为「缺口」——段 3c 兜底建 `StandingIllustration(status=0)` + `depicts` 边，交 `plot-design` 按 depicts 逐个推进出图。
    - 变体数量不设上下限、不按角色优先级——由剧情情绪节拍决定，用到几个就提几个。
 4. **分支与结局**：`choice.options[]` 每项含 `label` + `to`/`scene`/`file` 至少其一；结局用 `ending{kind:BE/TE/HE/NE}`，对齐 `Event.ending_kind` 与 `option.leads_to_ending`。
-5. **Write 落盘**：`25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/完整对话.yaml`（节级定稿 YAML，与该节 outline.yaml 同目录）。`Section.script_path` 指向此 `.yaml` 路径。Write 自动创建章/节目录。
-6. **YAML 写作规则**（严格 schema 子集 1:1）：所有 string 双引号；多行文本用双引号 + `\n`，禁块标量；bool 小写 `true/false`；字段顺序对齐 schema properties；**不加任何额外字段**（schema `additionalProperties:false`，`authoring` 块绝不搬进定稿）；`meta.requires.portraits` 在定稿段补齐（提纲段无）。**scene-block `id` 沿用本节 outline 的预分配 id，不自创新 id**（保证发布合并时章内唯一）。
+5. **Write 落盘**：`25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/完整对话.yaml`（节级定稿 YAML，与该节 outline.md 同目录）。`Section.script_path` 指向此 `.yaml` 路径。Write 自动创建章/节目录。
+6. **定稿 YAML 写作规则**（严格 schema 子集 1:1）：所有 string 双引号；多行文本用双引号 + `\n`，禁块标量；bool 小写 `true/false`；字段顺序对齐 schema properties；**不加任何额外字段**（schema `additionalProperties:false`，authoring 散文绝不搬进定稿）；`meta.requires.portraits` 在定稿段补齐（提纲段无）。**scene-block `id` 沿用本节 outline.md 反引号标注的预分配 id，不自创新 id**（保证发布合并时章内唯一）。
 
 > 格式细节、11 指令字段、跳转寻址——严格按 [00_init/剧本.md](../../../00_init/剧本.md) 与 [99_game/data/剧本.schema.json](../../../99_game/data/剧本.schema.json)。
 

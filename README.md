@@ -218,7 +218,7 @@ sequenceDiagram
 | 阶段 | Skill | 状态 | 职责 |
 |------|-------|------|------|
 | ① 建章节结构 | `chapter-structurer` | ✅ 已实现 | 建 Chapter + 按情感弧分节建 Section（has_section）+ 各节 `Section-contains->Scene`，预分配全章 scene-block id |
-| ② 出节级提纲 | `chapter-outliner` | ✅ 已实现 | 为**每节**产出提纲（入参 section_id，落盘 `25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.yaml`） |
+| ② 出节级提纲 | `chapter-outliner` | ✅ 已实现 | 为**每节**产出提纲（入参 section_id，落盘 `25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.md`） |
 | ③ 节级细节对话 | `chapter-dialoguer` | ✅ 已实现 | 基于**本节**提纲创作逐句对话，产出定稿到 `25_剧本/.../sec<MM>_/完整对话.yaml` + 建 depicts 立绘缺口（入参 section_id） |
 
 > **门控**：① 建章节结构 → 结构审通过（ch=11）→ 才进入 ②③ 节级创作；**全章各节定稿终审通过（sec=31）+ 立绘全 `11` → 才发布**。
@@ -348,7 +348,7 @@ sequenceDiagram
 | Skill | 阶段 | 功能 | 主要产出 | 读写图 / 写 status |
 |-------|------|------|---------|-------------------|
 | chapter-structurer | ① 章级结构 | 建 Chapter + 按情感弧分节建 Section + 各节 `Section-contains->Scene` + 预分配 scene-block id | Chapter + has_section + Section + contains 边 | ✅ |
-| chapter-outliner | ② 节级提纲 | 为**每节**出提纲（入参 section_id） | `25_剧本/chapter<NN>_<概述>/sec<MM>_<概述>/outline.yaml` | ✅ |
+| chapter-outliner | ② 节级提纲 | 为**每节**出提纲（入参 section_id） | `25_剧本/chapter<NN>_<概述>/sec<MM>_<概述>/outline.md` | ✅ |
 | chapter-dialoguer | ③ 节级定稿 | 基于**本节**提纲创作逐句对话，按情绪节拍规划立绘 portrait + 建 depicts 缺口（入参 section_id） | 定稿剧本 `25_剧本/.../sec<MM>_/完整对话.yaml` | ✅ |
 | chapter-publisher | 章级发布 | 全章各节定稿合并发布 + 立绘/背景到运行时 | `99_game/` 资源 + manifest | ✅ |
 
@@ -396,7 +396,7 @@ sequenceDiagram
 │           └── background/           # 各图层背景图
 │
 ├── 25_剧本/                          # 剧本产出（章+节两层：structurer 出设计简报；outliner/dialoguer 按节产出）
-│   └── chapter<NN>_<章概述>/         # 每章一目录：设计简报.md + 各 sec<MM>_<节概述>/（outline.yaml + 完整对话.yaml）
+│   └── chapter<NN>_<章概述>/         # 每章一目录：设计简报.md + 各 sec<MM>_<节概述>/（outline.md + 完整对话.yaml）
 │
 ├── 55_dashboard/                     # 人工治理后台（Streamlit，http://localhost:8501）
 │   ├── config/                       # settings.py（凭证来源）

@@ -1,7 +1,7 @@
 ---
 name: chapter-outliner
 description: |
-  推进 Section 图节点的提纲段：读 structurer 的章级设计简报（含分节规划）+ 本节 Section 统合的 Scene + 分支骨架 → 自检本节 event 丰满度 →（够）按分支节点图先行/本质差异/节奏门控产出节级提纲 YAML（拓扑骨架 + authoring 人读引导块，lines 仅含拓扑占位，scene-block id 用 structurer 预分配）→ 落盘 25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.yaml + 写 Section.outline_path + status=20。
+  推进 Section 图节点的提纲段：读 structurer 的章级设计简报（含分节规划）+ 本节 Section 统合的 Scene + 分支骨架 → 自检本节 event 丰满度 →（够）按分支节点图先行/本质差异/节奏门控产出节级提纲 Markdown（拓扑骨架契约值 + authoring 人读散文，lines 仅含拓扑占位，scene-block id 用 structurer 预分配）→ 落盘 25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.md + 写 Section.outline_path + status=20。
   前驱：所属 Chapter status=11（结构已批）且本 Section status∈{-1,0}。若 event 素材不足以支撑提纲，**拒绝产出**并报告缺口（不写 status），由用户补全叙事基础后重调本 skill。
 argument-hint: <section_id>
 arguments:
@@ -9,11 +9,11 @@ arguments:
 allowed-tools: Read, Bash, Write, Edit
 ---
 
-> **status=-1 = 作废重做**：当 Section 被重置为 `status=-1` 时（如所属 Chapter 属性变更沿 has_section 级联），即使 outline.yaml 已落盘，也**必须重新产出并覆盖**。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧提纲内容**，直接以当前图节点数据 + 设计简报为唯一来源重新创作。
+> **status=-1 = 作废重做**：当 Section 被重置为 `status=-1` 时（如所属 Chapter 属性变更沿 has_section 级联），即使 outline.md 已落盘，也**必须重新产出并覆盖**。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧提纲内容**，直接以当前图节点数据 + 设计简报为唯一来源重新创作。
 
 # 节提纲（Section 提纲段 · status {-1,0}→20）
 
-剧情创作流程的**第二段**（节级，在章级结构段之后、节级定稿段之前）。读 `chapter-structurer` 产出的**章级设计简报**（取分节规划里**本节**的定位）+ 本节 `Section` 经 `contains` 统合的 Scene + 分支骨架，**先自检本节 event 丰满度**；够丰满才按**分支节点图先行 / 本质差异 / 节奏**三门控产出**节级提纲 YAML**——确定「本节分几个 scene 段、每段场景/时间/bgm、choice 分叉与汇合、ending 位置」，`lines` 留空（细节对话由 `chapter-dialoguer` 填）。提纲无审批，产出即 `Section.status=20`（提纲就绪）。
+剧情创作流程的**第二段**（节级，在章级结构段之后、节级定稿段之前）。读 `chapter-structurer` 产出的**章级设计简报**（取分节规划里**本节**的定位）+ 本节 `Section` 经 `contains` 统合的 Scene + 分支骨架，**先自检本节 event 丰满度**；够丰满才按**分支节点图先行 / 本质差异 / 节奏**三门控产出**节级提纲（outline.md，纯 Markdown）**——确定「本节分几个 scene 段、每段场景/时间/bgm、choice 分叉与汇合、ending 位置」，`lines` 留空（细节对话由 `chapter-dialoguer` 填）。提纲无审批，产出即 `Section.status=20`（提纲就绪）。
 
 > **素材不足门控**：若本节 event 不够丰满（事件数过少 / 事件链断裂 / Choice 指向的事件缺失 / 出场角色在本节无 involved 事件），**拒绝产出提纲**——不写 status、不落盘，只产出「素材不足报告」（列缺口）返回。用户可手动跑 `nrt-narrative-grower` 补全叙事基础后，重调本 skill 复查。
 
@@ -25,7 +25,7 @@ allowed-tools: Read, Bash, Write, Edit
 
 ## 流程（三段式：查状态 → 完成任务 → 保存结果）
 
-> 本 skill 是 Section 提纲段 status 的写入点。提纲 YAML 由本 skill 直接创作产出，无纯产出子 skill。
+> 本 skill 是 Section 提纲段 status 的写入点。提纲 outline.md 由本 skill 直接创作产出，无纯产出子 skill。
 
 ### 1. 查询目标节点状态
 
@@ -106,13 +106,13 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 - **Choice 分支无落点**（option 指向的 target Event 缺失）
 - **出场角色无着落**（主要角色在本节 involved 的 Event = 0，角色弧空转）
 
-**素材不足时**：**停止——不进入段 2，不写 status、不落盘 outline.yaml**。产出「素材不足报告」返回，列出具体缺口（哪个维度不足 + 涉及的 Scene/角色/Choice），供用户参考补全（可手动跑 `nrt-narrative-grower`）。**禁止硬凑提纲**——空洞提纲会让后续 dialoguer 产出的对话无据可依。
+**素材不足时**：**停止——不进入段 2，不写 status、不落盘 outline.md**。产出「素材不足报告」返回，列出具体缺口（哪个维度不足 + 涉及的 Scene/角色/Choice），供用户参考补全（可手动跑 `nrt-narrative-grower`）。**禁止硬凑提纲**——空洞提纲会让后续 dialoguer 产出的对话无据可依。
 
 **素材够时**：进入段 2 产出提纲。
 
-### 2. 完成任务（按三门控产出节级提纲 YAML）
+### 2. 完成任务（按三门控产出节级提纲 outline.md）
 
-据设计简报（本节在情感弧中的位置 + 戏剧职责）+ 本节 Scene 序 + 分支骨架，**先结构后内容**，三步产出节级提纲（格式见 [00_init/剧本.md](../../../00_init/剧本.md) 的「提纲格式」节——定稿 YAML 的子集 + authoring 块）：
+据设计简报（本节在情感弧中的位置 + 戏剧职责）+ 本节 Scene 序 + 分支骨架，**先结构后内容**，三步产出节级提纲（格式见 [00_init/剧本.md](../../../00_init/剧本.md) 的「提纲格式（outline.md）」节——拓扑骨架用 `key: value` 行 + 反引号标契约值，authoring 散文为 md 正文）：
 
 #### 2a. 分支节点图先行（结构验证）
 
@@ -133,34 +133,35 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 
 #### 2c. 节奏/戏剧结构 + 落盘
 
-据设计简报的**情感弧线**安排本节 scene 序的节奏：明确本节的 turning point（转折点）/ climax（高潮）位置，让情绪有起伏而非平铺。然后产出节级 outline **YAML**——**拓扑骨架（schema 子集字段）+ `authoring` 人读引导块**。
+据设计简报的**情感弧线**安排本节 scene 序的节奏：明确本节的 turning point（转折点）/ climax（高潮）位置，让情绪有起伏而非平铺。然后产出节级 outline **md**——**拓扑骨架（`key: value` 行 + 反引号标契约值）+ `authoring` 人读散文**。
 
-#### 拓扑骨架（与定稿同结构，dialoguer 必须原样搬到定稿）
+#### 拓扑骨架（dialoguer 必须原样搬到定稿；反引号内值为契约值，不得改写）
 
-1. **meta**：`chapter`(=chapter_no)、`title`(=本节节标题)、`requires{characters, scenes}`（提纲段不列 portraits，细节对话段才定）。
-2. **scenes[]**：每个 scene-block 含 `id`（**段标识，用设计简报分节规划里 structurer 预分配的本节 id，不自创；全章节内唯一**）、`scene`(=Scene.name)、`time`、`bgm`、`lines`（**仅含分支拓扑占位**：`choice` / `jump` / `ending` 等；**不写 say/narrate 台词**）。
-3. **分支拓扑**：在对应 scene 标注 `choice` 的 options（label + 跳向的 scene id）、`jump` 串联、`ending` 位置与 kind（对齐 `Event.ending_kind` / `option.leads_to_ending`）。
+1. **节头**：一级标题 `# sec<MM> <节标题> · chapter <NN>`。
+2. **资源清单**（`## 资源清单`）：`- 出场角色：`角色名``、`- 场景：`场景名``（提纲段**不列立绘变体**，细节对话段才定）。
+3. **场景段**（每段一个 `## 场景段：`id``）：`id` 用设计简报分节规划里 structurer 预分配的本节 id（**不自创；全章节内唯一**）；段下 `- 场景：`场景名`(=Scene.name)` / `- 时段：` / `- BGM：`track`（mode, loop）`。
+4. **分支拓扑**（每场景段下 `### 分支拓扑`，仅在存在分支时）：对应定稿 `lines` 占位，用 md 列表写 `choice` 的 options（label + 跳向的 scene id）、`jump` 串联、`ending` 位置与 kind（对齐 `Event.ending_kind` / `option.leads_to_ending`）；**不写 say/narrate 台词**。无分支的段此节留空（dialoguer 填逐句对话）。
 
-> 跨节/跨章跳转：本节内用 `scene:`（章内唯一 id 寻址）；跨章用 `file:`（章 stem）。预分配 id 的章内唯一性保证跨节 jump 不冲突。
+> 跨节/跨章跳转：本节内用 `scene`（章内唯一 id 寻址）；跨章用 `file`（章 stem）。预分配 id 的章内唯一性保证跨节 jump 不冲突。
 
-#### authoring 人读引导块（不进定稿，仅供 dialoguer 参考；不进 schema 校验）
+#### authoring 人读散文（不进定稿，仅供 dialoguer 参考；不进 schema）
 
-- **顶层 `authoring`**：`direction`（一段话讲清**本节**剧情发展方向，**核心字段**）/ `emotion_arc`（本节情感弧线 start→end + 中途转折）/ `constraints`（给 dialoguer 的硬约束清单）。
-- **每 scene 的 `authoring`**：`purpose`（这场戏的戏剧职责）/ `beats`（节拍走向，自然语言列表，**禁写台词**——解决事件粒度粗，给 dialoguer 节拍依据）/ `motif_anchors`（母题/象征物锚点）/ `transition`（场景衔接方式说明）。
+- **节级**：`## 方向`（direction，一段话讲清**本节**剧情发展方向，**核心字段**）/ `## 情感弧`（emotion_arc，本节 start→end + 中途转折）/ `## 约束`（constraints，给 dialoguer 的硬约束清单）。
+- **每场景段**：`### 职责`（purpose，这场戏的戏剧职责）/ `### 节拍`（beats，节拍走向，自然语言列表，**禁写台词**——给 dialoguer 节拍依据）/ `### 母题锚点`（motif_anchors）/ `### 衔接`（transition）。
 
-字段定义详见 [00_init/剧本.md](../../../00_init/剧本.md)「提纲格式（outline.yaml）」节。
+字段定义详见 [00_init/剧本.md](../../../00_init/剧本.md)「提纲格式（outline.md）」节。
 
-#### YAML 写作安全规则（强制，所有 string 双引号）
+#### md 写作约定（提纲不进 schema、不被代码解析，无 YAML 约束）
 
-- 所有 string 值**强制双引号**（防 YAML 1.1 把裸 `yes/no/on/off` 解析成 bool + 半角冒号断裂）。
-- 多行文本用双引号 + `\n`，**禁用块标量** `|` / `>`。
-- bool 用小写 `true/false`；字段顺序对齐 schema properties。
+- **契约值用反引号**：场景段 id、scene 名、bgm track、角色名、跳转目标等需原样搬进定稿的值，一律用反引号包裹（如 `` `酒店-客房` ``），提示 dialoguer 不得改写。
+- **authoring 散文自由**：direction / emotion_arc / constraints / beats 等自由换行、自由长度，不强制引号、不禁多行。
+- 其余字段语义（meta.chapter/title、scenes.id 唯一、lines 仅拓扑占位）与定稿 schema 子集一致，仅载体从 YAML 改为 md。
 
 #### 落盘
 
-**Write**：`25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.yaml`（NN=`chapter_no`、MM=`section_no` 零填充；<章概述>取章 title、<节概述>取节 title 核心主题，清洗 Windows 非法字符）。Write 自动创建章/节目录。
+**Write**：`25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.md`（NN=`chapter_no`、MM=`section_no` 零填充；<章概述>取章 title、<节概述>取节 title 核心主题，清洗 Windows 非法字符）。Write 自动创建章/节目录。
 
-> 节级提纲 = 拓扑骨架（定稿子集）+ authoring 引导块。`chapter-dialoguer` 读此文件，以 `authoring.beats` 为节拍依据，在保持拓扑不变的前提下填 lines 成节级定稿 `.yaml`；**authoring 块不搬进定稿**。
+> 节级提纲 = 拓扑骨架契约值 + authoring 散文。`chapter-dialoguer` 读此文件，以「节拍（beats）」章节为节拍依据，在保持拓扑契约值不变的前提下填 lines 成节级定稿 `完整对话.yaml`；**authoring 散文不搬进定稿**。
 
 ### 3. 保存结果（写 outline_path + status=20）
 
@@ -177,7 +178,7 @@ SET sec.outline_path = '<OUTLINE_PATH>',
 ## 参考文档
 
 - 创作方法论：[references/分支结构方法论.md](references/分支结构方法论.md) — 节点图先行/本质差异/后果可见/节奏
-- 剧本格式（含提纲格式）：[00_init/剧本.md](../../../00_init/剧本.md) — JSON 结构、11 指令、outline 子集约定、节级创作与发布合并
+- 剧本格式（含提纲格式）：[00_init/剧本.md](../../../00_init/剧本.md) — JSON 结构、11 指令、outline.md 提纲格式、节级创作与发布合并
 - 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Chapter/Section/has_section/contains 定义
 - 上游：[chapter-structurer](../chapter-structurer/SKILL.md)（章级建结构 + 分节 + 产设计简报 → Chapter status=11、Section status=0）
 - 下游：[chapter-dialoguer](../chapter-dialoguer/SKILL.md)（读本节提纲填细节对话 → Section status=30）

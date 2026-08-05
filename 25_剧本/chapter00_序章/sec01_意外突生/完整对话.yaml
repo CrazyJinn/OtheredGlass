@@ -1,6 +1,6 @@
 meta:
   chapter: 0
-  title: "意外突生"
+  title: "序章"
   requires:
     characters:
       - "陆择"
@@ -12,7 +12,6 @@ meta:
       - "陆择.慵懒"
       - "陆择.玩味"
       - "陆择.轻佻"
-
 scenes:
   - id: "咖啡店"
     scene: "街角咖啡店-点餐台"
@@ -22,47 +21,37 @@ scenes:
       mode: "play"
       loop: true
     lines:
-      - op: narrate
-        text: "推门声。咖啡机的蒸汽混着浅浅的背景乐。"
-      - op: narrate
-        text: "街角的小咖啡店，清晨没什么人，灯光暖黄。"
-      - op: show
+      - op: "narrate"
+        text: "门铃叮一声。店里暖黄的，咖啡机嘶嘶冒着白汽。"
+      - op: "narrate"
+        text: "点餐台后站着个扎马尾的女孩，正低头擦杯子。"
+      - op: "show"
         who: "陆择"
         portrait: "慵懒"
         pos: "left"
-      - op: narrate
-        text: "点餐台后是个扎马尾的年轻女孩，正低头擦着杯子。"
-      - op: say
+      - op: "say"
         who: "陆择"
         portrait: "慵懒"
         pos: "left"
-        text: "美式，中杯。"
-      - op: narrate
-        text: "女孩抬起头，应了一声，手指在屏幕上点。"
-      - op: say
-        who: "陆择"
-        portrait: "玩味"
-        pos: "left"
-        text: "这么早上班，眼睛还挺亮。"
-      - op: narrate
-        text: "女孩的手指顿了一下，飞快地瞄他一眼，又低下头。"
-      - op: say
+        text: "一杯美式，谢了。"
+      - op: "narrate"
+        text: "她抬头瞟了他一眼，转身去接咖啡。"
+      - op: "say"
         who: "陆择"
         portrait: "轻佻"
         pos: "left"
-        text: "夸你呢。别紧张。"
-      - op: narrate
-        text: "耳根红了起来。她把杯子递过来，指尖碰了一下他的手，又像烫到似的缩回去。"
-      - op: say
+        text: "呵，早班啊。眼睛倒挺亮。"
+      - op: "narrate"
+        text: "她端着杯子回来，耳根红着，放到台上时指尖擦过他的手背，又飞快缩回去。"
+      - op: "say"
         who: "陆择"
         portrait: "玩味"
         pos: "left"
-        text: "谢了。"
-      - op: narrate
+        text: "逗你的，别紧张。"
+      - op: "narrate"
         text: "陆择接过咖啡，笑了笑，转身推门出去。"
-      - op: hide
+      - op: "hide"
         who: "陆择"
-
   - id: "路口"
     scene: "马路-路口"
     time: "阴天白天"
@@ -71,28 +60,24 @@ scenes:
       mode: "play"
       loop: true
     lines:
-      - op: narrate
-        text: "门一推开，雨泼了下来。"
-      - op: narrate
-        text: "陆择没带伞。他举着咖啡杯挡了挡，缩在门檐下。"
-      - op: show
+      - op: "narrate"
+        text: "门一推开，雨就泼了下来。陆择没带伞，缩在门檐下，举着咖啡杯挡了挡。"
+      - op: "show"
         who: "陆择"
         portrait: "慵懒"
         pos: "left"
-      - op: say
+      - op: "say"
         who: "陆择"
         portrait: "慵懒"
         pos: "left"
-        text: "……真讨厌下雨天。"
-      - op: narrate
-        text: "马路对面，一辆机场巴士亮着灯停在站台。雨里像一团模糊的光。"
-      - op: narrate
-        text: "陆择盯着那辆车——赶飞机。跑过去，还来得及。"
-      - op: narrate
-        text: "他攥紧咖啡杯，一头扎进雨里。"
-      - op: hide
+        text: "呵，这雨，真讨厌。"
+      - op: "narrate"
+        text: "对面站台边，一辆机场巴士亮着灯。他看了眼手机，端着咖啡朝对面踱过去。"
+      - op: "narrate"
+        text: "雨幕里冲出一道灯光。一声闷响。"
+      - op: "hide"
         who: "陆择"
-      - op: narrate
-        text: "雨幕里冲出来的一样东西——"
-      - op: narrate
-        text: "撞击声。然后什么都没有了。"
+      - op: "narrate"
+        text: "然后，什么都没有了。"
+      - op: "narrate"
+        text: "画面黑下去。只剩雨声，慢慢也淡了。"
