@@ -12,8 +12,13 @@ var _settings = preload("res://scripts/ui/SettingsPanel.gd").new()
 var _auto: bool = false
 var _ended: bool = false  # 本轮已进结局/章节结束（防 skip 越界）
 var _auto_timer := Timer.new()
+var _ctrl_held: bool = false  # Ctrl 按住快进状态
+var _ctrl_acc: float = 0.0     # Ctrl 快进句末累加计时
+const CTRL_LINE_INTERVAL := 0.25  # Ctrl 快进：句末打完后自动翻页间隔（秒）
 
 func _ready() -> void:
+	# 根 Control 默认 STOP 会吞掉穿透上来的鼠标点击，导致 _unhandled_input 收不到 advance（键盘不受影响）
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_bg)
 	add_child(_portraits)
@@ -25,6 +30,10 @@ func _ready() -> void:
 	add_child(_auto_timer)
 	_auto_timer.one_shot = true
 	_auto_timer.timeout.connect(_auto_advance)
+	# 纯展示层放行鼠标穿透到 _unhandled_input（推进对话）；按钮在 DialogueBox 内单独保留 STOP
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_portraits.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dialogue.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_wire_interpreter()
 	_wire_ui()
 	# 主场景根 Control 不会被 Window 自动铺满（实测恒为 0,0），手动设到视口尺寸，
@@ -33,7 +42,7 @@ func _ready() -> void:
 	if vp != null:
 		vp.size_changed.connect(_apply_layout)
 	_apply_layout()
-	# 进入起始章节（GameManager.start_new_game 可传参覆盖，默认 chapter01_新皮肤/桥上）
+	# 进入起始章节（GameManager.start_new_game 可传参覆盖，默认 chapter00_序章/酒店）
 	ScriptInterpreter.start(GameManager.start_chapter, GameManager.start_scene)
 
 func _apply_layout() -> void:
@@ -158,13 +167,30 @@ func _auto_advance() -> void:
 	_auto_timer.start(1.0)
 
 func _skip() -> void:
-	# V1：跳过 = 连续推进若干步（不区分已读）；遇 choice/menu/ending 必停，防状态腐蚀
-	for i in 20:
-		if _ended or _choice.visible or _menu.visible:
-			break
+	# 跳过 = 推进到下一个 scene-block 首句；遇 choice/menu/ending/章末必停
+	var start := ScriptInterpreter.current_scene_idx()
+	while not _ended and not _choice.visible and not _menu.visible:
+		if ScriptInterpreter.current_scene_idx() != start:
+			break  # 已跨段，停在新段首句
 		if _dialogue.is_typing():
 			_dialogue.finish_typing()
 			continue
+		ScriptInterpreter.advance()
+
+func _process(delta: float) -> void:
+	# Ctrl 按住 = 打字机 2× 速 + 句末自动翻页（松开恢复手动）
+	var ctrl := Input.is_key_pressed(KEY_CTRL)
+	if ctrl != _ctrl_held:
+		_ctrl_held = ctrl
+		_dialogue.set_fast(ctrl)
+		_ctrl_acc = 0.0
+	if not ctrl or _ended or _choice.visible or _menu.visible:
+		return
+	if _dialogue.is_typing():
+		return  # 等 2× 速打字机自己打完
+	_ctrl_acc += delta
+	if _ctrl_acc >= CTRL_LINE_INTERVAL:
+		_ctrl_acc = 0.0
 		ScriptInterpreter.advance()
 
 func _quick_save() -> void:

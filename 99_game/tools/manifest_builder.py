@@ -53,22 +53,26 @@ def _run_cypher(cypher: str) -> list:
     return json.loads(out[start:end + 1])
 
 
-def collect_portraits() -> dict:
+def collect_portraits() -> tuple[dict, dict]:
     """status=11 的立绘 → guid 整键: assets/portraits/<整键>.png
 
     整键 = make_key(char, variant, stand_id, costume) = <char>-<costume_short>-<variant>-<stand_id>。
     stand_id（图 StandingIllustration.id）全局唯一，无需冲突检测；同角色换装两套图各得各键。
     旧二维键（如陈默.沉重）由 build_manifest 的 existing 保留，供旧章 fallback。
+    返回 (portraits, portrait_scales)：顺带带回 IllusDesign.display_scale（同一次查图，避免查两次），
+    portrait_scales = {整键: scale}，仅收录 display_scale 非 null 的立绘。
     """
     cypher = (
         "MATCH (char:Character)-[:" + CHAR_TO_STAND_EDGES + "*1..5]->"
         "(stand:StandingIllustration {status:11}) "
         "OPTIONAL MATCH (stand)<-[:expands_to]-(illus:IllusDesign)<-[:outfit_for]-(costume:CostumeStyle) "
         "RETURN DISTINCT char.name AS char_name, stand.id AS stand_id, "
-        "stand.variant_label AS variant, costume.name AS costume_name "
+        "stand.variant_label AS variant, costume.name AS costume_name, "
+        "illus.display_scale AS scale "
         "ORDER BY char_name, variant"
     )
     portraits = {}
+    scales = {}
     warned_orphan = []
     for r in _run_cypher(cypher):
         char_name = (r.get("char_name") or "").strip()
@@ -81,11 +85,14 @@ def collect_portraits() -> dict:
             warned_orphan.append(f"{char_name}.{variant}({stand_id})")
         key = make_key(char_name, variant, stand_id, costume)
         portraits[key] = f"{PORTRAIT_PREFIX}{key}.png"
+        scale = r.get("scale")
+        if scale is not None:
+            scales[key] = scale
     if warned_orphan:
         sys.stderr.write(
             f"[warn] {len(warned_orphan)} 张立绘缺 CostumeStyle 绑定（整键去着装段）：{warned_orphan}\n"
         )
-    return portraits
+    return portraits, scales
 
 
 def collect_scenes() -> dict:
@@ -109,8 +116,10 @@ def build_manifest(manifest_path: Path) -> dict:
             print(f"[warn] {manifest_path} JSON 解析失败，bgm/sfx/cg 从空重建", file=sys.stderr)
 
     # portraits/scenes 合并：保留现有手写，图查到的覆盖/补充（向后兼容）；bgm/sfx/cg 保留现有
+    portraits, scales = collect_portraits()
     return {
-        "portraits": {**existing.get("portraits", {}), **collect_portraits()},
+        "portraits": {**existing.get("portraits", {}), **portraits},
+        "portrait_scales": {**existing.get("portrait_scales", {}), **scales},
         "scenes": {**existing.get("scenes", {}), **collect_scenes()},
         "bgm": existing.get("bgm", {}),
         "sfx": existing.get("sfx", {}),
@@ -131,7 +140,8 @@ def main() -> None:
     if args.dry_run:
         sys.stdout.write(text)
         print(
-            f"[dry-run] portraits={len(data['portraits'])} scenes={len(data['scenes'])} "
+            f"[dry-run] portraits={len(data['portraits'])} "
+            f"portrait_scales={len(data['portrait_scales'])} scenes={len(data['scenes'])} "
             f"bgm={len(data['bgm'])}(保留) sfx={len(data['sfx'])}(保留) cg={len(data['cg'])}(保留)",
             file=sys.stderr,
         )
@@ -140,6 +150,7 @@ def main() -> None:
     manifest_path.write_text(text, encoding="utf-8")
     print(
         f"已写入 {manifest_path}：portraits={len(data['portraits'])} "
+        f"portrait_scales={len(data['portrait_scales'])} "
         f"scenes={len(data['scenes'])} bgm={len(data['bgm'])} sfx={len(data['sfx'])} cg={len(data['cg'])}"
     )
 

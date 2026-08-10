@@ -8,11 +8,13 @@ signal button_log()
 signal button_menu()
 
 const BOX_H := 240
+const BASE_CHAR_DELAY := 0.03  # 秒/字（正常）
+const FAST_CHAR_DELAY := 0.015  # 秒/字（Ctrl 快进 2× 速）
 var _avatar := TextureRect.new()
 var _name_lbl := Label.new()
 var _body := RichTextLabel.new()
 var _continue_lbl := Label.new()
-var _char_delay: float = 0.03  # 秒/字
+var _char_delay: float = BASE_CHAR_DELAY  # 秒/字（由 set_fast 切换）
 var _full_text := ""
 var _shown := 0
 var _typing := false
@@ -44,6 +46,12 @@ func _ready() -> void:
 	add_child(_timer)
 	_timer.one_shot = false
 	_timer.timeout.connect(_tick)
+	# 展示控件放行鼠标穿透到 Game._unhandled_input（推进对话）；按钮保留默认 STOP
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_continue_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func _make_buttons(box: Panel) -> void:
 	var names := ["Auto", "Skip", "Log", "Menu"]
@@ -77,6 +85,13 @@ func finish_typing() -> void:
 	_shown = _full_text.length()
 	_continue_lbl.visible = true
 	finished_typing.emit()
+
+# Ctrl 快进切换：打字机 2× 速；打字中需重启 timer 才用上新周期
+func set_fast(fast: bool) -> void:
+	_char_delay = FAST_CHAR_DELAY if fast else BASE_CHAR_DELAY
+	if _typing:
+		_timer.stop()
+		_timer.start(_char_delay)
 
 func _tick() -> void:
 	if not _typing:

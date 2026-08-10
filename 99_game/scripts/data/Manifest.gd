@@ -2,7 +2,7 @@ extends Node
 ## 逻辑名 → 资源路径 映射加载器。
 
 var _data: Dictionary = {
-	"portraits": {}, "scenes": {}, "bgm": {}, "sfx": {}, "cg": {}
+	"portraits": {}, "scenes": {}, "bgm": {}, "sfx": {}, "cg": {}, "portrait_scales": {}
 }
 
 func load_from_path(path: String) -> void:
@@ -20,6 +20,10 @@ func load_from_path(path: String) -> void:
 
 func get_portrait(name: String) -> String:
 	return _data["portraits"].get(name, "")
+
+func get_portrait_scale(name: String) -> float:
+	# 立绘显示缩放（1.0=占满立绘层满高）。无记录默认 1.0（旧章/未设的 IllusDesign 行为同满高）。
+	return _data["portrait_scales"].get(name, 1.0)
 
 func get_scene(name: String) -> String:
 	return _data["scenes"].get(name, "")

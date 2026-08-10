@@ -29,3 +29,26 @@ func test_narrate_keeps_slots():
 	interp.advance()  # 离开 say 到 narrate；narrate 不改槽
 	# 直接读 slots：center 仍是沉重，证明 narrate 维持画面
 	assert_eq(interp.slots["center"]["portrait"], "沉重")
+
+# 回归：跨 scene-block 时 _enter_scene_block 必须清空立绘槽，避免上一段残留（序章 sec00→sec01 顾盈残留 bug）
+func test_scene_block_change_clears_slots():
+	var interp = _new_interp()
+	# 手动构造两段，不依赖具体章文件
+	interp._scenes = [
+		{"id": "a", "lines": [{"op": "narrate", "text": "段A"}]},
+		{"id": "b", "lines": [{"op": "narrate", "text": "段B"}]}
+	]
+	interp._scene_idx = 0
+	interp._line_idx = 0
+	# 段 A 模拟有人在场（left + right 各占槽）
+	interp.slots = {"left": {"who": "陆择", "portrait": "x"}, "center": null, "right": {"who": "顾盈", "portrait": "y"}}
+	# 推进跨到段 B：advance 越过段 A 末尾触发 _enter_scene_block 清场
+	var start := interp.current_scene_idx()
+	var guard := 0
+	while interp.current_scene_idx() == start and guard < 100:
+		interp.advance()
+		guard += 1
+	assert_eq(interp.current_scene_idx(), 1, "应已跨到段 B")
+	assert_is_null(interp.slots["left"], "跨段后 left 清空")
+	assert_is_null(interp.slots["right"], "跨段后 right 清空")
+	assert_is_null(interp.slots["center"], "跨段后 center 清空")

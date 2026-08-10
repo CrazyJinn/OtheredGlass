@@ -55,9 +55,16 @@ func advance() -> void:
 	_line_idx += 1
 	_run_from_current()
 
+# 当前 scene-block 在 _scenes 中的下标，供 UI 侧（如 skip 判定跨段）读取
+func current_scene_idx() -> int:
+	return _scene_idx
+
 # 内部：进入场景段时套用 scene + bgm，从 line 0 起
 func _enter_scene_block() -> void:
 	_line_idx = 0
+	# 换段清场：新 scene-block = 空舞台，避免上一段立绘残留（各段起手会重建在场角色）
+	slots = {"left": null, "center": null, "right": null}
+	portrait_changed.emit(_snapshot())
 	var blk: Dictionary = _scenes[_scene_idx]
 	bg_changed.emit(blk.get("scene", ""), blk.get("time", ""))
 	if blk.has("bgm"):

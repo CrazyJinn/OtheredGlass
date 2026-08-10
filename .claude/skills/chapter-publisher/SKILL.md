@@ -77,8 +77,9 @@ python 99_game/tools/validate_chapter.py '99_game/data/chapters/<stem>.json' 99_
 #   validate FAIL → 中断发布，报警（剧本 schema 不合，先回 25_剧本/ 修对应节定稿 YAML）
 #   注：合并工具内置 scene-block id 章内唯一性校验（重复则报错）——若报 id 重复，说明 structurer 预分配 / outliner 落盘环节 id 冲突，需回上游修正。
 
-# (b) 立绘：绿幕原图 → 缩放+去绿透明 PNG → 99_game/assets/portraits/<整键>.png
-#     先 scale(800x1200 保 2:3) 再 colorkey(#00FF00)，输出带 alpha 的透明立绘；原图 06_/ 不动。
+# (b) 立绘：绿幕原图 → opencv 抠绿+发丝精修+头位归一化 → 99_game/assets/portraits/<整键>.png
+#     4角采样自适应抠绿（替代硬编码色）+ grabCut 发丝精修 + despill 去绿边；以人物高/7.5 头长为尺度、
+#     YuNet 双眼中心为锚点缩放平移，使同角色各变体头部（眼线）落在画布同一水平线（800x1200 RGBA）。原图 06_/ 不动。
 #     <整键> = <char>-<costume_short>-<variant>-<stand_id>（与 portrait-map 产出、manifest 键、合并 JSON requires 一致）
 python 99_game/tools/process_portrait.py '<image_path>' -o '99_game/assets/portraits/<整键>.png'
 

@@ -4,7 +4,7 @@ from validate_chapter import validate_chapter
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = str(ROOT / "data" / "剧本.schema.json")
-CHAPTER = str(ROOT / "data" / "chapters" / "chapter01_新皮肤.json")
+CHAPTER = str(ROOT / "data" / "chapters" / "chapter00_序章.json")
 
 
 def test_valid_chapter_passes():

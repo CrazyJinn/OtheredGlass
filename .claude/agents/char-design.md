@@ -9,7 +9,7 @@ tools: Read, Grep, Glob, Bash, Skill
 
 ## 概述
 
-角色美术生产链的**纯编排层**。**唯一职责是分发任务**：查询图状态 → 决定下一步 → 把每个节点整体委派给对应生产 skill → 复查 status → 汇报。不亲自产出 prompt/图片、不读写图节点与边、**不拆解生产 skill 的内部步骤**（不直接调其子 skill `char-prompt-assembler` / `infra-image-generator`）；所有节点的创建、更新、status 推进都由各生产 skill 自行完成。
+角色美术生产链的**编排层**。**职责是分发与驱动**：查询图状态 → 决定下一步 → 用 `Skill` 工具加载对应生产 skill 并按其流程执行 → 复查 status → 汇报。char-design **不亲自用 Bash 写 cypher 写入、不亲自跑 snowflake、不凭空手写提示词内容**；但 Skill 工具是扁平的——加载 `char-design-sheet` / `char-illus-designer` 后，char-design 即在该 skill 的流程内继续执行其三段式（查状态 → 组装/生成 → 保存结果写 status），**包括按该 skill 的指示调用其声明的子 skill**（`char-prompt-assembler` / `infra-image-generator`），这是预期行为，不是越界。所有图节点的创建、更新、status 推进最终都由生产 skill 的「保存结果」步统一写入。
 
 Schema 文件：`00_init/Schema/角色美术.md`
 输入：**角色名或 ID**（如"陆择"、snowflake ID）。美术子图节点类型固定，一次 cypher 查询即可拿到全部节点的 status，据 status 决定下一步。
@@ -46,11 +46,15 @@ ORDER BY type, status
 
 ### 3. 决策与调度
 
-**通过 Skill 工具委派执行，char-design 不亲自跑生成脚本**：决策后用 `Skill` 工具调用下表对应 skill，传入 `char_id` 与 `target_status`（如 `char-design-sheet NvCkQmFPFt 2`）。被调 skill 在自己的上下文里完成三段式【查询目标节点 → 组装提示词/生成图片 → MERGE 兜底建节点+边并写 status】，仅向 char-design 返回产物路径与最终 status。**char-design 自身禁止用 Bash 执行 cypher 写入、snowflake、图片生成、提示词组装**——这些是各 skill 的职责；char-design 只用 Bash 执行第 2 步的只读状态查询。
+**通过 Skill 工具加载并驱动生产 skill**：决策后用 `Skill` 工具调用下表对应 skill，传入 `char_id` 与 `target_status`（如 `char-design-sheet NvCkQmFPFt 2`）。Skill 工具是扁平的——加载后即由 char-design 在该 skill 的流程内继续执行其三段式【查询目标节点 → 组装提示词/生成图片 → MERGE 兜底建节点+边并写 status】，最终 status 由该 skill 的「保存结果」步统一写入。**char-design 在"分发决策"阶段**（尚未加载某生产 skill 时）**只用 Bash 执行第 2 步的只读状态查询，不亲自写 cypher 写入、不跑 snowflake、不手写提示词内容、不凭空调图片生成**；一旦 `Skill` 加载了某个生产 skill，则按其 SKILL.md 流程执行（其保存步的 cypher 写入、新建节点时的 snowflake、第 2 步对子 skill 的调用，都是该 skill 流程的一部分）。
 
-**只做整体分发，严禁拆解生产 skill 的内部步骤**（这是 status 漏写的唯一根源，必须遵守）：每个待推进的生产节点，**只能用 `Skill` 工具整体调用上表对应的生产 skill**（char-concept-designer / char-costume-designer / char-design-sheet / char-illus-designer），由该 skill 在自己的上下文里跑完整三段式（查状态 → 组装/生成 → 保存结果写 status）并统一写 status。**严禁绕过生产 skill、改去直接调用其内部的纯产出子 skill**（`char-prompt-assembler` / `infra-image-generator`）——这两个子 skill 的契约就是"只产出 prompt/图片文件、不读写图、不写 status"，status 只能由生产 skill 的「保存结果」步写入。一旦绕过生产 skill 去调子 skill，必然陷入死局：子 skill 不写 status、char-design 自己又被上一条规则禁止写 cypher，结果就是"产物已生成、status 永远停在 -1"。**判定越界的简单标准：只要工具调用里出现 `char-prompt-assembler` 或 `infra-image-generator`，就是错的**；正确动作永远是 `Skill <生产skill> <char_id> <target_status>`。
+**不绕过生产 skill 的流程框架**（这是 status 漏写的唯一根源，必须遵守）：每个待推进的生产节点，**先用 `Skill` 工具加载上表对应的生产 skill**（char-concept-designer / char-costume-designer / char-design-sheet / char-illus-designer），再按其 SKILL.md 流程执行完整三段式（查状态 → 组装/生成 → 保存结果写 status）。
 
-**char-design 的全部职责仅限分发**：解析角色 → 只读查状态 → 据 status 决策 → 用 Skill 分发到生产 skill → 复查该节点 status → 汇报。不产出 prompt、不产出图片、不写/改图节点与边、不直接调用任何纯产出子 skill。
+**生产 skill 流程内调用其子 skill 是必须的**：`char-design-sheet` / `char-illus-designer` 的第 2 步明确指示调用 `char-prompt-assembler`（组装提示词）与 `infra-image-generator`（生成图片）。这两个子 skill 是纯产出层（只产 prompt/图片文件、不读写图、不写 status），加载上述生产 skill 后**必须按其指示调用它们**，最后由该 skill 的「保存结果」步统一写 status。
+
+**真正的越界**（会导致"产物已生成、status 永远停在 -1"的死局）只有两种：① 未先 `Skill <生产skill>` 加载其流程，就凭空直接调 `char-prompt-assembler` / `infra-image-generator`；② 调了子 skill 产出文件后，**不继续走该生产 skill 的「保存结果」步写 status**。判定标准**不是**"工具调用里出现子 skill 名"——在 char-design-sheet / char-illus-designer 流程内出现它们是正确且必须的；判定标准**是**"是否完整走了生产 skill 的三段式、最终由其保存步写入了 status"。
+
+**char-design 的职责边界**：解析角色 → 只读查状态 → 据 status 决策 → 用 Skill 加载生产 skill 并驱动其流程 → 复查该节点 status → 汇报。char-design **不凭空手写提示词内容、不亲自直接调 OfoxAI 图片 API**——提示词与图片只能通过加载生产 skill、由其流程内的子 skill（char-prompt-assembler / infra-image-generator）产出；**不绕过生产 skill 的保存步**（status 只能由该步写入）。
 
 **调度只看 status，不看产物文件**：决定是否调度某 skill 时，唯一判据是节点 `status` 与 `target_status`。**禁止**因 `prompt_path`/`image_path` 已有值或磁盘文件已存在而判定"已完成"并跳过调度。`status=-1`（作废重做）必须重新调用对应 skill 重生成并覆盖旧产物；**重做时禁止读取旧 prompt / 旧图片内容**，直接以当前图节点数据为唯一来源重新组装并覆盖写入。
 
@@ -80,7 +84,7 @@ ORDER BY type, status
 
 > **StandingIllustration 已剥离**：立绘变体改由 `plot-design` agent 按 depicts 引用直调 `char-stand-designer <stand_id>` 推进（按需出图，见 [plot-design](plot-design.md)）。char-design 终点 = `IllusDesign` 推到 `11`（含审批）。
 
-**调度方式**：用 `Skill` 工具调用**上表 4 个生产 skill 之一**，参数 `<char_id> [target_status]`（省略 target_status 则推到最终状态）。char-design **只能调用这 4 个生产 skill**；`char-prompt-assembler` / `infra-image-generator` 是生产 skill 的内部子 skill，**严禁由 char-design 直接调用**（理由见上文「只做整体分发」）。
+**调度方式**：用 `Skill` 工具调用**上表 4 个生产 skill 之一**，参数 `<char_id> [target_status]`（省略 target_status 则推到最终状态）。入口决策时 char-design **只从这 4 个生产 skill 选一个加载**，不跳过它们。`char-prompt-assembler` / `infra-image-generator` 是生产 skill 流程**内部**的子 skill——它们**不作为 char-design 的入口调度目标**，但**在已加载 char-design-sheet / char-illus-designer 并执行其第 2 步时，必须按该 skill 指示调用**（理由见上文「不绕过生产 skill 的流程框架」）。
 
 **节点由 skill 创建**：agent 不直接创建任何图节点或边；节点/边由各 skill 在「保存结果」步用 MERGE 兜底创建，status 由该步统一写入。子 skill（char-prompt-assembler / infra-image-generator）为**纯产出层**——只产 prompt/图片文件、不读写图、不写 status。
 

@@ -65,6 +65,8 @@ LLM 按 [references/template-角色美术设定.md](references/template-角色�
 | 唇形 | lip_shape | 薄唇 / 饱满 / 厚唇 / 微笑唇 | 单选 |
 | 特殊标记 | marks | 无 / 疤痕 / 纹身 / 胎记 / 泪痣 | 可多选 |
 
+**身高抽取（height_cm）**：从刚生成的 `appearance` 文本里识别形如 `NNNcm` / `约NNNcm` 的三位身高，取整数填入 `height_cm`（供下游 IllusDesign 推算立绘显示缩放，见 char-illus-designer）。若 appearance 未给明确身高，填 `null`。
+
 **LanguageStyle**（怪物跳过）：
 
 | 内容 | 属性 |
@@ -91,6 +93,7 @@ SET app.name = '<角色名外貌特征>',
     app.shape_language = '...', app.age_impression = '...', app.body_type = '...',
     app.skin_tone = '...', app.ethnicity = '...', app.hair = '...', app.eye = '...',
     app.lip_shape = '...', app.marks = '...',
+    app.height_cm = <身高整数或 null>,   // 从 appearance 抽取三位身高（如 170）；无明确身高写 null
     app.status = 1;
 ```
 

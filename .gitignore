@@ -1,3 +1,7 @@
 settings.json
 settings.local.json
 __pycache__/
+
+# 字体子集产物（subset_font.py 生成，不入 git；完整字体 LXGWWenKai-Medium.ttf 仍跟踪）
+99_game/fonts/*.full.ttf
+99_game/fonts/*.subset.ttf

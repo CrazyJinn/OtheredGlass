@@ -34,10 +34,11 @@ allowed-tools: Read, Bash, Write, Edit
 
 ```cypher
 MATCH (ch:Character {id: '<char_id>'})
-MATCH (ch)-[:has_appearance]->(:AppearanceStyle)-[:produces]->(ds:DesignSheet)
+MATCH (ch)-[:has_appearance]->(ap:AppearanceStyle)-[:produces]->(ds:DesignSheet)
 MATCH (ch)-[:has_costume]->(cos:CostumeStyle)
 OPTIONAL MATCH (ds)-[:produces]->(illus:IllusDesign)<-[:outfit_for]-(cos)
 RETURN ch.name AS char_name,
+       ap.height_cm AS height_cm,
        ds.id AS ds_id, ds.status AS ds_status, ds.image_path AS ds_image,
        cos.id AS cos_id, cos.name AS cos_name, cos.status AS cos_status,
        illus.id AS illus_id, illus.status AS illus_status, illus.adaptation_notes AS notes
@@ -75,6 +76,8 @@ RETURN ch.name AS char_name,
 
 ### 3. 保存结果（MERGE 兜底 + 写产物 + 推进 status）
 
+**显示缩放推算（display_scale）**：立绘按身高缩放显示（1.0=占满立绘层满高）。从第 1 步查回的 `height_cm` 推算：`display_scale = round(height_cm / 200, 4)`（参考身高 200cm，与 `99_game/tools/init_portrait_scales.py` 的 `REF_HEIGHT_DEFAULT` 一致）。`height_cm` 缺失则 `display_scale = null`（立绘按满高显示）。
+
 对每组一次性写入（节点不存在则兜底创建）：
 
 ```cypher
@@ -88,6 +91,7 @@ MATCH (illus:IllusDesign {id: '<ILLUS_ID>'})
 SET illus.prompt_path = '<PROMPT_PATH>',
     illus.image_path  = '<IMAGE_PATH>',        // 仅 target_status=2 时
     illus.adaptation_notes = '<notes>',        // 若有补充
+    illus.display_scale = <scale 或 null>,     // = round(height_cm/200, 4)；height_cm 缺失则 null
     illus.status = <1 | 10>;                   // target_status=1 → 1；target_status=2 → 10（待审）
 ```
 

@@ -13,6 +13,7 @@ func _ready() -> void:
 		m.load_from_path("res://data/manifest.json")
 		Engine.register_singleton("Manifest", m)
 	_register_inputs()
+	_apply_default_font()
 
 func _register_inputs() -> void:
 	_add_action("advance", [KEY_SPACE, KEY_ENTER], [MOUSE_BUTTON_LEFT])
@@ -35,6 +36,20 @@ func _add_action(action_name: String, keycodes: Array, mouse_buttons: Array) -> 
 		var em := InputEventMouseButton.new()
 		em.button_index = mb
 		InputMap.action_add_event(action_name, em)
+
+func _apply_default_font() -> void:
+	# 桌面端有系统中文字体兜底；Web 端浏览器缺中文字体 → 中文乱码。
+	# 固定路径加载内嵌字体设为 root theme 默认字体。
+	# （不用 DirAccess 扫描：该 API 在 Web 端读 pck 不可靠——桌面正常但 Web 漏扫，字体设不上。）
+	const FONT_PATH := "res://fonts/LXGWWenKai-Medium.ttf"
+	if not ResourceLoader.exists(FONT_PATH):
+		return
+	var f := load(FONT_PATH) as Font
+	if f == null:
+		return
+	var t := Theme.new()
+	t.default_font = f
+	get_tree().root.theme = t
 
 ## 起始章节配置（Game 场景 _ready 时读这两个值启动解释器）。
 ## start_new_game() 可传参覆盖；默认进 chapter00_序章/酒店。

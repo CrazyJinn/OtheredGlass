@@ -1,6 +1,6 @@
 # 他者之镜（OtheredGlass）— Godot 工程
 
-2D Galgame 框架。集中式 `ScriptInterpreter` 解释器消费纯 JSON 剧本（`data/chapters/*.json`，格式见 `data/剧本.schema.json`），经 `data/manifest.json` 把逻辑名映射到资源；美术默认程序占位兜底（真图经上游 `chapter-publisher` 搬运，见「资源」）。本工程现含序章 `chapter00_序章.json` 与示例剧本 `chapter01_新皮肤.json`。
+2D Galgame 框架。集中式 `ScriptInterpreter` 解释器消费纯 JSON 剧本（`data/chapters/*.json`，格式见 `data/剧本.schema.json`），经 `data/manifest.json` 把逻辑名映射到资源；美术默认程序占位兜底（真图经上游 `chapter-publisher` 搬运，见「资源」）。本工程现含序章 `chapter00_序章.json`。
 
 > 剧情格式权威定义：`00_init/剧本.md` + `00_init/剧本.schema.json`（本工程 `data/剧本.schema.json` 为其字节副本）。
 
@@ -19,14 +19,13 @@
 
 ## 验收点
 
-> 以下以**示例章 `chapter01_新皮肤`** 为例（桥上陈默）；「开始游戏」默认进序章 `chapter00_序章`。
+> 「开始游戏」默认进序章 `chapter00_序章`（线性叙事，无分支/结局；角色 陆择/顾盈/小夏/伊芙，场景 酒店-客房 → 街角咖啡店 → 马路-路口 → 灵魂夹缝）。
 
-1. 桥上：陈默.沉重(center) 占位立绘 + 打字机台词。
-2. choice「再想想」→ 经 `label keepgoing` → 陈默.释然 → `jump` 到「回出租屋」段（自动换背景）。
-3. choice「跳下去」→ `jump` 到「结局_BE」段 → `ending(BE)` 进结局画面。
-4. 立绘累积：narrate 期间立绘维持；不同 `pos` 累积；`hide` 移除。
-5. 段尾无 `jump`/`ending` 时回标题（章节结束）。
-6. H / 滚轮上 开 Backlog；ESC/右键 系统菜单；F5/F9 快速存读档；A 自动；S 跳过（遇 choice/结局停）。
+1. 立绘累积：角色 `say`/`show` 进 left/center/right 槽，`narrate` 期间维持，`hide` 移除。
+2. 立绘按身高缩放、贴底对齐（高个偏高、矮个偏矮；缩放值来自 `IllusDesign.display_scale` 经 manifest `portrait_scales` 注入）。
+3. 背景：`scene` 切换时换背景图（缺图走绿色占位兜底）。
+4. 章末（末段末句后无 `jump`/`ending`）自动回标题。
+5. H / 滚轮上 开 Backlog；ESC/右键 系统菜单；F5/F9 快速存读档；A 自动；S 跳过。
 
 ## 输入键位（代码注册于 GameManager._ready）
 | 操作 | 键 |
@@ -41,7 +40,7 @@
 ```
 cd tools
 pip install -r requirements.txt
-python validate_chapter.py ../data/chapters/chapter01_新皮肤.json ../data/剧本.schema.json
+python validate_chapter.py ../data/chapters/chapter00_序章.json ../data/剧本.schema.json
 python -m pytest test_validate.py -v
 ```
 预期：3 用例通过 + CLI 输出 `OK`。
