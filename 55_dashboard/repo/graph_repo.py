@@ -46,7 +46,7 @@ def get_nodes(label):
 
 
 # 美术生产链边类型（限定遍历范围，避免把叙事 Event/Info/其他角色拉进美术子图）
-_ART_EDGES = "has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style"
+_ART_EDGES = "has_appearance|has_voice_style|has_voice_profile|has_costume|produces|outfit_for|expands_to|ref_style"
 
 # 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
 _SCENE_EDGES = "has_scene|has_layer"

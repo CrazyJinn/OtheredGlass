@@ -15,6 +15,8 @@ NODE_STATUS = {
     # 剧情（Chapter 章级结构审 + Section 节级定稿审，各一道审批）
     "Chapter":             {"legal": [-1, 0, 1, 10, 11],          "completion": 11, "has_approval": True},
     "Section":             {"legal": [-1, 0, 20, 30, 31],         "completion": 31, "has_approval": True},
+    # 声音（角色基线音色档案，无审批；VoiceDesign 设计 + clone prompt 固化即 status=1）
+    "VoiceProfile":        {"legal": [-1, 0, 1],                  "completion": 1, "has_approval": False},
 }
 
 ENUM_OPTIONS = {

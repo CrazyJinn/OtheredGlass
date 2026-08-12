@@ -130,6 +130,15 @@ python 99_game/tools/chapter_packs_updater.py '<stem>' \
    ⚠️ 加密后无法再 `validate_chapter.py`（明文），故加密必须在本 skill 流程之后。
 2. **按章分包**：参考 `chapter_packs.json` + `manifest.json`，把每章资源打进 `<stem>.pck`（pck 内用全局 `assets/...` 路径），Web 预设主包不含这些资源，运行时由 ChapterPackLoader 按需下载挂载。详见 [99_game/docs](../../../99_game/docs/)。
 
+## 与 voice-publisher 的边界
+
+`voice` 字段（`say.voice`）由 [voice-publisher](../voice-publisher/SKILL.md) **后处理注入**，创作区定稿 YAML **不写** voice：
+
+- **生产时序**：chapter-dialoguer（YAML）→ **chapter-publisher**（合并 + 立绘）→ **voice-publisher**（TTS + 绑定 voice）。
+- 本 skill 合并 YAML → chapter JSON 时不含 voice（YAML 没有）；voice 由 voice-publisher 在合并后按 `<char>-<stem>-<scene_id>-<line_idx>` 注入。
+- **重跑 chapter-publisher 会覆盖 chapter JSON，清除已注入的 voice 字段**（剧本改动导致 line_idx 变化也需重对齐）→ 重跑本 skill 后需重跑 voice-publisher。
+- chapter JSON 的 `meta.requires` 不含 voices（voice 键由 voice-publisher 按 say 行位置算，不进 requires）。
+
 ## 参考文档
 
 - 剧本格式与 manifest 映射（含节级创作与发布合并）：[00_init/剧本.md](../../../00_init/剧本.md)

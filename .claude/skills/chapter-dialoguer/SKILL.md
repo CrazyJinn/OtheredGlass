@@ -102,7 +102,7 @@ ORDER BY char_name, variant LIMIT 200
 
 #### 创作技术要求（格式正确性）
 
-1. **lines 指令**：用 11 条指令（`say`/`narrate`/`show`/`hide`/`bg`/`bgm`/`sfx`/`choice`/`label`/`jump`/`ending`）。每条 `say` 必带 `who`/`portrait`/`pos`/`text` 全四字段，`pos` ∈ `left`/`center`/`right`。
+1. **lines 指令**：用 11 条指令（`say`/`narrate`/`show`/`hide`/`bg`/`bgm`/`sfx`/`choice`/`label`/`jump`/`ending`）。每条 `say` 必带 `who`/`portrait`/`pos`/`text`/`emotion` 五字段，`pos` ∈ `left`/`center`/`right`。`emotion` 是语音情绪标签（`平静`/`高兴`/`悲伤`/`愤怒`/`震惊`/`无奈`/`调侃`/`温柔`/`冷漠`/`紧张`/`恐惧`/`坚定`，可扩），据该句当下情绪选——它驱动 `voice-publisher`→CosyVoice instruct 控制配音语气（见 [15_声音/emotion_instruct.json](../../../15_声音/emotion_instruct.json)），与 `portrait` variant（视觉情绪）配对表达同一情绪节拍（一句的视觉表情 + 语音语气应同情绪，如 `portrait: 慵懒` + `emotion: 调侃`，不要错配如 `portrait: 慵懒` + `emotion: 愤怒`）。
 2. **情感递进**：每个 scene 内部情绪有起伏（不是平铺），对齐设计简报情感弧线的该段位置。
 3. **变体选用规则**（立绘表情密度——galgame 视觉叙事的核心）：
    - **反模式（必须避免）**：同一 scene 同一角色用同一个 portrait 通铺全场（如一段戏 5 句全用「慵懒」、12 句全用「庄严」）。立绘表情是对话情绪的视觉锚点，一表情撑全场会让情绪弧无法视觉化、剧情显得单薄。

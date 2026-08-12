@@ -84,7 +84,9 @@
             "who": { "type": "string" },
             "portrait": { "type": "string" },
             "pos": { "$ref": "#/$defs/pos" },
-            "text": { "type": "string" }
+            "text": { "type": "string" },
+            "voice": { "type": "string" },
+            "emotion": { "type": "string" }
           }
         },
         {

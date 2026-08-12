@@ -59,7 +59,9 @@
           "who": "陆择",
           "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
           "pos": "left",
-          "text": "……几点了。"
+          "text": "……几点了。",
+          "voice": "陆择-chapter00_序章-酒店-2",
+          "emotion": "平静"
         },
         {
           "op": "narrate",
@@ -80,7 +82,9 @@
           "who": "顾盈",
           "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
           "pos": "right",
-          "text": "哟，醒了。"
+          "text": "哟，醒了。",
+          "voice": "顾盈-chapter00_序章-酒店-6",
+          "emotion": "调侃"
         },
         {
           "op": "narrate",
@@ -91,21 +95,27 @@
           "who": "顾盈",
           "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
           "pos": "right",
-          "text": "这衬衫，我穿可比你顺眼。"
+          "text": "这衬衫，我穿可比你顺眼。",
+          "voice": "顾盈-chapter00_序章-酒店-8",
+          "emotion": "调侃"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
           "pos": "left",
-          "text": "呵，那是。我穿它的时候，没人盯着衬衫看。"
+          "text": "呵，那是。我穿它的时候，没人盯着衬衫看。",
+          "voice": "陆择-chapter00_序章-酒店-9",
+          "emotion": "调侃"
         },
         {
           "op": "say",
           "who": "顾盈",
           "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
           "pos": "right",
-          "text": "嗯……昨晚，挺卖力的。"
+          "text": "嗯……昨晚，挺卖力的。",
+          "voice": "顾盈-chapter00_序章-酒店-10",
+          "emotion": "调侃"
         },
         {
           "op": "narrate",
@@ -116,7 +126,9 @@
           "who": "陆择",
           "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
           "pos": "left",
-          "text": "没办法。主要是这床不行——再来几次，怕是要塌。"
+          "text": "没办法。主要是这床不行——再来几次，怕是要塌。",
+          "voice": "陆择-chapter00_序章-酒店-12",
+          "emotion": "调侃"
         },
         {
           "op": "narrate",
@@ -127,7 +139,9 @@
           "who": "陆择",
           "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
           "pos": "left",
-          "text": "对了，留号码这种事，咱们就免了吧？"
+          "text": "对了，留号码这种事，咱们就免了吧？",
+          "voice": "陆择-chapter00_序章-酒店-14",
+          "emotion": "调侃"
         },
         {
           "op": "narrate",
@@ -138,14 +152,18 @@
           "who": "顾盈",
           "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
           "pos": "right",
-          "text": "放心。没打算加你。"
+          "text": "放心。没打算加你。",
+          "voice": "顾盈-chapter00_序章-酒店-16",
+          "emotion": "调侃"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
           "pos": "left",
-          "text": "呵，我倒松了口气。"
+          "text": "呵，我倒松了口气。",
+          "voice": "陆择-chapter00_序章-酒店-17",
+          "emotion": "调侃"
         },
         {
           "op": "narrate",
@@ -156,35 +174,45 @@
           "who": "陆择",
           "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
           "pos": "left",
-          "text": "这附近哪儿有咖啡店？"
+          "text": "这附近哪儿有咖啡店？",
+          "voice": "陆择-chapter00_序章-酒店-19",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "顾盈",
           "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
           "pos": "right",
-          "text": "嗯？请我？"
+          "text": "嗯？请我？",
+          "voice": "顾盈-chapter00_序章-酒店-20",
+          "emotion": "调侃"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-赤裸上身-轻佻-PHSE4iftNS",
           "pos": "left",
-          "text": "想多了，我赶飞机。昨晚喝成那样，得找杯咖啡缓缓。"
+          "text": "想多了，我赶飞机。昨晚喝成那样，得找杯咖啡缓缓。",
+          "voice": "陆择-chapter00_序章-酒店-21",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "顾盈",
           "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
           "pos": "right",
-          "text": "啧，白高兴。"
+          "text": "啧，白高兴。",
+          "voice": "顾盈-chapter00_序章-酒店-22",
+          "emotion": "无奈"
         },
         {
           "op": "say",
           "who": "顾盈",
           "portrait": "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
           "pos": "right",
-          "text": "行吧，飞你的吧。"
+          "text": "行吧，飞你的吧。",
+          "voice": "顾盈-chapter00_序章-酒店-23",
+          "emotion": "无奈"
         },
         {
           "op": "narrate",
@@ -199,7 +227,9 @@
           "who": "陆择",
           "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
           "pos": "left",
-          "text": "还有俩小时，来得及。"
+          "text": "还有俩小时，来得及。",
+          "voice": "陆择-chapter00_序章-酒店-26",
+          "emotion": "平静"
         },
         {
           "op": "narrate",
@@ -236,7 +266,9 @@
           "who": "陆择",
           "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
           "pos": "left",
-          "text": "一杯美式，谢了。"
+          "text": "一杯美式，谢了。",
+          "voice": "陆择-chapter00_序章-咖啡店-3",
+          "emotion": "平静"
         },
         {
           "op": "narrate",
@@ -247,7 +279,9 @@
           "who": "陆择",
           "portrait": "陆择-商务休闲着装-轻佻-PJajqyM6s6",
           "pos": "left",
-          "text": "呵，早班啊。眼睛倒挺亮。"
+          "text": "呵，早班啊。眼睛倒挺亮。",
+          "voice": "陆择-chapter00_序章-咖啡店-5",
+          "emotion": "调侃"
         },
         {
           "op": "narrate",
@@ -258,7 +292,9 @@
           "who": "陆择",
           "portrait": "陆择-商务休闲着装-玩味-PJajqyM6s5",
           "pos": "left",
-          "text": "逗你的，别紧张。"
+          "text": "逗你的，别紧张。",
+          "voice": "陆择-chapter00_序章-咖啡店-7",
+          "emotion": "调侃"
         },
         {
           "op": "narrate",
@@ -295,7 +331,9 @@
           "who": "陆择",
           "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
           "pos": "left",
-          "text": "呵，这雨，真讨厌。"
+          "text": "呵，这雨，真讨厌。",
+          "voice": "陆择-chapter00_序章-路口-2",
+          "emotion": "无奈"
         },
         {
           "op": "narrate",
@@ -346,7 +384,9 @@
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-茫然-P2vQL2d9dd",
           "pos": "left",
-          "text": "……这是哪儿？"
+          "text": "……这是哪儿？",
+          "voice": "陆择-chapter00_序章-夹缝-3",
+          "emotion": "震惊"
         },
         {
           "op": "narrate",
@@ -367,35 +407,45 @@
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
           "pos": "right",
-          "text": "晨光的祝福，降临于你——阿门。"
+          "text": "晨光的祝福，降临于你——阿门。",
+          "voice": "伊芙-chapter00_序章-夹缝-7",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
           "pos": "right",
-          "text": "嗯……让我想想，该怎么和你说。"
+          "text": "嗯……让我想想，该怎么和你说。",
+          "voice": "伊芙-chapter00_序章-夹缝-8",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-茫然-P2vQL2d9dd",
           "pos": "left",
-          "text": "你是谁？"
+          "text": "你是谁？",
+          "voice": "陆择-chapter00_序章-夹缝-9",
+          "emotion": "震惊"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
           "pos": "right",
-          "text": "我叫伊芙。你的灵魂引路人。"
+          "text": "我叫伊芙。你的灵魂引路人。",
+          "voice": "伊芙-chapter00_序章-夹缝-10",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-温柔-P2vQL2d9dg",
           "pos": "right",
-          "text": "你，已经死了。"
+          "text": "你，已经死了。",
+          "voice": "伊芙-chapter00_序章-夹缝-11",
+          "emotion": "平静"
         },
         {
           "op": "narrate",
@@ -410,91 +460,117 @@
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-沉吟-P2vQL2d9de",
           "pos": "left",
-          "text": "……有点意思。"
+          "text": "……有点意思。",
+          "voice": "陆择-chapter00_序章-夹缝-14",
+          "emotion": "调侃"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
           "pos": "right",
-          "text": "审判的判词，已经落下了。"
+          "text": "审判的判词，已经落下了。",
+          "voice": "伊芙-chapter00_序章-夹缝-15",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
           "pos": "right",
-          "text": "你活着那些日子，玩弄一颗又一颗的心，欠下的情债……够你去一个，很深的地方。"
+          "text": "你活着那些日子，玩弄一颗又一颗的心，欠下的情债……够你去一个，很深的地方。",
+          "voice": "伊芙-chapter00_序章-夹缝-16",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-茫然-P2vQL2d9dd",
           "pos": "left",
-          "text": "……多深？"
+          "text": "……多深？",
+          "voice": "陆择-chapter00_序章-夹缝-17",
+          "emotion": "震惊"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
           "pos": "right",
-          "text": "人们管那里，叫地狱。"
+          "text": "人们管那里，叫地狱。",
+          "voice": "伊芙-chapter00_序章-夹缝-18",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-轻佻-PRodLgg4dE",
           "pos": "left",
-          "text": "呵。"
+          "text": "呵。",
+          "voice": "陆择-chapter00_序章-夹缝-19",
+          "emotion": "调侃"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-轻佻-PRodLgg4dE",
           "pos": "left",
-          "text": "那倒是新鲜。我这种人下去，估计能混个迎宾。"
+          "text": "那倒是新鲜。我这种人下去，估计能混个迎宾。",
+          "voice": "陆择-chapter00_序章-夹缝-20",
+          "emotion": "调侃"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-温柔-P2vQL2d9dg",
           "pos": "right",
-          "text": "但——有人替你说了句话。"
+          "text": "但——有人替你说了句话。",
+          "voice": "伊芙-chapter00_序章-夹缝-21",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-温柔-P2vQL2d9dg",
           "pos": "right",
-          "text": "你有一样本事，一直用错了地方。你太懂人心……懂怎么让人动心，也懂一颗心碎起来，是什么声音。"
+          "text": "你有一样本事，一直用错了地方。你太懂人心……懂怎么让人动心，也懂一颗心碎起来，是什么声音。",
+          "voice": "伊芙-chapter00_序章-夹缝-22",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-温柔-P2vQL2d9dg",
           "pos": "right",
-          "text": "所以，给你一条路。"
+          "text": "所以，给你一条路。",
+          "voice": "伊芙-chapter00_序章-夹缝-23",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
           "pos": "right",
-          "text": "六个试炼，每个三十天。你的灵魂会穿越进一具身体，去救一个——在感情里，走投无路的人。"
+          "text": "六个试炼，每个三十天。你的灵魂会穿越进一具身体，去救一个——在感情里，走投无路的人。",
+          "voice": "伊芙-chapter00_序章-夹缝-24",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
           "pos": "right",
-          "text": "你只能在最关键的岔路口伸手。其余的，不许碰。"
+          "text": "你只能在最关键的岔路口伸手。其余的，不许碰。",
+          "voice": "伊芙-chapter00_序章-夹缝-25",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-温柔-P2vQL2d9dg",
           "pos": "right",
-          "text": "做成了，你的账，一笔勾销。"
+          "text": "做成了，你的账，一笔勾销。",
+          "voice": "伊芙-chapter00_序章-夹缝-26",
+          "emotion": "平静"
         },
         {
           "op": "narrate",
@@ -509,28 +585,36 @@
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-沉吟-P2vQL2d9de",
           "pos": "left",
-          "text": "……是我这种人，弄碎的吧。"
+          "text": "……是我这种人，弄碎的吧。",
+          "voice": "陆择-chapter00_序章-夹缝-29",
+          "emotion": "悲伤"
         },
         {
           "op": "say",
           "who": "陆择",
           "portrait": "陆择-麻衣苦行-沉吟-P2vQL2d9de",
           "pos": "left",
-          "text": "……为什么，是我。"
+          "text": "……为什么，是我。",
+          "voice": "陆择-chapter00_序章-夹缝-30",
+          "emotion": "无奈"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-浅笑-P2vQL2d9di",
           "pos": "right",
-          "text": "因为你欠的，是情债。"
+          "text": "因为你欠的，是情债。",
+          "voice": "伊芙-chapter00_序章-夹缝-31",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-浅笑-P2vQL2d9di",
           "pos": "right",
-          "text": "能还的——也是情。"
+          "text": "能还的——也是情。",
+          "voice": "伊芙-chapter00_序章-夹缝-32",
+          "emotion": "温柔"
         },
         {
           "op": "narrate",
@@ -545,14 +629,18 @@
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-浅笑-P2vQL2d9di",
           "pos": "right",
-          "text": "第一个试炼，要开始了。"
+          "text": "第一个试炼，要开始了。",
+          "voice": "伊芙-chapter00_序章-夹缝-35",
+          "emotion": "平静"
         },
         {
           "op": "say",
           "who": "伊芙",
           "portrait": "伊芙-天使灵魂引路人着装-浅笑-P2vQL2d9di",
           "pos": "right",
-          "text": "愿光，指引你的归途。"
+          "text": "愿光，指引你的归途。",
+          "voice": "伊芙-chapter00_序章-夹缝-36",
+          "emotion": "温柔"
         },
         {
           "op": "narrate",

@@ -4,13 +4,16 @@ extends Node
 
 var _bgm: AudioStreamPlayer = null
 var _sfx_player: AudioStreamPlayer = null
+var _voice_player: AudioStreamPlayer = null
 var _bgm_loop: bool = true
 
 func _ready() -> void:
 	_bgm = AudioStreamPlayer.new()
 	_sfx_player = AudioStreamPlayer.new()
+	_voice_player = AudioStreamPlayer.new()
 	add_child(_bgm)
 	add_child(_sfx_player)
+	add_child(_voice_player)
 
 func play_bgm(track: String, loop: bool = true) -> void:
 	var path: String = _manifest().get_bgm(track) if _manifest() else ""
@@ -36,10 +39,26 @@ func play_sfx(track: String) -> void:
 	_sfx_player.stream = load(path)
 	_sfx_player.play()
 
+func play_voice(key: String) -> void:
+	# 首行无条件 stop：任一新 say 都自动停上一句，覆盖点击/Auto/Skip/Ctrl 所有推进路径
+	_voice_player.stop()
+	if key == "":
+		return  # narrate / 无 voice 字段：仅停旧音不播放
+	var path: String = _manifest().get_voice(key) if _manifest() else ""
+	if path == "" or not ResourceLoader.exists(path):
+		push_warning("AudioManager: VOICE 资源缺失 %s" % key)
+		return
+	_voice_player.stream = load(path)
+	_voice_player.play()
+
+func stop_voice() -> void:
+	_voice_player.stop()
+
 func set_volume(channel: String, value_db: float) -> void:
 	match channel:
 		"bgm": _bgm.volume_db = value_db
 		"sfx": _sfx_player.volume_db = value_db
+		"voice": _voice_player.volume_db = value_db
 
 func _manifest():
 	return Engine.get_singleton("Manifest") if Engine.has_singleton("Manifest") else null

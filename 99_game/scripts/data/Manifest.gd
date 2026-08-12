@@ -2,7 +2,7 @@ extends Node
 ## 逻辑名 → 资源路径 映射加载器。
 
 var _data: Dictionary = {
-	"portraits": {}, "scenes": {}, "bgm": {}, "sfx": {}, "cg": {}, "portrait_scales": {}
+	"portraits": {}, "scenes": {}, "bgm": {}, "sfx": {}, "cg": {}, "portrait_scales": {}, "voices": {}
 }
 
 func load_from_path(path: String) -> void:
@@ -36,3 +36,6 @@ func get_sfx(track: String) -> String:
 
 func get_cg(name: String) -> String:
 	return _data["cg"].get(name, "")
+
+func get_voice(name: String) -> String:
+	return _data["voices"].get(name, "")

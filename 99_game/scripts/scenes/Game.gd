@@ -85,9 +85,11 @@ func _on_line_ready(kind: String, payload: Dictionary) -> void:
 	if kind == "say":
 		_dialogue.show_line(payload.get("who", ""), payload.get("portrait", ""), payload.get("text", ""), false)
 		_backlog.append(payload.get("who", ""), payload.get("text", ""))
+		AudioManager.play_voice(payload.get("voice", ""))
 	else:  # narrate
 		_dialogue.show_line("", "", payload.get("text", ""), true)
 		_backlog.append("", payload.get("text", ""))
+		AudioManager.play_voice("")  # 旁白不配音：仅停上一句对白尾音
 
 func _on_bg_changed(scene_name: String, _time: String) -> void:
 	var man = Engine.get_singleton("Manifest") if Engine.has_singleton("Manifest") else null
@@ -115,13 +117,16 @@ func _on_choice(options: Array) -> void:
 # 场景段头自动写 quick 槽（spec 5.3）
 func _on_scene_entered() -> void:
 	SaveManager.save_slot(SaveManager.QUICK, ScriptInterpreter.snapshot())
+	AudioManager.stop_voice()  # 段切换清场，避免上段尾音漏进新段
 
 func _on_ended(kind: String, title: String, _cg: String) -> void:
 	_ended = true
+	AudioManager.stop_voice()
 	GameManager.goto_ending(kind, title)
 
 func _on_chapter_finished() -> void:
 	_ended = true
+	AudioManager.stop_voice()
 	GameManager.to_title()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -168,6 +173,7 @@ func _auto_advance() -> void:
 
 func _skip() -> void:
 	# 跳过 = 推进到下一个 scene-block 首句；遇 choice/menu/ending/章末必停
+	AudioManager.stop_voice()  # skip 立即静音，不等下一句自覆盖
 	var start := ScriptInterpreter.current_scene_idx()
 	while not _ended and not _choice.visible and not _menu.visible:
 		if ScriptInterpreter.current_scene_idx() != start:

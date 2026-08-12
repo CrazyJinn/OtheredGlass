@@ -20,6 +20,7 @@
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
 | [场景美术.md](Schema/场景美术.md) | 场景如何从地点变成画面 | Scene, SceneLayer |
 | [剧情.md](Schema/剧情.md) | 剧本章节编排（章→节→场景；结构/提纲/定稿） | Chapter, Section |
+| [声音.md](Schema/声音.md) | 角色如何从文字变成声音 | VoiceProfile |
 
 ---
 
@@ -45,6 +46,7 @@
 | SceneLayer | snowflake Base62 | 场景的单一图层（背景/地面/陈设/遮罩） |
 | Chapter | snowflake Base62 | 剧本章节编排单元（章级：结构 / 分节规划） |
 | Section | snowflake Base62 | 章节内的节编排单元（节级：提纲 / 定稿，锚定 outline_path / script_path） |
+| VoiceProfile | snowflake Base62 | 角色基线音色档案（instruct + 参考音频 + clone prompt） |
 
 ---
 
@@ -65,6 +67,7 @@
 | has_appearance | Character → AppearanceStyle | 1:1 | ✅ | 角色外貌 |
 | has_costume | Character → CostumeStyle | 1:N | ✅ | 角色着装 |
 | has_voice_style | Character → LanguageStyle | 1:1 | ✅ | 角色语言风格 |
+| has_voice_profile | Character → VoiceProfile | 1:1 | ✅ | 角色基线音色档案（区别于 has_voice_style 的文字风格） |
 | produces | AppearanceStyle → DesignSheet | 1:1 | ✅ | 外貌产出设计图 |
 | produces | DesignSheet → IllusDesign | 1:N | ✅ | 设计图→立绘设计图 |
 | outfit_for | CostumeStyle → IllusDesign | 1:1 | ✅ | 着装→立绘设计图 |
@@ -97,6 +100,7 @@ flowchart LR
         Appearance["AppearanceStyle"]
         Costume["CostumeStyle"]
         Language["LanguageStyle"]
+        Voice["VoiceProfile"]
     end
 
     subgraph 美术生产["美术生产"]
@@ -118,6 +122,7 @@ flowchart LR
     Character -->|"has_appearance ✅ 1:1"| Appearance
     Character -->|"has_costume ✅ 1:N"| Costume
     Character -->|"has_voice_style ✅ 1:1"| Language
+    Character -->|"has_voice_profile ✅ 1:1"| Voice
     Appearance -->|"produces ✅ 1:1"| DesignSheet
     Costume -->|"outfit_for ✅ 1:1"| IllusDesign
     DesignSheet -->|"produces ✅ 1:N"| IllusDesign
