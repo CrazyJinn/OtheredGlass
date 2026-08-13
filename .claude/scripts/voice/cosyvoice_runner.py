@@ -1,16 +1,16 @@
-"""CosyVoice3 批量 clone（voice-publisher 的 CosyVoice 后端，venv 跑）。
+"""CosyVoice3 批量 clone（voice-publisher 的 CosyVoice 后端，.venv-cosyvoice 跑）。
 
 全章配音：按角色 ref_audio（Qwen VoiceDesign 出，锁音色）+ say.emotion（→ instruct 映射）→
 CosyVoice3 inference_instruct2 逐句 clone。
 
-**venv（D:/cosyvoice_env, Python 3.10 + transformers 4.51）跑**，不与 Qwen 的系统 3.14 环境冲突。
-voice-publisher 用 D:/cosyvoice_env/Scripts/python.exe 调本脚本。
+**.venv-cosyvoice（项目内 venv, Python 3.10 + transformers 4.51）跑**，不与 Qwen 的 .venv-qwen（4.57）冲突。
+voice-publisher 用 .venv-cosyvoice/Scripts/python.exe 调本脚本。
 
 前置：
-  - D:/CosyVoice（cosyvoice 包）+ third_party/Matcha-TTS（matcha）已 clone
-  - D:/model/Fun-CosyVoice3-0.5B 模型
-  - venv D:/cosyvoice_env（transformers 4.51 + onnxruntime-gpu + cosyvoice 依赖）
-  - ref_audio（角色 ref，由 voice_clone_runner ensure-ref 用 Qwen VoiceDesign 出，系统 python）
+  - 15_声音/vendor/CosyVoice（cosyvoice 包，vendored）+ third_party/Matcha-TTS
+  - 模型路径 + CosyVoice 仓库：from paths import（读 settings.json，不硬编码）
+  - .venv-cosyvoice（transformers 4.51 + onnxruntime-gpu + cosyvoice 依赖）
+  - ref_audio（角色 ref，由 voice_clone_runner ensure-ref 用 Qwen VoiceDesign 出，.venv-qwen）
 
 任务 tasks.json（voice_bundler collect_tasks 产，含 emotion）：{char: [{key, text, emotion, ...}]}
 emotion → instruct 映射：15_声音/emotion_instruct.json
@@ -21,7 +21,8 @@ import json
 import os
 import sys
 
-COSYVOICE_REPO = os.environ.get("COSYVOICE_REPO", "D:/CosyVoice")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # 15_声音（for paths import）
+from paths import COSYVOICE_REPO, COSYVOICE_MODEL
 sys.path.insert(0, COSYVOICE_REPO)
 sys.path.insert(0, os.path.join(COSYVOICE_REPO, "third_party", "Matcha-TTS"))
 
@@ -43,7 +44,7 @@ torchaudio.save = _sf_save
 
 from cosyvoice.cli.cosyvoice import AutoModel
 
-MODEL_DIR = os.environ.get("COSYVOICE_MODEL", "D:/model/Fun-CosyVoice3-0.5B")
+MODEL_DIR = COSYVOICE_MODEL  # from paths（已 import）
 EMOTION_INSTRUCT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emotion_instruct.json")
 DEFAULT_INSTRUCT = "用自然的语气说"
 INSTRUCT_PREFIX = "You are a helpful assistant. "

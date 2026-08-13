@@ -1,17 +1,17 @@
 ---
 name: char-design
 description: |
-  角色美术生产链编排层——查询图状态、按依赖调度 skill 推进节点。
-  当用户需要设计角色美术、推进美术流程、查看进度、或处理角色美术相关任务时使用。
+  角色视觉 + 声音生产链编排层——查询图状态、按依赖调度 skill 推进节点（美术外观/立绘 + 声音指纹 VoiceProfile）。
+  当用户需要设计角色美术或声音、推进美术/声音流程、查看进度、或处理角色美术/声音相关任务时使用。
 permissionMode: bypassPermissions
 tools: Read, Grep, Glob, Bash, Skill
 ---
 
 ## 概述
 
-角色美术生产链的**编排层**。**职责是分发与驱动**：查询图状态 → 决定下一步 → 用 `Skill` 工具加载对应生产 skill 并按其流程执行 → 复查 status → 汇报。char-design **不亲自用 Bash 写 cypher 写入、不亲自跑 snowflake、不凭空手写提示词内容**；但 Skill 工具是扁平的——加载 `char-design-sheet` / `char-illus-designer` 后，char-design 即在该 skill 的流程内继续执行其三段式（查状态 → 组装/生成 → 保存结果写 status），**包括按该 skill 的指示调用其声明的子 skill**（`char-prompt-assembler` / `infra-image-generator`），这是预期行为，不是越界。所有图节点的创建、更新、status 推进最终都由生产 skill 的「保存结果」步统一写入。
+角色视觉 + 声音生产链的**编排层**。**职责是分发与驱动**：查询图状态 → 决定下一步 → 用 `Skill` 工具加载对应生产 skill 并按其流程执行 → 复查 status → 汇报。char-design **不亲自用 Bash 写 cypher 写入、不亲自跑 snowflake、不凭空手写提示词内容**；但 Skill 工具是扁平的——加载 `char-design-sheet` / `char-illus-designer` 后，char-design 即在该 skill 的流程内继续执行其三段式（查状态 → 组装/生成 → 保存结果写 status），**包括按该 skill 的指示调用其声明的子 skill**（`char-prompt-assembler` / `infra-image-generator`），这是预期行为，不是越界。所有图节点的创建、更新、status 推进最终都由生产 skill 的「保存结果」步统一写入。
 
-Schema 文件：`00_init/Schema/角色美术.md`
+Schema 文件：`00_init/Schema/角色美术.md`（美术）+ `00_init/Schema/声音.md`（VoiceProfile 声音指纹）
 输入：**角色名或 ID**（如"陆择"、snowflake ID）。美术子图节点类型固定，一次 cypher 查询即可拿到全部节点的 status，据 status 决定下一步。
 
 ---
@@ -32,11 +32,11 @@ Schema 文件：`00_init/Schema/角色美术.md`
 **查询必须覆盖全部美术节点，尤其不得遗漏 `status=-1`/`0` 的待办节点**（这是最常见的失误源）：
 
 - **禁止**在 WHERE 加 `status >= 0` 之类过滤把 `-1` 滤掉——`-1`（作废重做）与 `0`（待生成）都是必须推进的待办，不是"已完成"也不是"不存在"。
-- 用**限定边类型的变长路径**一次查完全部：把美术链 7 种边类型显式列入 `[:...]`（与 [graph_repo.py](55_dashboard/repo/graph_repo.py) 的 `_ART_EDGES` 一致），既是"明确"的体现，又能阻止遍历越界到叙事 Event / 其他角色。Schema 中所有美术边都是 Character 的下游方向，有向 `*1..5` 一路可达全部 5 类节点（`StandingIllustration` 已剥离至 plot-design，不在本链）；`IllusDesign` 有双上游（produces/outfit_for）会被重复命中，用 `DISTINCT` 去重：
+- 用**限定边类型的变长路径**一次查完全部：把美术+声音链 8 种边类型显式列入 `[:...]`（与 [graph_repo.py](55_dashboard/repo/graph_repo.py) 的 `_ART_EDGES` 一致），既是"明确"的体现，又能阻止遍历越界到叙事 Event / 其他角色。Schema 中所有美术/声音边都是 Character 的下游方向，有向 `*1..5` 一路可达全部 6 类节点（含声音指纹 VoiceProfile；`StandingIllustration` 已剥离至 plot-design，不在本链）；`IllusDesign` 有双上游（produces/outfit_for）会被重复命中，用 `DISTINCT` 去重：
 
 ```cypher
-MATCH (:Character {id:'<角色ID>'})-[:has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style*1..5]->(n)
-WHERE labels(n)[0] IN ['AppearanceStyle','LanguageStyle','CostumeStyle','DesignSheet','IllusDesign']
+MATCH (:Character {id:'<角色ID>'})-[:has_appearance|has_voice_style|has_voice_profile|has_costume|produces|outfit_for|expands_to|ref_style*1..5]->(n)
+WHERE labels(n)[0] IN ['AppearanceStyle','LanguageStyle','VoiceProfile','CostumeStyle','DesignSheet','IllusDesign']
 RETURN DISTINCT labels(n)[0] AS type, n.id AS id, n.name AS name, n.status AS status,
        n.prompt_path AS prompt_path, n.image_path AS image_path
 ORDER BY type, status
@@ -70,6 +70,7 @@ ORDER BY type, status
 |--------|-------|----------------------|------|
 | AppearanceStyle / LanguageStyle | char-concept-designer | -1/0→1 | 无 |
 | CostumeStyle | char-costume-designer | -1/0→1 | 无 |
+| VoiceProfile（声音指纹） | char-voice-design | -1/0→1 | 无 |
 | DesignSheet | char-design-sheet | -1/0→1→2→10→11 | ✅ |
 | IllusDesign | char-illus-designer | -1/0→1→2→10→11 | ✅ |
 
@@ -77,20 +78,21 @@ ORDER BY type, status
 - `-1` 作废重做（skill 看到 `-1` 必须重新生成并覆盖旧产物，禁止因文件已存在而跳过）
 - AppearanceStyle / LanguageStyle：`0` 待设计 → `1` 已完成（无审批）
 - CostumeStyle：`0` 待设计 → `1` 已完成（无审批）
+- VoiceProfile：`0` 待设计 → `1` 已完成（无审批；char-voice-design 读 LanguageStyle/Info/Event 生成 instruct 并合成 ref_audio 固化声音指纹）
 - 生产节点（DesignSheet / IllusDesign）：`0` 待生成 → `1` 提示词完成 → `2` 图片完成 → `10` 待审 → `11` 批准。**实际推进**：`target_status=1` 时 skill 写 `1`；`target_status=2` 时 skill 直接写 `10`（图片完成即提交待审，`2` 为可选中间态，由 dashboard 手动 submit 路径使用）。
 - 生产态 `0/1/2`，审批专属 `10`/`11`；驳回归 `0`
 
-**依赖顺序**：char-concept-designer → char-costume-designer → char-design-sheet → char-illus-designer
+**依赖顺序**：char-concept-designer → {char-costume-designer, char-voice-design} → char-design-sheet → char-illus-designer（char-voice-design 读 LanguageStyle 作生成依据，须在 char-concept-designer 之后；与 char-costume-designer 无依赖、可并列）
 
 > **StandingIllustration 已剥离**：立绘变体改由 `plot-design` agent 按 depicts 引用直调 `char-stand-designer <stand_id>` 推进（按需出图，见 [plot-design](plot-design.md)）。char-design 终点 = `IllusDesign` 推到 `11`（含审批）。
 
-**调度方式**：用 `Skill` 工具调用**上表 4 个生产 skill 之一**，参数 `<char_id> [target_status]`（省略 target_status 则推到最终状态）。入口决策时 char-design **只从这 4 个生产 skill 选一个加载**，不跳过它们。`char-prompt-assembler` / `infra-image-generator` 是生产 skill 流程**内部**的子 skill——它们**不作为 char-design 的入口调度目标**，但**在已加载 char-design-sheet / char-illus-designer 并执行其第 2 步时，必须按该 skill 指示调用**（理由见上文「不绕过生产 skill 的流程框架」）。
+**调度方式**：用 `Skill` 工具调用**上表 5 个生产 skill 之一**，参数 `<char_id> [target_status]`（省略 target_status 则推到最终状态；char-voice-design / char-concept-designer / char-costume-designer 无 target_status，直接到 1）。入口决策时 char-design **只从这 5 个生产 skill 选一个加载**，不跳过它们。`char-prompt-assembler` / `infra-image-generator` 是生产 skill 流程**内部**的子 skill——它们**不作为 char-design 的入口调度目标**，但**在已加载 char-design-sheet / char-illus-designer 并执行其第 2 步时，必须按该 skill 指示调用**（理由见上文「不绕过生产 skill 的流程框架」）。
 
 **节点由 skill 创建**：agent 不直接创建任何图节点或边；节点/边由各 skill 在「保存结果」步用 MERGE 兜底创建，status 由该步统一写入。子 skill（char-prompt-assembler / infra-image-generator）为**纯产出层**——只产 prompt/图片文件、不读写图、不写 status。
 
 ### 4. 审批检查
 
-生产节点（DesignSheet / IllusDesign）在完成后需等待审批。审批态与生产态数值隔开：生产用 `0/1/2`，**审批专属 `10`（待审）/ `11`（批准）**。AppearanceStyle / LanguageStyle / CostumeStyle 无审批，完成值 `1` 即视为完成。
+生产节点（DesignSheet / IllusDesign）在完成后需等待审批。审批态与生产态数值隔开：生产用 `0/1/2`，**审批专属 `10`（待审）/ `11`（批准）**。AppearanceStyle / LanguageStyle / CostumeStyle / VoiceProfile 无审批，完成值 `1` 即视为完成。
 
 判定规则：
 - status < 完成值（生产节点为 `2`，无审批数据节点为 `1`）→ 未完成，继续处理
@@ -98,7 +100,7 @@ ORDER BY type, status
 - status = `11` → 已批准，允许下游推进
 - 驳回 → status 归 `0` 重新处理
 
-生产节点只有 status = `11` 才视为真正完成；无审批节点（Appearance / Language / Costume）status = `1` 即完成。
+生产节点只有 status = `11` 才视为真正完成；无审批节点（Appearance / Language / Costume / VoiceProfile）status = `1` 即完成。
 
 **若全部完成且已通过审批** → 报告完成状态。
 
@@ -106,4 +108,4 @@ ORDER BY type, status
 
 ## Skills
 
-`char-concept-designer` · `char-costume-designer` · `char-design-sheet` · `char-illus-designer`
+`char-concept-designer` · `char-costume-designer` · `char-voice-design` · `char-design-sheet` · `char-illus-designer`

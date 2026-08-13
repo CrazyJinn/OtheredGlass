@@ -19,8 +19,10 @@ def test_is_approved():
     # 无 label 时 31 不被认定（向后兼容）；Section 定稿已批(31) 带 label 才认定
     assert status.is_approved(31) is False
     assert status.is_approved(31, "Section") is True
+    assert status.is_approved(33, "Section") is True   # 声音已批
     assert status.is_approved(11, "Section") is True
     assert status.is_approved(20, "Section") is False
+    assert status.is_approved(32, "Section") is False  # 声音待审不算已批
 
 
 def test_can_submit_only_at_completion():
@@ -79,17 +81,22 @@ def test_chapter_structural_status():
 
 
 def test_section_status():
-    """Section 节级提纲/定稿段：0→20→30→31，一道定稿审，completion=31，不经 submit。"""
-    assert status.completion_status("Section") == 31
+    """Section 节级提纲/定稿/配音段：0→20→30→31→32→33，定稿审+声音审，completion=33，不经 submit。"""
+    assert status.completion_status("Section") == 33
     assert status.has_approval("Section") is True
-    # Section 定稿(30) 由 dialoguer 直写，不经 submit；completion=31 但禁止 submit
+    # Section 定稿(30)由 dialoguer 直写、声音(32)由 section-voice-publisher 直写，均不经 submit；
+    # completion=33 但禁止 submit（已批节不可被 submit 回退）
     assert status.can_submit("Section", 0) is False
     assert status.can_submit("Section", 20) is False
     assert status.can_submit("Section", 30) is False
-    assert status.can_submit("Section", 31) is False   # 关键：已批节不可被 submit 回退
+    assert status.can_submit("Section", 31) is False
+    assert status.can_submit("Section", 32) is False
+    assert status.can_submit("Section", 33) is False
 
 
 def test_chapter_status_labels():
     assert status.STATUS_LABEL[20] == "提纲就绪"
     assert status.STATUS_LABEL[30] == "定稿待审"
     assert status.STATUS_LABEL[31] == "定稿已批"
+    assert status.STATUS_LABEL[32] == "声音待审"
+    assert status.STATUS_LABEL[33] == "声音已批"

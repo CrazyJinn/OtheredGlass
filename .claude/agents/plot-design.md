@@ -15,9 +15,9 @@ tools: Read, Grep, Glob, Bash, Skill
 Schema 文件：`00_init/Schema/剧情.md`（Chapter/Section + has_section/contains/depicts 边）+ `00_init/剧本.md`（JSON 格式，节级创作与发布合并）。
 输入：**章节标题、序号或 ID**（如「新皮肤」、`1`、snowflake ID），或 **小节 section id**（单节聚焦，由 dashboard「推进此节」入口触发）。一次 cypher 查询即可拿到 Chapter + 全部 has_section 的 Section + 各节 contains 的 Scene + 全部 depicts 的立绘 status，据 status 决定下一步。两种模式：**章节全量**（章节标识 → 全量循环推进全章）与 **单节聚焦**（section id → 只推该节的提纲/定稿/该节关联立绘，见第 3 步「单节聚焦模式决策」）。
 
-创作链（混合粒度）= **章级结构段 → 结构审 → 各节提纲段 → 各节定稿段 → 各节定稿审 → 立绘（按需）→ 章级合并发布**。
+创作链（混合粒度）= **章级结构段 → 结构审 → 各节提纲段 → 各节定稿段 → 各节定稿审 → 各节配音段 → 各节声音审 → 立绘（按需）→ 章级合并发布**。
 - **章级**：`chapter-structurer`（建 Chapter + 分节 + Section，→ ch=1）→ 结构审 → `chapter-publisher`（全章各节就绪后合并发布）。
-- **节级**：每节独立走 `chapter-outliner`（→ sec=20）→ `chapter-dialoguer`（→ sec=30）→ 定稿审（→ sec=31）。各节可独立推进、独立审批、独立重做。
+- **节级**：每节独立走 `chapter-outliner`（→ sec=20）→ `chapter-dialoguer`（→ sec=30）→ 定稿审（→ sec=31）→ `section-voice-publisher`（节级配音 → sec=32）→ 声音审（→ sec=33）。各节可独立推进、独立审批、独立重做。
 - 立绘由 plot-design 按 depicts 引用直调 `char-stand-designer` 推进（已从 char-design 剥离）。**立绘上游 IllusDesign 未就绪时报警，不跨链调 char-design**。**event 素材不足时 outliner 拒绝产出并报告缺口**，plot-design 汇报后退出——用户需用独立流程 `nrt-narrative-grower` 补全叙事基础后重调 plot-design。
 
 ---
@@ -93,11 +93,13 @@ ORDER BY sec.section_no, c.order, scene_name, variant
 - `sec.status ∈ {-1, 0}` → `Skill chapter-outliner <sec_id>`（→ 20）；返回「素材不足」按现状汇报缺口退出。
 - `sec.status = 20` → `Skill chapter-dialoguer <sec_id>`（→ 30）。
 - `sec.status = 30` → 汇报「该节定稿待审，请到 dashboard 审批中心处理（30→31）」，退出。
-- `sec.status = 31`（定稿已批）→ **推进该节关联的 depicts 立绘**：沿 `Section-contains->Scene-depicts->IllusDesign-expands_to->stand` 枚举本节立绘（单节 cypher 已带回），对每个 `stand.status≠11`：
+- `sec.status = 31`（定稿已批）→ `Skill section-voice-publisher <sec_id>`（节级配音 → sec=32），随后继续推进该节 depicts 立绘（见下「推进本节立绘」）。
+- `sec.status = 32`（声音待审）→ 先推进该节 depicts 立绘（见下），再汇报「该节声音待审，请到 dashboard 审批中心做声音审（32→33）」，退出。
+- `sec.status = 33`（声音已批）→ 推进该节 depicts 立绘（见下）；本节立绘全 `11` → 汇报「该节定稿/声音/立绘均已就绪」，退出。
+- **推进本节立绘**（`sec.status∈{31,32,33}` 定稿已批后通用动作，**独立于声音门控**——立绘不依赖声音，不应被声音审阻塞）：沿 `Section-contains->Scene-depicts->IllusDesign-expands_to->stand` 枚举本节立绘（单节 cypher 已带回），对每个 `stand.status≠11`：
   - **上游 `IllusDesign=11`** → `Skill char-stand-designer <stand_id> 2`（按需单变体出图 → 10 待审）；
-  - **`IllusDesign≠11`（或不存在）** → 报警「立绘上游 IllusDesign 未就绪，请先单独跑 `char-design`」，**跳过该立绘继续下一个**（不跨链调 char-design）；
-  - 本节无 `stand.status≠11`（全就绪）→ 汇报「该节定稿与立绘均已就绪」，退出。
-  - **不调 `chapter-publisher`**（发布是章级动作，需全章 sec=31 + 立绘全 11）。
+  - **`IllusDesign≠11`（或不存在）** → 报警「立绘上游 IllusDesign 未就绪，请先单独跑 `char-design`」，**跳过该立绘继续下一个**（不跨链调 char-design）。
+- **不调 `chapter-publisher`**（发布是章级动作，需全章 sec=33 + 立绘全 11）。
 
 **单节聚焦严禁**：枚举其他节、调 `chapter-publisher`。立绘只推**本节** depicts 引用的（共享 IllusDesign 被出图后其他节自然可用），不跨链调 `char-design` / 角色美术链 skill。铁律（只看 status 不看产物、`-1` 必须重生成覆盖、不读旧提纲/旧剧本/旧图）在单节模式同样适用。汇报只交代目标节（节标题 / `sec.status` / 本节各 `stand.status` + 本轮是否处理 + 原因），不报其他节。
 
@@ -108,8 +110,10 @@ ORDER BY sec.section_no, c.order, scene_name, variant
 | Chapter（章级结构） | `chapter-structurer` | Skill | -1/0→1→10→11 | ✅ 结构审 |
 | Section（节级提纲） | `chapter-outliner` | Skill | -1/0→20 | — |
 | Section（节级细节对话定稿） | `chapter-dialoguer` | Skill | →30→31 | ✅ 定稿审 |
+| Section（节级配音） | `section-voice-publisher` | Skill | 31→32（直写，不经 submit） | — |
+| Section（节级声音审） | dashboard 审批中心 | — | 32→33 | ✅ 声音审 |
 | StandingIllustration（章节所需立绘） | `char-stand-designer` | Skill | -1/0→1→2→10→11 | ✅ |
-| Chapter 合并发布到运行时 | `chapter-publisher` | Skill | 仅 ch=11 + 全 sec=31 + 立绘全 11 后 | — |
+| Chapter 合并发布到运行时 | `chapter-publisher` | Skill | 仅 ch=11 + 全 sec=33 + 立绘全 11 后 | — |
 
 **章节全量模式调度决策树**（单节聚焦见上）：
 
@@ -122,9 +126,11 @@ ORDER BY sec.section_no, c.order, scene_name, variant
     - 返回「**素材不足**」（未写 status、带缺口报告）→ **汇报缺口并退出**（提示用户可手动跑 `nrt-narrative-grower <缺口实体>` 补全叙事基础后重调 plot-design），不阻塞、不自动转探索。
   - `sec.status = 20`（提纲就绪）且定稿未产出 → `Skill chapter-dialoguer <sec_id>`（产节级定稿 + 跑 validate + 建 depicts 立绘缺口 → `sec.status=30`）
   - `sec.status = 30` → 等待 dashboard 该节定稿审批
-  - `sec.status = 31` → 该节完成，继续下一节
-- **全部 `sec.status = 31` AND `ch.status = 11`**（全章各节定稿已批）→ 检查 depicts 立绘：对每个 `stand.status ≠ 11` 的立绘推进（见下方「立绘委派方式」）
-- **全部 `stand.status = 11` AND 全部 `sec.status = 31` AND `ch.status = 11`** → `Skill chapter-publisher <ch_id>` 合并发布章节到 `99_game/`，报告发布完成
+  - `sec.status = 31`（定稿已批）→ `Skill section-voice-publisher <sec_id>`（节级配音 → sec=32）
+  - `sec.status = 32` → 等待 dashboard 该节声音审批（32→33）
+  - `sec.status = 33` → 该节完成，继续下一节
+- **全部 `sec.status = 33` AND `ch.status = 11`**（全章各节定稿+声音已批）→ 检查 depicts 立绘：对每个 `stand.status ≠ 11` 的立绘推进（见下方「立绘委派方式」）
+- **全部 `stand.status = 11` AND 全部 `sec.status = 33` AND `ch.status = 11`** → `Skill chapter-publisher <ch_id>` 合并发布章节到 `99_game/`，报告发布完成
 
 **立绘委派方式**（StandingIllustration 已从 char-design 剥离至 plot-design，按需出图）：全章各节定稿已批（全 `sec.status=31`）后，对每个 depicts 引用且 `stand.status ≠ 11` 的立绘：
 1. **先查其上游 IllusDesign 是否 = 11**（query 一次）。
@@ -144,13 +150,13 @@ ORDER BY sec.section_no, c.order, scene_name, variant
 **Status 合法值**（skill/agent 只能写入这些值，禁止其他值如 `3`）：
 - `-1` 作废重做（看到 `-1` 必须重新生成并覆盖旧产物，禁止因文件已存在而跳过）
 - **Chapter（章级结构段）**：`0` 待编排 → `1` 结构就绪 → `10` 结构待审 → `11` 结构已批（completion=11）。submit 在 `status=1`，驳回归 `0`。`ch.status==11` 只代表「结构已批，进入节级生产」，**不代表章完成**。
-- **Section（节级提纲/定稿段，无结构审）**：`0` 待提纲 → `20` 提纲就绪（无审批）→ `30` 定稿待审 → `31` 定稿已批（completion=31）。定稿段(30)由 dialoguer 直写，不经 submit；定稿驳回归 `20`。
+- **Section（节级提纲/定稿/配音段，无结构审）**：`0` 待提纲 → `20` 提纲就绪（无审批）→ `30` 定稿待审 → `31` 定稿已批 → `32` 声音待审 → `33` 声音已批（completion=33）。定稿段(30)由 dialoguer 直写、声音段(32)由 section-voice-publisher 直写，均不经 submit（Section 永远不能 submit）；定稿驳回归 `20`，声音驳回归 `31`（重配，不改台词）。
 - **StandingIllustration**：`0→1→2→10→11`，由 plot-design 直调 `char-stand-designer <stand_id>` 推进。
 - **IllusDesign**（立绘上游，plot-design **只读不写**）：由 `char-design` 推进到 `11`（人工触发）。plot-design 推进某立绘前须先确认其上游 IllusDesign=11，否则报警跳过。
 
-**依赖顺序**：`chapter-structurer`（建结构 + 分节 + Section + contains）→ 结构审 `10→11` → 各节 `chapter-outliner`（节级提纲 → `sec=20`）→ 各节 `chapter-dialoguer`（节级定稿 + 建 depicts 立绘缺口 → `sec=30`）→ 各节定稿审 `30→31` → 推进 depicts 立绘（`char-stand-designer`；上游 IllusDesign≠11 则报警跳过，不跨链）→ 立绘全 `11` → `chapter-publisher`（合并各节 `25_剧本/`→`99_game/` 单一章 JSON）。
+**依赖顺序**：`chapter-structurer`（建结构 + 分节 + Section + contains）→ 结构审 `10→11` → 各节 `chapter-outliner`（节级提纲 → `sec=20`）→ 各节 `chapter-dialoguer`（节级定稿 + 建 depicts 立绘缺口 → `sec=30`）→ 各节定稿审 `30→31` → 各节 `section-voice-publisher`（节级配音 → `sec=32`）→ 各节声音审 `32→33` → 推进 depicts 立绘（`char-stand-designer`；上游 IllusDesign≠11 则报警跳过，不跨链）→ 立绘全 `11` → `chapter-publisher`（合并各节 `25_剧本/`→`99_game/` 单一章 JSON；节 YAML 的 voice 字段随合并进章 JSON）。
 
-**门控**：ch 未到 `11` 不产节级提纲；sec 未到 `20` 不产该节定稿；**全章 sec 未到 `31` 不推立绘**（避免为未定稿剧本浪费立绘出图）；**立绘未全 `11` 不发布**（避免运行时缺资源）。
+**门控**：ch 未到 `11` 不产节级提纲；sec 未到 `20` 不产该节定稿；sec 未到 `31` 不产该节配音、不推该节立绘（避免为未定稿剧本浪费配音/立绘）；**全章 sec 未全到 `33`（声音已批）+ 立绘未全 `11` 不发布**（避免运行时缺声音/立绘资源）。
 
 **节点由 skill 创建**：agent 不直接创建任何图节点或边。Chapter + `has_section` 边 + Section 节点 + `Section-contains->Scene` 边由 `chapter-structurer` 兜底建；`outline_path` 由 `chapter-outliner` 写到 Section；`script_path` + `depicts` 边 + 立绘缺口节点（`StandingIllustration status=0` + `expands_to`/`ref_style`）由 `chapter-dialoguer` 兜底建（depicts 绑 Scene）；缺口立绘的推进由 plot-design 直调 `char-stand-designer`；IllusDesign 上游由 `char-design` 推进（人工触发，plot-design 不跨链）。
 
@@ -168,11 +174,13 @@ Section 判定规则（仅 `ch.status=11` 后遍历）：
 - `sec.status` ∈ {-1, 0} → 待提纲，调 outliner
 - `sec.status = 20` → 提纲就绪，可进定稿段，调 dialoguer
 - `sec.status = 30` → 定稿待审，等 dashboard
-- `sec.status = 31` → 该节定稿已批
+- `sec.status = 31` → 定稿已批，调 section-voice-publisher（→32）
+- `sec.status = 32` → 声音待审，等 dashboard（声音审 32→33）
+- `sec.status = 33` → 声音已批
 
 立绘判定：`stand.status = 10` 待审；` = 11` 已批；`< 11` 未就绪需推进——**推进前须确认上游 IllusDesign=11，否则报警跳过**（不跨链调 char-design）。
 
-**只有 `ch.status=11` AND 全部 Section `status=31` AND 全部 depicts 立绘 `status=11` 才视为章节就绪**（结构已批 + 各节定稿与所需立绘双就绪）。
+**只有 `ch.status=11` AND 全部 Section `status=33` AND 全部 depicts 立绘 `status=11` 才视为章节就绪**（结构已批 + 各节定稿/声音与所需立绘均就绪）。
 
 **若全部就绪** → 委派 `Skill chapter-publisher <ch_id>` 把全章各节从 `25_剧本/` 合并发布到 `99_game/`（合并剧本 + 拷立绘/背景资源 + 更新 manifest + 章资源清单），报告发布完成与运行时入口。
 
@@ -180,4 +188,4 @@ Section 判定规则（仅 `ch.status=11` 后遍历）：
 
 ## Skills
 
-`chapter-structurer`（skill，章级建结构 + 分节 + 统合 Scene + 建 Section）· `chapter-outliner`（skill，节级产提纲，素材不足时报缺口）· `chapter-dialoguer`（skill，节级产定稿 + 建 depicts 立绘缺口）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，全章各节合并发布 `25_剧本/`→`99_game/`）
+`chapter-structurer`（skill，章级建结构 + 分节 + 统合 Scene + 建 Section）· `chapter-outliner`（skill，节级产提纲，素材不足时报缺口）· `chapter-dialoguer`（skill，节级产定稿 + 建 depicts 立绘缺口）· `section-voice-publisher`（skill，节级定稿后逐句配音 → sec=32）· `char-stand-designer`（skill，按 depicts 引用按需出立绘）· `chapter-publisher`（skill，全章各节合并发布 `25_剧本/`→`99_game/`；节 YAML voice 随合并进章 JSON）

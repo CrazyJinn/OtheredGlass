@@ -40,6 +40,16 @@ def chapter_stem_from_path(chapter_json_path) -> str:
     return Path(chapter_json_path).stem
 
 
+def chapter_stem_from_meta(no, title) -> str:
+    """Chapter 节点 chapter_no + title → stem（与 chapter-publisher 产出的章 JSON 文件名一致）。
+
+    节级配音（section-voice-publisher）在章 JSON 合并前就要算 key，靠本函数从 Chapter 节点
+    字段算出与章级等价的 stem，保证节级/章级 voice key 单一源、不漂移。如 (0, '序章') → 'chapter00_序章'。
+    chapter-publisher 算 stem 也应改调本函数。
+    """
+    return f"chapter{int(no):02d}_{_sanitize(title)}"
+
+
 def iter_say_lines(chapter: dict):
     """遍历 chapter JSON 的所有 say 行，yield (scene_id, line_idx, line_dict)。"""
     for block in chapter.get("scenes", []):
@@ -105,7 +115,19 @@ def _save_json(p, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# ── CLI 四模式 ──
+def _load_yaml(p):
+    import yaml  # 节级配音消费节定稿 YAML；系统 python 已装 PyYAML（99_game 依赖）
+    with open(p, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _save_yaml(p, data):
+    import yaml
+    with open(p, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
+
+
+# ── CLI 六模式（4 章级 + 2 节级）──
 
 def _cmd_inject(args):
     path = Path(args.chapter_json)
@@ -156,6 +178,30 @@ def _cmd_tasks(args):
         print(f"[tasks] {n_lines} lines / {len(tasks)} chars -> {args.out}")
 
 
+def _cmd_tasks_from_section(args):
+    stem = chapter_stem_from_meta(args.chapter_no, args.chapter_title)
+    sec = _load_yaml(args.sec_yaml)  # 节定稿 YAML = {meta, scenes}，scenes 结构同章 JSON
+    tasks = collect_tasks(sec, stem)
+    data = json.dumps(tasks, ensure_ascii=False, indent=2)
+    if not args.out or args.out == "-":
+        print(data)
+    else:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(data, encoding="utf-8")
+        n_lines = sum(len(v) for v in tasks.values())
+        print(f"[tasks-from-section] stem={stem} {n_lines} lines / {len(tasks)} chars -> {args.out}")
+
+
+def _cmd_inject_yaml(args):
+    stem = chapter_stem_from_meta(args.chapter_no, args.chapter_title)
+    sec = _load_yaml(args.sec_yaml)
+    stats = inject_voices(sec, stem, dry_run=args.dry_run)  # inject_voices 遍历 iter_say_lines 写 voice
+    if not args.dry_run:
+        _save_yaml(args.sec_yaml, sec)
+    verb = "would-change" if args.dry_run else "changed"
+    print(f"[inject-yaml] stem={stem} say={stats['total_say']} {verb}={stats['changed']}")
+
+
 def main():
     ap = argparse.ArgumentParser(description="voice 资源键生成与 chapter JSON 绑定（三处对齐）")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -180,6 +226,20 @@ def main():
     p_tasks.add_argument("chapter_json")
     p_tasks.add_argument("-o", "--out", help="输出 JSON 路径（缺省打印到 stdout）")
     p_tasks.set_defaults(func=_cmd_tasks)
+
+    p_tfs = sub.add_parser("tasks-from-section", help="节定稿 YAML → 按角色分组任务 JSON（节级配音，供 cosyvoice_runner publish）")
+    p_tfs.add_argument("sec_yaml", help="节定稿 YAML 路径（Section.script_path）")
+    p_tfs.add_argument("--chapter-no", type=int, required=True, help="Chapter.chapter_no")
+    p_tfs.add_argument("--chapter-title", required=True, help="Chapter.title")
+    p_tfs.add_argument("-o", "--out", help="输出 JSON 路径（缺省打印到 stdout）")
+    p_tfs.set_defaults(func=_cmd_tasks_from_section)
+
+    p_iy = sub.add_parser("inject-yaml", help="给节定稿 YAML 每个 say 注入 voice 字段（节级配音，幂等）")
+    p_iy.add_argument("sec_yaml", help="节定稿 YAML 路径（Section.script_path）")
+    p_iy.add_argument("--chapter-no", type=int, required=True, help="Chapter.chapter_no")
+    p_iy.add_argument("--chapter-title", required=True, help="Chapter.title")
+    p_iy.add_argument("--dry-run", action="store_true")
+    p_iy.set_defaults(func=_cmd_inject_yaml)
 
     args = ap.parse_args()
     args.func(args)

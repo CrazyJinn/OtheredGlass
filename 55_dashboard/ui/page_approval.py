@@ -3,7 +3,7 @@ import streamlit as st
 
 from repo import graph_repo
 from core import approval
-from ui.components import image_viewer, status_badge
+from ui.components import image_viewer, status_badge, audio_player
 
 
 def render():
@@ -24,10 +24,15 @@ def render():
                 review_tag = "（结构审）"
             elif n["label"] == "Section" and n["status"] == 30:
                 review_tag = "（定稿审）"
+            elif n["label"] == "Section" and n["status"] == 32:
+                review_tag = "（声音审）"
             label_text = full.get("title") or full.get("name") or n["id"]
             st.write(f"**{n['label']}** · {label_text}{review_tag}")
             status_badge.render(n["status"])
-            if full.get("image_path"):
+            if n["label"] == "Section" and n["status"] == 32:
+                # 声音审：逐句审听节 YAML 的 voice wav（节级配音产物），不依赖章级 manifest
+                audio_player.render(full.get("script_path"))
+            elif full.get("image_path"):
                 image_viewer.render(full["image_path"])
             c1, c2 = st.columns(2)
             with c1:

@@ -10,3 +10,10 @@ __pycache__/
 99_game/assets/voices/
 99_game/data/.cache/
 15_声音/output/
+
+# Python venv（项目内，uv 建，不入 git；依赖锁 requirements/*.txt 提交）
+.venv-qwen/
+.venv-cosyvoice/
+
+# CosyVoice 仓库（vendored，第三方，不入 git；来源见 15_声音/README.md）
+15_声音/vendor/

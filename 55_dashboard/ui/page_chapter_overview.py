@@ -219,7 +219,17 @@ def _render_line(line):
         who = line.get("who", "")
         portrait = line.get("portrait", "")
         pos = line.get("pos", "")
-        st.markdown(f"**{who}** `{portrait}·{pos}`：{line.get('text', '')}")
+        emotion = line.get("emotion")
+        head = f"**{who}** `{portrait}·{pos}`"
+        if emotion:
+            head += f" `🎭{emotion}`"
+        st.markdown(f"{head}：{line.get('text', '')}")
+        # 节级配音后节 YAML 带 voice 字段，wav 已落 99_game/assets/voices/；就地试听
+        voice = line.get("voice")
+        if voice:
+            wav = settings.PROJECT_ROOT / "99_game" / "assets" / "voices" / f"{voice}.wav"
+            if wav.exists():
+                st.audio(str(wav), format="audio/wav")
     elif op == "narrate":
         st.markdown(f"*（旁白）{line.get('text', '')}*")
     elif op == "show":

@@ -1,16 +1,16 @@
-"""Qwen VoiceDesign ref 生成器（voice-publisher 的 ref 来源，系统 python 3.14 跑）。
+"""Qwen VoiceDesign ref 生成器（voice-publisher 的 ref 来源，.venv-qwen 跑）。
 
 全章配音的 ref_audio 由本脚本用 Qwen3-TTS VoiceDesign 合成（按 VoiceProfile.instruct）。
-CosyVoice clone（[cosyvoice_runner.py](cosyvoice_runner.py)，venv 跑）消费这些 ref_audio。
+CosyVoice clone（[cosyvoice_runner.py](cosyvoice_runner.py)，.venv-cosyvoice 跑）消费这些 ref_audio。
 
-**系统 Python 3.14（Qwen3-TTS）跑**；CosyVoice clone 在 venv（D:/cosyvoice_env, Python 3.10）跑——
-两个环境分离（transformers 4.51 vs 4.57 冲突）。voice-publisher 编排两套 python。
+**.venv-qwen（项目内 venv, Python 3.14 + Qwen3-TTS）跑**；CosyVoice clone 在 .venv-cosyvoice（Python 3.10）跑——
+两个 venv 分离（transformers 4.51 vs 4.57 冲突）。voice-publisher 编排两套 venv。
 
 > 本脚本只负责「设计音色 → 出 ref_audio」。clone（逐句台词 → wav）由 cosyvoice_runner 做。
 > 早期版本的 Qwen Base clone（.pt + generate_voice_clone）已废弃——CosyVoice 替代（支持情绪 instruct）。
 
 前置：
-  - Qwen3-TTS VoiceDesign 模型 D:/model/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+  - Qwen VoiceDesign 模型路径：from paths import（QWEN_VOICE_DESIGN，读 settings.json）
   - VoiceProfile（instruct + ref_text + ref_audio_path）
 
 输出：ref_audio 落 VoiceProfile.ref_audio_path（如 15_声音/output/<char>_ref.wav，24kHz），CosyVoice 用。
@@ -18,12 +18,14 @@ CosyVoice clone（[cosyvoice_runner.py](cosyvoice_runner.py)，venv 跑）消费
 import argparse
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # 15_声音（for paths import）
 
 import torch
 import soundfile as sf
 from qwen_tts import Qwen3TTSModel
-
-VOICE_DESIGN_PATH = os.environ.get("QWEN_VOICE_DESIGN_PATH", "D:/model/Qwen3-TTS-12Hz-1.7B-VoiceDesign")
+from paths import QWEN_VOICE_DESIGN as VOICE_DESIGN_PATH
 
 
 def load_design_model(path=VOICE_DESIGN_PATH, device="cuda:0") -> Qwen3TTSModel:

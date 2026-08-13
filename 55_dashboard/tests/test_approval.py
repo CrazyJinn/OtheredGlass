@@ -75,10 +75,23 @@ def test_section_approval_reuses_chapter_final_stage():
 
 
 def test_submit_rejects_section():
-    """Section 禁止 submit（定稿 30 由 dialoguer 直写；completion=31 但 can_submit 恒 False）。"""
+    """Section 禁止 submit（定稿 30 由 dialoguer 直写、声音 32 由 section-voice-publisher 直写；completion=33 但 can_submit 恒 False）。"""
     with pytest.raises(approval.IllegalTransition):
         approval.submit("Section", 20)
     with pytest.raises(approval.IllegalTransition):
         approval.submit("Section", 30)
     with pytest.raises(approval.IllegalTransition):
         approval.submit("Section", 31)
+    with pytest.raises(approval.IllegalTransition):
+        approval.submit("Section", 32)
+
+
+def test_section_voice_approval():
+    """Section 声音审：声音待审(32)→声音已批(33)；声音驳回→回定稿已批(31)重配（台词不变）。"""
+    assert approval.approve(32) == 33   # 声音审通过
+    assert approval.reject(32) == 31    # 声音驳回→回定稿已批重配
+
+
+def test_on_edit_section_voice_approved_reverts_to_outline():
+    """Section 声音已批(33) 被编辑 → 回提纲就绪(20)（台词变致 voice key line_idx 漂移，需重做定稿再重配）。"""
+    assert approval.on_edit("Section", 33) == 20

@@ -1,9 +1,9 @@
 ---
 name: chapter-publisher
 description: |
-  把全章各节定稿已批（各 Section.status=31 且所属 Chapter.status=11）的章节从创作区 `25_剧本/` 合并发布到运行时 `99_game/`：
+  把全章各节定稿+声音已批（各 Section.status=33 且所属 Chapter.status=11）的章节从创作区 `25_剧本/` 合并发布到运行时 `99_game/`：
   用 generate_portrait_map.py + merge_sections_to_chapter.py --portrait-map 把各节定稿 YAML 拍平合并为单一章 JSON（立绘引用改写为 guid 整键 `<char>-<costume>-<variant>-<stand_id>`，解决同角色换装同名覆盖）拷到 99_game/data/chapters/ + status=11 的立绘/背景资源到 99_game/assets/ + 更新 manifest + 产出章资源清单 chapter_packs.json（Web 按章分包依据）。
-  在全章各节定稿审批通过且所需立绘就绪、需发布到 Godot 运行时时使用。
+  在全章各节定稿+声音审批通过（sec=33）且所需立绘就绪、需发布到 Godot 运行时时使用。
 argument-hint: <chapter_id>
 arguments:
   - chapter_id
@@ -50,13 +50,13 @@ RETURN DISTINCT char.name AS char_name, stand.id AS stand_id, stand.variant_labe
 ```
 
 **前驱校验**：
-- `ch.status` 必须 = `11`（结构已批）；**全部 Section `status` 必须 = `31`**（各节定稿已批）——章真正可发布 = `Chapter.status==11` AND 全部 `Section.status==31`。任一不满足则停止并提示先在 dashboard 推进/审批对应节。
+- `ch.status` 必须 = `11`（结构已批）；**全部 Section `status` 必须 = `33`**（各节定稿+声音已批）——章真正可发布 = `Chapter.status==11` AND 全部 `Section.status==33`。任一不满足则停止并提示先在 dashboard 推进/审批对应节（含定稿审 30→31、节级配音 31→32、声音审 32→33）。
 - depicts 立绘：`status=11` 且 `image_path` 非空的才拷贝；`status≠11` 的逐个**警告**（运行时该变体走占位图），不阻断发布（让已就绪资源先上线）。
 - background SceneLayer：同理，`status=11` 且 `image_path` 非空才拷贝。
 
 ### 2. 合并拍平 + 拷贝资源到 99_game/
 
-**章 stem**：由 Chapter 构造 `chapter<NN>_<章概述>`（NN=`chapter_no` 零填充，章概述取 `ch.title` 核心主题，清洗 Windows 非法字符），运行时文件名用 `<stem>.json`。各节定稿按 `section_no` 升序作为合并输入。
+**章 stem**：用 [voice_bundler.chapter_stem_from_meta](../../../.claude/scripts/voice/voice_bundler.py)(no, title) 构造 `chapter<NN>_<章概述>`（NN=`chapter_no` 零填充，章概述取 `ch.title` 核心主题，清洗 Windows 非法字符）——与 section-voice-publisher 共用此函数，保证节级 voice key 的 stem 与章 JSON 文件名**单一源、不漂移**。运行时文件名用 `<stem>.json`。各节定稿按 `section_no` 升序作为合并输入。
 
 ```bash
 # 确保目标目录存在
@@ -98,17 +98,28 @@ cp '<bg_image>' '99_game/assets/scenes/<scene_name>.png'
 python 99_game/tools/manifest_builder.py
 ```
 
+**补 manifest.voices 段**：节级配音（section-voice-publisher）已把 `voice` 字段写进各节定稿 YAML，合并时随 pure concat 带进章 JSON；manifest 的 voices 段在此补（读合并后章 JSON 的 `say.voice` 推导，节级阶段章未合并无法写）：
+
+```bash
+# 写 manifest.voices 段（{key: assets/voices/<key>.wav}）
+python .claude/scripts/voice/voice_bundler.py manifest '99_game/data/chapters/<stem>.json' --ext wav
+# 导出本章 voice 键 CSV，供下一步 chapter_packs.voices
+python .claude/scripts/voice/voice_bundler.py list '99_game/data/chapters/<stem>.json' > '99_game/data/.cache/voices-<stem>.csv'
+```
+
 ### 4. 产出章资源清单 chapter_packs.json（Web 分包依据）
 
 把本章用到的立绘/背景逻辑名记入 `99_game/data/chapter_packs.json`，供导出工具按章把资源分组打成 `<stem>.pck`（pck 内路径与全局 manifest 一致，挂载后 `res://` 全局路径命中）。**分包粒度仍是章 stem**（运行时不感知节层）。
 
-数据源 = 合并后章 JSON 的 `meta.requires.portraits`（已随 portrait-map 改写为 guid 整键，最稳，与 lines 引用同源）+ 第 1 步全章背景：
+数据源 = 合并后章 JSON 的 `meta.requires.portraits`（已随 portrait-map 改写为 guid 整键，最稳，与 lines 引用同源）+ 第 1 步全章背景 + 第 3 步导出的 voice 键：
 - `portraits`：guid 整键 `<char>-<costume>-<variant>-<stand_id>`（直接取合并 JSON 的 requires.portraits）
 - `scenes`：`<Scene.name>`（has_layer background）
+- `voices`：voice 键 `<char>-<stem>-<scene_id>-<line_idx>`（第 3 步 `voice_bundler list` 导出的 CSV）
 
 ```bash
 python 99_game/tools/chapter_packs_updater.py '<stem>' \
-  --portraits '<char1>.<var1>,<char2>.<var2>' --scenes '<scene1>,<scene2>'
+  --portraits '<char1>.<var1>,<char2>.<var2>' --scenes '<scene1>,<scene2>' \
+  --voices "$(cat '99_game/data/.cache/voices-<stem>.csv')"
 ```
 
 工具幂等：覆盖该 stem 条目，保留其他章。空列表（该章无立绘/背景）也要写入，保持清单完整。
@@ -130,14 +141,16 @@ python 99_game/tools/chapter_packs_updater.py '<stem>' \
    ⚠️ 加密后无法再 `validate_chapter.py`（明文），故加密必须在本 skill 流程之后。
 2. **按章分包**：参考 `chapter_packs.json` + `manifest.json`，把每章资源打进 `<stem>.pck`（pck 内用全局 `assets/...` 路径），Web 预设主包不含这些资源，运行时由 ChapterPackLoader 按需下载挂载。详见 [99_game/docs](../../../99_game/docs/)。
 
-## 与 voice-publisher 的边界
+## 与 section-voice-publisher / voice-publisher 的边界
 
-`voice` 字段（`say.voice`）由 [voice-publisher](../voice-publisher/SKILL.md) **后处理注入**，创作区定稿 YAML **不写** voice：
+`voice` 字段（`say.voice`）由 [section-voice-publisher](../section-voice-publisher/SKILL.md) 在**节级定稿后**注入节 YAML，本 skill 合并时随 pure concat 自动带进章 JSON：
 
-- **生产时序**：chapter-dialoguer（YAML）→ **chapter-publisher**（合并 + 立绘）→ **voice-publisher**（TTS + 绑定 voice）。
-- 本 skill 合并 YAML → chapter JSON 时不含 voice（YAML 没有）；voice 由 voice-publisher 在合并后按 `<char>-<stem>-<scene_id>-<line_idx>` 注入。
-- **重跑 chapter-publisher 会覆盖 chapter JSON，清除已注入的 voice 字段**（剧本改动导致 line_idx 变化也需重对齐）→ 重跑本 skill 后需重跑 voice-publisher。
-- chapter JSON 的 `meta.requires` 不含 voices（voice 键由 voice-publisher 按 say 行位置算，不进 requires）。
+- **生产时序**：chapter-dialoguer（节 YAML）→ **section-voice-publisher**（节级 TTS + 写节 YAML voice，sec=31→32）→ 声音审（32→33）→ **chapter-publisher**（合并节 YAML[含 voice] + 立绘 + 补 manifest.voices / chapter_packs.voices）。
+- 本 skill 合并时节 YAML 已含 voice（`merge_sections_to_chapter.py` 是 pure concat + 字段保留，不丢 voice）→ 合并后章 JSON 每 say 自带 voice，**无需再注入**。
+- **本 skill 末尾补 manifest.voices + chapter_packs.voices**（节级阶段章未合并，这两处无法写；合并后用 voice_bundler 读章 JSON 推导补齐，见第 3、4 步）。
+- **重跑 chapter-publisher 不再清除 voice**（节 YAML 仍有 voice，合并会保留）。仅当某节台词重做（line_idx 漂移）时，需重跑该节 section-voice-publisher 重对齐 voice key + wav。
+- [voice-publisher](../voice-publisher/SKILL.md) 降为**章级兜底**：对未走节级配音的老章做全章 TTS + 绑定（若章 JSON 已全量含 voice 则跳过 clone、仅刷 manifest/chapter_packs）。
+- chapter JSON 的 `meta.requires` 不含 voices（voice 键按 say 行位置算，不进 requires）。
 
 ## 参考文档
 

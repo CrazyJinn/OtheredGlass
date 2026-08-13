@@ -1,91 +1,82 @@
 # 15_声音 — 角色配音（Qwen VoiceDesign + CosyVoice3 + emotion）
 
-「**Qwen VoiceDesign 设计音色 → CosyVoice3 clone（按情绪）**」两段式配音。基线音色由图 `VoiceProfile` 治理（1:1 per 角色）；每句台词的情绪（`emotion`）由 `chapter-dialoguer` 创作时标注。
+「Qwen VoiceDesign 设计音色 → CosyVoice3 clone（按情绪）」两段式配音。
+基线音色由图 VoiceProfile 治理（1:1 per 角色）；每句情绪（emotion）由 chapter-dialoguer 创作时标注。
 
-## 谁负责什么（关键分工）
+## 谁负责什么
 
-| 环节 | 职责 | 产物 |
-|---|---|---|
-| **chapter-dialoguer**（创作） | 写台词时标 `say.emotion`（每句情绪，从词表选，据台词当下情绪）——**这是创作意图，是"气氛"的源头** | chapter JSON / YAML 的 `say.emotion` 字段 |
-| **voice-publisher**（配音） | 消费 emotion：Qwen VoiceDesign 出角色 ref（锁音色）→ CosyVoice3 按 emotion 映射 instruct clone（控语气）→ 绑定 voice 字段 | `99_game/assets/voices/<key>.wav` |
-| **VoiceProfile**（图治理） | 角色基线音色档案（instruct / ref_text / ref_audio_path），每角色 1 个 | Neo4j `Character→has_voice_profile→VoiceProfile` |
+| 环节 | 职责 |
+|---|---|
+| **char-voice-design**（声音指纹设计） | 读 Character+LanguageStyle+Info+Event 生成 VoiceProfile（instruct/ref_text）+ 合成 ref_audio；`char-design` 管 |
+| **chapter-dialoguer**（创作） | 写台词时标 `say.emotion`（每句情绪，词表选）——气氛源头 |
+| **section-voice-publisher**（节级配音） | 单节定稿后（sec=31）Qwen VoiceDesign 出 ref（`.venv-qwen`）→ CosyVoice3 按 emotion clone（`.venv-cosyvoice`）→ voice 写回节 YAML（sec→32）；`plot-design` 管 |
+| **voice-publisher**（章级兜底配音） | 未走节级配音的老章：全章 TTS + 绑定 voice 字段 |
+| VoiceProfile（图） | 角色基线音色档案 = 声音指纹（instruct / ref_text / ref_audio_path） |
 
-> **emotion 不是配音阶段决定的**——是 chapter-dialoguer 创作台词时就定好的（像写剧本时标表情）。配音只是执行这个意图。
+## 两套 venv（项目内，uv 管理；transformers 冲突 → 隔离）
 
-## 模型权重（本地）
+Qwen 要 `transformers==4.57`，CosyVoice 要 4.51，同环境冲突。两个 venv 隔离（项目内，gitignore）：
 
-- `D:/model/Qwen3-TTS-12Hz-1.7B-VoiceDesign` — Qwen 声音设计（出 ref_audio，**系统 python**）
-- `D:/model/Fun-CosyVoice3-0.5B` — CosyVoice3 clone（按 emotion，**venv python**）
-
-## 两套 Python 环境（必须分离）
-
-CosyVoice 要 `transformers==4.51`，Qwen3-TTS 锁 4.57，冲突；且 CosyVoice 官方 torch 不支持 RTX 5060 Ti（Blackwell）。故两套环境隔离（详见 memory `cosyvoice-python314-windows-setup`）：
-
-| 环境 | Python | 用途 | 关键包 |
+| venv | Python | 用途 | 锁文件 |
 |---|---|---|---|
-| **系统** | 3.14 | Qwen VoiceDesign 出 ref_audio | qwen-tts, transformers 4.57, torch cu128 |
-| **venv `D:/cosyvoice_env`** | 3.10 | CosyVoice3 clone（按 emotion） | transformers 4.51, onnxruntime-gpu, torch cu128 |
+| `.venv-qwen` | 3.14 | Qwen VoiceDesign 出 ref_audio | [requirements/qwen.txt](requirements/qwen.txt) |
+| `.venv-cosyvoice` | 3.10 | CosyVoice3 clone（按 emotion） | [requirements/cosyvoice.txt](requirements/cosyvoice.txt) |
 
-venv 建法见 [plan 文件](C:\Users\crazy\.claude\plans\99-game-next-floofy-summit.md) 的 CosyVoice 集成段 + memory。
-
-## 流程（voice-publisher 5 步，双环境编排）
-
-```
-chapter-dialoguer 标 say.emotion（创作）
-       ↓
-voice-publisher:
-  1. 查图 VoiceProfile（角色 ref_audio_path）
-  2. voice_bundler tasks（chapter JSON say → {char:[{key,text,emotion}]}）
-  3a. 系统 python: voice_clone_runner ensure-ref（Qwen VoiceDesign 出/复用 ref_audio）
-  3b. venv python:  cosyvoice_runner publish（CosyVoice3 按 emotion instruct clone）
-  4. voice_bundler inject（voice 字段 + manifest + chapter_packs）
-  5. 汇报
+**建 venv**（uv）：
+```bash
+uv venv --python 3.14 .venv-qwen
+uv pip install --python .venv-qwen/Scripts/python.exe -r 15_声音/requirements/qwen.txt
+# cosyvoice 同（--python 3.10 + requirements/cosyvoice.txt）
 ```
 
-## emotion 词表 + 映射
+## 路径配置（paths.py）
 
-- **词表**（可扩）：`平静/高兴/悲伤/愤怒/震惊/无奈/调侃/温柔/冷漠/紧张/恐惧/坚定`
-- **emotion → CosyVoice instruct 映射**：[emotion_instruct.json](emotion_instruct.json)（如 `悲伤 → 用悲伤低沉、强忍哽咽的语气说`）
-- 未映射的 emotion → 默认"用自然的语气说"
-- 改映射措辞调情绪强度，重跑 voice-publisher 即生效
+模型/仓库路径统一在 [paths.py](../.claude/scripts/voice/paths.py)（脚本已迁 `.claude/scripts/voice/`，本模块按 `_PROJECT_ROOT` 定位 `15_声音/vendor/CosyVoice`）：读 `settings.json` 的 `voice.model_dir` + env + 默认。所有脚本 `from paths import *`，**不硬编码 D:/**。
 
-## 工具清单
+- **模型权重**：`D:/model`（settings.json `voice.model_dir`，外部共享，gitignore）
+- **CosyVoice 仓库**：`15_声音/vendor/CosyVoice/`（vendored，含 Matcha-TTS，gitignore）
 
-| 文件 | 用途 | 环境 |
-|---|---|---|
-| [voice_clone_runner.py](voice_clone_runner.py) | Qwen VoiceDesign 出 ref_audio（ensure-ref） | 系统 python 3.14 |
-| [cosyvoice_runner.py](cosyvoice_runner.py) | CosyVoice3 按 emotion clone（publish） | venv python 3.10 |
-| [emotion_instruct.json](emotion_instruct.json) | emotion → instruct 映射配置 | — |
-| [label_chapter00_emotion.py](label_chapter00_emotion.py) | 一次性：序章 emotion 标注（替 dialoguer，迁移用） | 系统 python |
-| [cosyvoice_demo.py](cosyvoice_demo.py) | CosyVoice emotion demo（三情绪试听） | venv python |
-| [luze_voice_build.py](luze_voice_build.py) / [guying_voice_build.py](guying_voice_build.py) | 单角色验证（Qwen 路径B，老参考） | 系统 python |
+迁机器：改 settings.json `voice.model_dir` + 建 venv（requirements 锁）+ vendor CosyVoice（见下）。
 
-## 单角色验证（开发用）
+## vendor CosyVoice（第三方，不入 git）
+
+`15_声音/vendor/CosyVoice/` 含 cosyvoice 包 + Matcha-TTS（.gitignore `15_声音/vendor/`）。
 
 ```bash
-# Qwen VoiceDesign → 单句（老路径，验证音色）
-python 15_声音/luze_voice_build.py
-
-# CosyVoice 三情绪（venv，验证 emotion）
-D:/cosyvoice_env/Scripts/python.exe 15_声音/cosyvoice_demo.py
+git clone https://github.com/FunAudioLLM/CosyVoice.git 15_声音/vendor/CosyVoice
+cd 15_声音/vendor/CosyVoice && git submodule update --init third_party/Matcha-TTS
+# 或直接从已 clone 的仓库 cp（含 Matcha-TTS）
 ```
 
-## 全章配音（生产）
+## 工具（脚本统一在 `.claude/scripts/voice/`，本目录只留数据/依赖：output/ + vendor/ + requirements/）
 
-voice-publisher skill（在 Claude Code 里调）：
+| 文件 | 用途 | venv |
+|---|---|---|
+| [voice_clone_runner.py](../.claude/scripts/voice/voice_clone_runner.py) | Qwen VoiceDesign 出 ref（ensure-ref） | `.venv-qwen` |
+| [cosyvoice_runner.py](../.claude/scripts/voice/cosyvoice_runner.py) | CosyVoice3 按 emotion clone（publish） | `.venv-cosyvoice` |
+| [voice_bundler.py](../.claude/scripts/voice/voice_bundler.py) | voice 键生成 + 章/节 YAML 绑定（make_voice_key / inject / inject-yaml / tasks / tasks-from-section / chapter_stem_from_meta） | 系统 python |
+| [emotion_instruct.json](../.claude/scripts/voice/emotion_instruct.json) | emotion → CosyVoice instruct 映射 | — |
+| [paths.py](../.claude/scripts/voice/paths.py) | 路径配置（模型/仓库，读 settings.json） | — |
 
-```
-/voice-publisher <chapter_id>
-```
+## emotion（每句情绪）
 
-它会查图 + tasks + 双环境（Qwen design ref 系统 python / CosyVoice clone venv python）+ inject + manifest。详见 [.claude/skills/voice-publisher/SKILL.md](../.claude/skills/voice-publisher/SKILL.md)。
+- 由 **chapter-dialoguer** 标（创作时 say.emotion）
+- 词表 + 映射：[emotion_instruct.json](../.claude/scripts/voice/emotion_instruct.json)
+- 未映射 → 默认"用自然的语气说"
 
-## 运行时播放
+## 配音（生产）
 
-Godot 侧 `AudioManager.play_voice(key)` 同步播音；点 next / Auto / Skip / Ctrl 推进时自覆盖停旧播新。运行时层只看 `say.voice` 键 → manifest → wav，**对"wav 是 Qwen 还是 CosyVoice 产的"无感**——换后端零运行时改动。
+- **节级配音**（主线，plot-design 单节聚焦触发）：`section-voice-publisher <section_id>`——单节定稿后即配音，sec=31→32，dashboard 声音审 32→33。
+- **章级兜底**（未走节级的老章）：`voice-publisher <chapter_id>`——全章 TTS + 绑定。
+
+章级 chapter-publisher 合并时节 YAML 的 voice 随 pure concat 进章 JSON，末尾补 manifest.voices / chapter_packs.voices。
+
+## 运行时
+
+Godot `AudioManager.play_voice(key)` 播音；运行时只看 `say.voice` → manifest → wav，**对后端（Qwen/CosyVoice）无感**，换后端零运行时改动。
 
 ## 参考
 
-- 基线音色 Schema：[00_init/Schema/声音.md](../00_init/Schema/声音.md)（VoiceProfile 节点）
-- 剧本 emotion 字段：[00_init/剧本.md](../00_init/剧本.md)（say.emotion + 词表）
-- voice 键三处对齐：[99_game/tools/voice_bundler.py](../99_game/tools/voice_bundler.py)（make_voice_key）
+- 基线音色 Schema：[00_init/Schema/声音.md](../00_init/Schema/声音.md)
+- 剧本 emotion 字段：[00_init/剧本.md](../00_init/剧本.md)
+- voice 键三处对齐：[voice_bundler.py](../.claude/scripts/voice/voice_bundler.py)

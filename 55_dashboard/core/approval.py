@@ -17,22 +17,25 @@ def submit(label, current_status):
 
 
 def approve(current_status):
-    """通过：结构待审(10)/通用待审(10)→批准(11)；定稿待审(30)→定稿已批(31)。"""
-    return {10: 11, 30: 31}.get(current_status, 11)
+    """通过：结构/通用待审(10)→批准(11)；定稿待审(30)→定稿已批(31)；声音待审(32)→声音已批(33)。"""
+    return {10: 11, 30: 31, 32: 33}.get(current_status, 11)
 
 
 def reject(current_status):
-    """驳回：定稿待审(30)→回提纲就绪(20)重写对话（提纲不重做）；其他→0。"""
+    """驳回：定稿待审(30)→回提纲就绪(20)重写对话（提纲不重做）；声音待审(32)→回定稿已批(31)重配（台词不变，重跑 section-voice-publisher 覆盖 wav）；其他→0。"""
     if current_status == 30:
         return 20
+    if current_status == 32:
+        return 31
     return 0
 
 
 def on_edit(label, current_status):
     """编辑节点时：已批准则回退，否则不改（返回 None）。
 
-    - Section 定稿已批(31)→回提纲就绪(20)：保留提纲，重做定稿（Section 的 sync 出边 contains
-      为 sync=false，编辑 Section 不级联到 Scene，仅自身回退）。
+    - Section 定稿已批(31)/声音已批(33)→回提纲就绪(20)：保留提纲，重做定稿（台词变会致 voice key
+      的 line_idx 漂移，需重做定稿再重配音；Section 的 sync 出边 contains 为 sync=false，编辑 Section
+      不级联到 Scene，仅自身回退）。
     - 其余已批准(11)→回 0（结构/美术重做）。
     """
     if not status.is_approved(current_status, label):
