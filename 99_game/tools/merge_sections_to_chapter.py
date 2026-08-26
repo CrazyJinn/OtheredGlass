@@ -1,24 +1,25 @@
-"""把全章各节定稿 YAML 合并拍平为单一章运行时 JSON。
+"""把全章各节台词 JSONL 合并拍平为单一章运行时 JSON。
 
-chapter-publisher 在全章各 Section.status==31 时调用：N 个节级 YAML → 1 个章级 JSON。
+chapter-publisher 在全章各节产物就绪时调用：N 个节级 `台词.jsonl` → 1 个章级 JSON。
 - meta：chapter/title 取 CLI 参数；requires = 各节 meta.requires 的 characters/scenes/portraits 并集（保序去重）。
-- scenes：按节传入顺序拼接各节 scenes[]（scene-block id 由 structurer 预分配、章内唯一，纯 concat 不改写）。
+- scenes：按节传入顺序拼接各 scene-block（scene 分隔行 id 由 structurer 预分配、章内唯一，纯 concat 不改写）。
+- portrait 整键改写：--chapter-map 的 portraits 段（generate_portrait_map.py 查图产）。
+- BGM 注入：--chapter-map 的 bgm 段（Scene-has_bgm->BgmTrack，status=2 才进 map）写入 scene-block.bgm
+  ——台词文件不含感官演出 op，演出信息全部由图推导注入（背景=scene 名、立绘=say 槽位、BGM=本注入）。
 - 合并后校验 scene-block id 章内唯一（防御性，重复则报错）。
 
-与 yaml_to_chapter_json.py 正交（那是 1:1 转换，本工具是 N:1 合并）。不做 schema 校验
-（校验由 validate_chapter.py 负责，保持工具正交）。
-退码：0 成功 / 1 解析或 IO 或 id 冲突失败 / 2 参数错（与 yaml_to_chapter_json.py 对齐）。
+不做 schema 校验（校验由 validate_chapter.py 负责，保持工具正交）。
+退码：0 成功 / 1 解析或 IO 或 id 冲突失败 / 2 参数错。
 """
 import argparse
 import json
 import sys
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:
-    sys.stderr.write("缺少依赖：pip install -r tools/requirements.txt (PyYAML)\n")
-    raise
+_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / ".claude" / "scripts"  # 项目根/.claude/scripts
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+import jsonl_script  # noqa: E402
 
 
 def _union(*lists):
@@ -33,13 +34,13 @@ def _union(*lists):
     return out
 
 
-_PORTRAIT_OPS = ("say", "show")
+_PORTRAIT_OPS = ("say",)  # 台词 JSONL 已无 show（立绘随 say 槽位自动出场）
 
 
 def _rewrite_portraits(scenes, pmap):
-    """按 scene-block 的 scene 字段查 pmap，把 say/show.portrait 从纯变体改写为整键。
+    """按 scene-block 的 scene 字段查 pmap，把 say.portrait 从纯变体改写为整键。
 
-    pmap = {scene_name: {char: {variant: 整键}}}（generate_portrait_map.py 产出）。
+    pmap = {scene_name: {char: {variant: 整键}}}（generate_portrait_map.py 产出的 portraits 段）。
     着装是 Scene 属性，同 scene_name 的所有 block 共享同一组绑定。
     """
     for blk in scenes:
@@ -54,9 +55,9 @@ def _rewrite_portraits(scenes, pmap):
 
 
 def _derive_portraits_from_lines(scenes):
-    """从改写后的全章 say/show.portrait 字段保序去重收集（整键集合）。
+    """从改写后的全章 say.portrait 字段保序去重收集（整键集合）。
 
-    带 portrait-map 时 requires.portraits 用此重推导，保证与 lines 内引用一致。
+    带 chapter-map 时 requires.portraits 用此重推导，保证与 lines 内引用一致。
     """
     out, seen = [], set()
     for blk in scenes:
@@ -69,17 +70,30 @@ def _derive_portraits_from_lines(scenes):
     return out
 
 
-def merge(section_paths, chapter, title, portrait_map=None):
-    """读入各节定稿 YAML（按 section_no 顺序），返回合并后的 {meta, scenes} dict。
+def _inject_bgm(scenes, bgm_map):
+    """把 bgm_map（{scene_name: {track, mode, loop}}）写入对应 scene-block 的 bgm 字段。
 
-    portrait_map 非 None 时：合并后按 scene 改写 say/show.portrait 为 guid 整键，
-    requires.portraits 从改写后的 lines 重推导（不再取各节并集）。
-    portrait_map 为 None 时行为不变（向后兼容）。
+    map 由 generate_portrait_map.py 查图产出（仅 status=2 的 BgmTrack 进 map，
+    未就绪的上游已打警告）。mode/loop 在 map 侧已填默认（play/true），此处原样写入。
+    """
+    for blk in scenes:
+        info = bgm_map.get(blk.get("scene"))
+        if not info or not info.get("track"):
+            continue
+        blk["bgm"] = {"track": info["track"], "mode": info.get("mode", "play"), "loop": info.get("loop", True)}
+
+
+def merge(section_paths, chapter, title, chapter_map=None):
+    """读入各节台词 JSONL（按 section_no 顺序），返回合并后的 {meta, scenes} dict。
+
+    chapter_map 非 None 时（generate_portrait_map.py 产出，{"portraits":…, "bgm":…}）：
+    合并后按 scene 改写 say.portrait 为 guid 整键、注入 scene-block.bgm，
+    requires.portraits 从改写后的 lines 重推导。为 None 时两者均不处理。
     """
     sections = []
     for sp in section_paths:
-        with open(sp, "r", encoding="utf-8") as f:
-            sections.append(yaml.safe_load(f) or {})
+        rows = jsonl_script.load(sp)
+        sections.append(jsonl_script.project(rows))
 
     # requires 并集（characters/scenes/portraits）
     reqs = [(s.get("meta", {}) or {}).get("requires", {}) or {} for s in sections]
@@ -102,36 +116,41 @@ def merge(section_paths, chapter, title, portrait_map=None):
             seen_ids.add(bid)
             scenes.append(blk)
 
-    # portrait 整键改写（搬运层 guid 唯一键，解决同角色换装同名覆盖）
-    if portrait_map:
-        _rewrite_portraits(scenes, portrait_map)
-        requires["portraits"] = _derive_portraits_from_lines(scenes)
+    # 演出注入（portrait 整键改写 + BGM）
+    if chapter_map:
+        pmap = chapter_map.get("portraits") or {}
+        bgm_map = chapter_map.get("bgm") or {}
+        if pmap:
+            _rewrite_portraits(scenes, pmap)
+            requires["portraits"] = _derive_portraits_from_lines(scenes)
+        if bgm_map:
+            _inject_bgm(scenes, bgm_map)
 
     return {"meta": {"chapter": chapter, "title": title, "requires": requires}, "scenes": scenes}
 
 
 def main(argv):
-    p = argparse.ArgumentParser(description="合并各节定稿 YAML 为章运行时 JSON（N→1 拍平）")
-    p.add_argument("inputs", nargs="+", help="各节定稿 YAML 路径，按 section_no 顺序传入")
+    p = argparse.ArgumentParser(description="合并各节台词 JSONL 为章运行时 JSON（N→1 拍平，演出由图注入）")
+    p.add_argument("inputs", nargs="+", help="各节 台词.jsonl 路径，按 section_no 顺序传入")
     p.add_argument("--chapter", required=True, help="章节编号（meta.chapter）")
     p.add_argument("--title", required=True, help="章节标题（meta.title）")
     p.add_argument("-o", "--out", required=True, help="输出章 JSON 路径")
-    p.add_argument("--portrait-map", default=None,
-                   help="portrait-map JSON 路径（generate_portrait_map.py 产出）；"
-                        "传入则把 say/show.portrait 改写为 guid 整键")
+    p.add_argument("--chapter-map", default=None,
+                   help="章映射 JSON 路径（generate_portrait_map.py 产出，含 portraits/bgm 两段）；"
+                        "传入则改写 say.portrait 为 guid 整键并注入 scene-block.bgm")
     args = p.parse_args(argv)
 
-    portrait_map = None
-    if args.portrait_map:
+    chapter_map = None
+    if args.chapter_map:
         try:
-            portrait_map = json.loads(Path(args.portrait_map).read_text(encoding="utf-8"))
+            chapter_map = json.loads(Path(args.chapter_map).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as e:
-            sys.stderr.write(f"读取 portrait-map 失败: {e}\n")
+            sys.stderr.write(f"读取 chapter-map 失败: {e}\n")
             return 1
 
     try:
-        doc = merge(args.inputs, args.chapter, args.title, portrait_map)
-    except (OSError, yaml.YAMLError, ValueError) as e:
+        doc = merge(args.inputs, args.chapter, args.title, chapter_map)
+    except (OSError, ValueError) as e:
         sys.stderr.write(f"合并失败: {e}\n")
         return 1
     out_path = Path(args.out)

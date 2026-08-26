@@ -2,7 +2,7 @@
 
 2D Galgame 框架。集中式 `ScriptInterpreter` 解释器消费纯 JSON 剧本（`data/chapters/*.json`，格式见 `data/剧本.schema.json`），经 `data/manifest.json` 把逻辑名映射到资源；美术默认程序占位兜底（真图经上游 `chapter-publisher` 搬运，见「资源」）。本工程现含序章 `chapter00_序章.json`。
 
-> 剧情格式权威定义：`00_init/剧本.md` + `00_init/剧本.schema.json`（本工程 `data/剧本.schema.json` 为其字节副本）。
+> 剧情格式权威定义：`.claude/skills/chapter-dialoguer/references/剧本.md` + `.claude/skills/chapter-dialoguer/references/剧本.schema.json`（本工程 `data/剧本.schema.json` 为其字节副本）。
 
 ## 架构
 - `scripts/autoload/ScriptInterpreter.gd` ★ 剧本解释器（执行循环 / 11 指令分发 / 跳转寻址 / 立绘槽 / 存档快照）。

@@ -4,11 +4,17 @@ from validate_chapter import validate_chapter
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = str(ROOT / "data" / "剧本.schema.json")
-CHAPTER = str(ROOT / "data" / "chapters" / "chapter00_序章.json")
 
 
-def test_valid_chapter_passes():
-    ok, errors = validate_chapter(CHAPTER, SCHEMA)
+def _valid_doc():
+    return {"meta": {"chapter": 1, "title": "x", "requires": {"characters": [], "scenes": [], "portraits": []}},
+            "scenes": [{"id": "s", "scene": "x", "lines": [{"op": "narrate", "text": "hi"}]}]}
+
+
+def test_valid_chapter_passes(tmp_path):
+    p = tmp_path / "ch.json"
+    p.write_text(json.dumps(_valid_doc(), ensure_ascii=False), encoding="utf-8")
+    ok, errors = validate_chapter(str(p), SCHEMA)
     assert ok, errors
 
 

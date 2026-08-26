@@ -1,22 +1,26 @@
-"""剧情章节进度：列出 Chapter + 分节编排/立绘缺口 + 节级剧本预览 + 审批。
+"""剧情章节进度：列出 Chapter + 分节编排/立绘缺口 + 节级台词预览 + 审批。
 
 结构与 page_scene_overview 对称：Chapter 代替 Location，get_chapter_graph 代替
 get_location_graph。dialog 复用同一 session_state["_dialog_node"] key（点 Section 行也进同
-一节点编辑器——Section 已被 schema_loader 自动注册）。
+一节点编辑器——Section/SecOutline/SecScript/LineAudio 均被 schema_loader 自动注册）。
 
-节级预览（读各 Section.script_path 的 YAML 渲染逐句对话）是剧情审批的核心——review 对白质量，
-区别于美术节点审批（看图片）。Chapter 审批按钮 status=10→11（结构审通过）/→0（驳回重做）；
-Section 定稿审(30→31)走审批中心（page_approval）。
+Section 是纯编排容器（无 status），节级进度看**产物链**：
+Section→has_outline→SecOutline(提纲)→produces→SecScript(定稿)→produces→LineAudio(音频)。
+节完成 = SecOutline=1 ∧ SecScript=11 ∧ LineAudio=11（派生判断）。
+
+节级预览（读各 SecScript.script_path 的台词 JSONL 渲染逐句对话）是剧情审批的核心——review 对白
+质量，区别于美术节点审批（看图片）。Chapter 审批按钮 status=10→11（结构审通过，卡片内渲染
+brief_path 设计简报）/→0（驳回重做）；SecScript 定稿审与 LineAudio 逐句音频审走审批中心
+（page_approval）。**人工微调回路**：用户直接编辑台词 JSONL 单句后点「重新提交审批」
+（SecScript 0/1/11→10 + LineAudio 级联 -1，stale 机制后续只重配被改句）——不经 dialoguer，
+手改不丢。
 """
-import yaml
-from pathlib import Path
-
 import streamlit as st
 
 from config import settings
 from repo import graph_repo
 from core import approval
-from ui.components import launch_button, status_badge
+from ui.components import launch_button, status_badge, script_jsonl_view, markdown_viewer
 from ui import page_node_editor
 
 
@@ -49,49 +53,98 @@ def render(schema):
 
 
 def _sections_sorted(g):
-    """从章节子图取 Section 列表，按 section_no 排序，附完整节点字段（title/script_path/section_no）。
+    """从章节子图取 Section 列表，按 section_no 排序，附产物链状态与定稿路径。
 
-    subgraph 的 nodes 只含 id/label/status/name，不含 section_no/title，故逐个 get_node 补全。
+    Section 无 status（纯编排容器），节级进度看产物链：
+    has_outline→SecOutline.status / SecOutline-produces→SecScript.status / SecScript-produces→LineAudio.status。
+    subgraph 的 nodes 只含 id/label/status/name，节编排字段与 script_path 逐个 get_node 补全。
     """
+    nodes_by_id = {n["id"]: n for n in g["nodes"]}
+    ol_of = {}    # sec_id -> ol_id（has_outline）
+    prod_of = {}  # 上游 id -> 下游 id（produces：SecOutline→SecScript / SecScript→LineAudio）
+    for e in g["edges"]:
+        if e["type"] == "has_outline":
+            ol_of[e["from"]] = e["to"]
+        elif e["type"] == "produces":
+            prod_of[e["from"]] = e["to"]
+
     secs = [n for n in g["nodes"] if n["label"] == "Section"]
     out = []
     for s in secs:
         full = graph_repo.get_node(s["id"]) or {}
         no = full.get("section_no")
+        ol_id = ol_of.get(s["id"])
+        sc_id = prod_of.get(ol_id) if ol_id else None
+        vo_id = prod_of.get(sc_id) if sc_id else None
+        sc_full = (graph_repo.get_node(sc_id) or {}) if sc_id else {}
         out.append({
             "id": s["id"],
-            "status": s["status"],
             "_full": full,
             "_no": no if no is not None else 9999,
+            "ol_status": nodes_by_id[ol_id]["status"] if ol_id in nodes_by_id else None,
+            "sc_id": sc_id,
+            "sc_status": nodes_by_id[sc_id]["status"] if sc_id in nodes_by_id else None,
+            "vo_id": vo_id,
+            "vo_status": nodes_by_id[vo_id]["status"] if vo_id in nodes_by_id else None,
+            "script_path": sc_full.get("script_path"),
         })
     out.sort(key=lambda s: (s["_no"], s["id"]))
     return out
 
 
+def _section_done(s):
+    """节产物链就绪 = SecOutline=1 ∧ SecScript=11 ∧ LineAudio=11（派生判断，非字段）。"""
+    return s["ol_status"] == 1 and s["sc_status"] == 11 and s["vo_status"] == 11
+
+
+def _render_product_chain(s):
+    """产物链三段徽章：提纲 / 定稿 / 音频（无节点显示 —）。"""
+    parts = []
+    for label, st_val in (("提纲", s["ol_status"]), ("定稿", s["sc_status"]), ("音频", s["vo_status"])):
+        if st_val is None:
+            parts.append(f"{label}：—")
+        else:
+            color = status_badge.badge_color(st_val)
+            text = status_badge.badge_text(st_val)
+            parts.append(f"{label}：:{color}[{text}]")
+    st.markdown(" · ".join(parts))
+
+
 def _render_section_row(s, ch_status):
     """单节状态行 + 节级推进入口（显眼展示，区别于折叠的编排子图）。
 
-    ch_status=11 时按 sec.status 给出推进（plot-design 单节聚焦：outliner/dialoguer）
-    或审批指引；ch_status≠11 时提示待章结构审批。
+    ch_status=11 时：有待审项（SecScript/LineAudio=10）给审批指引，未全就绪给「推进此节」
+    （plot-design 单节聚焦：按产物链当前段推进）；ch_status≠11 时提示待章结构审批。
     """
     full = s["_full"]
     title = full.get("title") or s["id"]
-    sec_status = s["status"]
     cols = st.columns([3, 2, 2])
     cols[0].markdown(f"**第{s['_no']}节 · {title}**")
     with cols[1]:
-        if sec_status is not None:
-            color = status_badge.badge_color(sec_status)
-            text = status_badge.badge_text(sec_status)
-            st.markdown(f":{color}[● {text}]")
+        _render_product_chain(s)
     with cols[2]:
         if ch_status == 11:
-            if sec_status in (-1, 0, 20, 31):
-                launch_button.render_section(s["id"], f"第{s['_no']}节 · {title}")
-            elif sec_status == 30:
+            if s["sc_status"] == 10:
                 st.caption("定稿待审 → 审批中心")
+            elif s["vo_status"] == 10:
+                st.caption("音频待审 → 审批中心")
+            elif not _section_done(s):
+                launch_button.render_section(s["id"], f"第{s['_no']}节 · {title}")
         else:
             st.caption("待章结构审批")
+        # 人工微调回路：直接编辑台词 JSONL 后重新送审（不经 dialoguer，手改不丢）。
+        # 显示条件含驳回后的 0——否则驳回态手改会被 plot-design 触发的 dialoguer 整篇覆盖。
+        if ch_status == 11 and s.get("script_path") and s["sc_status"] in (0, 1, 11):
+            if st.button("重新提交审批", key=f"resub_{s['id']}",
+                         help="直接编辑 台词.jsonl 改单句后点此重审：SecScript→10；已改台词的音频作废（-1），"
+                              "重配时只重做被改句。注意：点「推进此节」会让 dialoguer 整篇重写覆盖手改。"):
+                graph_repo.set_status(s["sc_id"], approval.resubmit("SecScript", s["sc_status"]))
+                if s["vo_id"] and (s["vo_status"] is not None and s["vo_status"] >= 0):
+                    # 顺序先 sc→10 再 vo→-1（漏后者会旧音频带新台词上线）
+                    graph_repo.set_status(s["vo_id"], -1)
+                st.toast("已重新提交定稿审（SecScript=10）；该节音频已作废（-1），改过的句子重配时自动重做",
+                         icon="🔁")
+                st.rerun()
 
 
 def _render_chapter_row(schema, ch):
@@ -123,8 +176,10 @@ def _render_chapter_row(schema, ch):
         if ch.get("branch_summary"):
             st.caption(f"**分支骨架**：{ch['branch_summary']}")
 
-        # 审批按钮（status=10 结构审）/ 生产提示（status=11）
+        # 审批按钮（status=10 结构审，先渲染设计简报）/ 生产提示（status=11）
         if status == 10:
+            with st.expander("📑 章节设计简报（结构审对象）", expanded=True):
+                markdown_viewer.render(ch.get("brief_path"))
             c1, c2 = st.columns(2)
             with c1:
                 if st.button("通过（批准 11）", key=f"cok_{ch_id}", type="primary"):
@@ -138,16 +193,16 @@ def _render_chapter_row(schema, ch):
                     st.toast("已驳回（status=0），结构需重做", icon="❌")
                     st.rerun()
         elif status == 11:
-            done = [s for s in sections if s["_full"].get("status") == 31]
+            done = [s for s in sections if _section_done(s)]
             if sections and len(done) == len(sections):
                 st.info(
-                    "全章各节定稿已批（31）。下方「立绘缺口」全部就绪后，点上方「推进剧情创作」"
-                    "由 plot-design 自动委派 chapter-publisher 合并发布到 `99_game/`。"
+                    "全章各节产物就绪（提纲/定稿/配音均批）。下方「立绘缺口」全部就绪后即可发布——"
+                    "chapter-publisher 由你直接触发（不经 plot-design），不自动发布。"
                 )
             else:
                 st.info(
-                    f"结构已批（11），节级生产中：{len(done)}/{len(sections)} 节定稿已批。"
-                    "在各节点「推进此节」单独推进（定稿已批则推进该节立绘），或点上方「推进剧情创作」全量推进。"
+                    f"结构已批（11），节级生产中：{len(done)}/{len(sections)} 节产物就绪。"
+                    "在各节点「推进此节」单独推进，或点上方「推进剧情创作」全量推进。"
                 )
 
         # 各节状态 + 节级推进入口（以小节为载体：每节显眼展示状态与推进/审批入口）
@@ -156,112 +211,15 @@ def _render_chapter_row(schema, ch):
             for s in sections:
                 _render_section_row(s, status)
 
-        # 各节剧本预览（核心：review 对白质量）——读 Section.script_path 的节级 YAML
+        # 各节台词预览（核心：review 对白质量）——读 SecScript.script_path 的台词 JSONL
         for s in sections:
-            sp = s["_full"].get("script_path")
+            sp = s.get("script_path")
             if sp:
-                _render_script_preview(sp, f"第{s['_no']}节 · {s['_full'].get('title') or s['id']}")
+                script_jsonl_view.render_preview(
+                    sp, f"第{s['_no']}节 · {s['_full'].get('title') or s['id']}")
 
         # 编排子图：has_section→Section→contains→Scene→depicts→立绘缺口
         _render_chapter_subgraph(g, sections)
-
-
-def _render_script_preview(script_path, label=""):
-    """读 script_path 的节级剧本 YAML，渲染 meta + 每个 scene-block 的逐句对话，供 review。"""
-    p = Path(script_path)
-    if not p.is_absolute():
-        p = settings.PROJECT_ROOT / script_path
-    if not p.exists():
-        st.caption(f"剧本文件不存在：{script_path}")
-        return
-    try:
-        data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as e:
-        st.error(f"剧本 YAML 解析失败：{e}")
-        return
-    meta = data.get("meta", {})
-    req = meta.get("requires", {})
-    scenes = data.get("scenes", [])
-    cap = f"📜 剧本预览：{label or script_path}（{len(scenes)} 场景段"
-    if req.get("portraits"):
-        cap += f"，{len(req['portraits'])} 立绘引用"
-    cap += "）"
-    with st.expander(cap, expanded=False):
-        if meta:
-            st.caption(f"章节 {meta.get('chapter')} · {meta.get('title')}")
-            parts = []
-            if req.get("characters"):
-                parts.append("角色：" + "、".join(req["characters"]))
-            if req.get("scenes"):
-                parts.append("场景：" + "、".join(req["scenes"]))
-            if req.get("portraits"):
-                parts.append(f"立绘 {len(req['portraits'])} 个")
-            if parts:
-                st.caption(" | ".join(parts))
-        for blk in scenes:
-            blk_id = blk.get("id", "")
-            with st.expander(f"场景段 {blk_id}（{blk.get('scene', '')}）", expanded=False):
-                meta_bits = []
-                if blk.get("time"):
-                    meta_bits.append(f"时段：{blk['time']}")
-                if blk.get("bgm"):
-                    meta_bits.append(f"BGM：{blk['bgm'].get('track', '')}（{blk['bgm'].get('mode', '')}）")
-                if meta_bits:
-                    st.caption(" · ".join(meta_bits))
-                for line in blk.get("lines", []):
-                    _render_line(line)
-
-
-def _render_line(line):
-    """渲染单条指令为可读文本。"""
-    op = line.get("op")
-    if op == "say":
-        who = line.get("who", "")
-        portrait = line.get("portrait", "")
-        pos = line.get("pos", "")
-        emotion = line.get("emotion")
-        head = f"**{who}** `{portrait}·{pos}`"
-        if emotion:
-            head += f" `🎭{emotion}`"
-        st.markdown(f"{head}：{line.get('text', '')}")
-        # 节级配音后节 YAML 带 voice 字段，wav 已落 99_game/assets/voices/；就地试听
-        voice = line.get("voice")
-        if voice:
-            wav = settings.PROJECT_ROOT / "99_game" / "assets" / "voices" / f"{voice}.wav"
-            if wav.exists():
-                st.audio(str(wav), format="audio/wav")
-    elif op == "narrate":
-        st.markdown(f"*（旁白）{line.get('text', '')}*")
-    elif op == "show":
-        st.caption(f"[入场] {line.get('who', '')}.{line.get('portrait', '')} @ {line.get('pos', 'center')}")
-    elif op == "hide":
-        st.caption(f"[离场] {line.get('who', '')}")
-    elif op == "bg":
-        st.caption(f"[切背景] {line.get('scene', '')} {line.get('time', '')}")
-    elif op == "bgm":
-        st.caption(f"[BGM] {line.get('track', '')} {line.get('mode', '')}")
-    elif op == "sfx":
-        st.caption(f"[音效] {line.get('track', '')}")
-    elif op == "choice":
-        st.markdown("**【选择】**")
-        for o in line.get("options", []):
-            tails = []
-            if o.get("to"): tails.append(f"→{o['to']}")
-            if o.get("scene"): tails.append(f"→场景{o['scene']}")
-            if o.get("file"): tails.append(f"→文件{o['file']}")
-            if o.get("leads_to_ending"): tails.append("导向结局")
-            tail = f"（{'，'.join(tails)}）" if tails else ""
-            st.markdown(f"  - 「{o.get('label', '')}」{tail}")
-    elif op == "label":
-        st.caption(f"[锚点] {line.get('name', '')}")
-    elif op == "jump":
-        tails = []
-        if line.get("to"): tails.append(f"→{line['to']}")
-        if line.get("scene"): tails.append(f"→场景{line['scene']}")
-        if line.get("file"): tails.append(f"→文件{line['file']}")
-        st.caption(f"[跳转] {'，'.join(tails)}")
-    elif op == "ending":
-        st.markdown(f"**【结局 {line.get('kind', '')}】{line.get('title', '')}**")
 
 
 def _render_chapter_subgraph(g, sections):
@@ -294,7 +252,8 @@ def _render_chapter_subgraph(g, sections):
         full = s["_full"]
         title = full.get("title") or s["id"]
         with st.expander(f"第{s['_no']}节 · {title}（场景/立绘）", expanded=False):
-            _badge_line("节状态", s["status"])
+            for label, st_val in (("提纲", s["ol_status"]), ("定稿", s["sc_status"]), ("音频", s["vo_status"])):
+                _badge_line(label, st_val)
             scene_ids = scenes_of.get(s["id"], [])
             scene_nodes = [nodes_by_id[sid] for sid in scene_ids if sid in nodes_by_id]
             scene_nodes.sort(key=lambda n: n.get("name") or "")
@@ -317,6 +276,9 @@ def _render_chapter_subgraph(g, sections):
 
 
 def _badge_line(label, status):
+    if status is None:
+        st.markdown(f"- {label} :gray[未创建]")
+        return
     color = status_badge.badge_color(status)
     text = status_badge.badge_text(status)
     st.markdown(f"- {label} :{color}[{text}]")

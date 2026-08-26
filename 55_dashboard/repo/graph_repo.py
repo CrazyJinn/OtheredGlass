@@ -46,13 +46,14 @@ def get_nodes(label):
 
 
 # 美术生产链边类型（限定遍历范围，避免把叙事 Event/Info/其他角色拉进美术子图）
-_ART_EDGES = "has_appearance|has_voice_style|has_voice_profile|has_costume|produces|outfit_for|expands_to|ref_style"
+_ART_EDGES = "has_appearance|has_voice_style|has_voice_design|has_costume|produces|outfit_for|expands_to|ref_style"
 
 # 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
 _SCENE_EDGES = "has_scene|has_layer"
 
-# 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration）
-_PLOT_EDGES = "has_section|contains|depicts|expands_to"
+# 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio；
+# Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration）
+_PLOT_EDGES = "has_section|has_outline|produces|contains|depicts|expands_to"
 
 
 def get_character_graph(char_id):
@@ -156,6 +157,9 @@ def get_sync_downstream(node_id):
 
 
 def update_node(node_id, props):
+    """SET n += props（剥离 id/label）。**value=None 即删除该属性**（Neo4j 不存 null，
+    `SET n += {k: null}` 会移除 k）——如 voice_candidates 采用动作用它清空 candidates_path。
+    切勿在此过滤 None，会把删属性能力堵死。"""
     clean = {k: v for k, v in props.items() if k not in ("id", "label")}
     with _session() as s:
         s.run(
@@ -177,13 +181,38 @@ def set_status_batch(node_ids, status):
 
 
 def get_pending_approvals():
-    # status=10 通用待审（含 Chapter 结构审）；status=30 Section 定稿待审；status=32 Section 声音待审
+    # status=10 通用待审（Chapter 结构审 / SecScript 定稿审 / LineAudio 逐句音频审 / 美术与音色设计审批）
     with _session() as s:
         rs = s.run(
-            "MATCH (n) WHERE n.status IN [10, 30, 32] "
+            "MATCH (n) WHERE n.status IN [10] "
             "RETURN n.id AS id, labels(n)[0] AS label, n.status AS status"
         )
         return [{"id": r["id"], "label": r["label"], "status": r["status"]} for r in rs]
+
+
+def get_upstream_script_path(vo_id):
+    """取 LineAudio 的上游 SecScript.script_path（审批中心逐句音频审的试听数据源）。"""
+    with _session() as s:
+        rec = s.run(
+            "MATCH (sc:SecScript)-[:produces]->(:LineAudio {id:$id}) "
+            "RETURN sc.script_path AS p LIMIT 1",
+            id=vo_id,
+        ).single()
+    return rec["p"] if rec else None
+
+
+def get_section_of_lineaudio(vo_id):
+    """取 LineAudio 所属的 Section id（沿产物链回溯：Section→SecOutline→SecScript→LineAudio）。
+
+    逐句审批卡的「重生成」deeplink 需要 section id 唤起 plot-design 单节聚焦。
+    """
+    with _session() as s:
+        rec = s.run(
+            "MATCH (sec:Section)-[:has_outline]->()-[:produces]->()-[:produces]->(:LineAudio {id:$id}) "
+            "RETURN sec.id AS sid LIMIT 1",
+            id=vo_id,
+        ).single()
+    return rec["sid"] if rec else None
 
 
 def get_upstream_character_id(node_id):

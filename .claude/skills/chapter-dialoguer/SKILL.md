@@ -1,8 +1,8 @@
 ---
 name: chapter-dialoguer
 description: |
-  推进 Section 图节点的定稿段：读 structurer 的章级设计简报 + outliner 的本节提纲 outline.md → 三轮打磨（功能→声音→精简）创作逐句对话填入骨架 → 跑 validate 校验 → 写 Section.script_path + status=30（定稿待审）。
-  前驱 Section status=20（提纲就绪）。创作中若发现 outline 戏剧性破碎（分支无本质差异/scene 无情绪推进），产出「结构性问题报告」回退 outliner，不写 status。按情绪节拍规划每条 say 的 portrait（同一角色随情绪转折切换变体，避免一表情撑全场），立绘缺口兜底建 depicts 节点（交 plot-design 按 depicts 逐个推进出图）。
+  推进 Section 图节点的定稿段：读 structurer 的章级设计简报 + outliner 的本节提纲 outline.md → 创作逐句对话 → 产出节级 台词.md（自然语言 Markdown：说话行「角色名:台词」、旁白行「旁白:叙述」、场景二级标题分隔、选择/分支/结局自然语言记录）→ 兜底建 SecScript 产物节点（SecOutline-[:produces]->SecScript）写 script_path + status=10（定稿待审，直写不经 submit；md 为自然语言格式，暂不跑 schema 校验）。
+  前驱 SecOutline.status=1（提纲就绪）。创作中若发现 outline 戏剧性破碎（分支无本质差异/scene 无情绪推进），产出「结构性问题报告」回退 outliner，不写 status。场景段查 Scene-has_bgm->BgmTrack，缺口兜底建 BgmTrack(status=0)。台词.md 为实验格式——配音（section-voice-publisher）与发布（chapter-publisher）链当前仍以 台词.jsonl 为输入。
 argument-hint: <section_id> [target_status]
 arguments:
   - section_id
@@ -10,187 +10,155 @@ arguments:
 allowed-tools: Read, Bash, Write, Edit
 ---
 
-> **status=-1 = 作废重做**：当 Section 被重置为 `status=-1` 时（如所属 Chapter 属性变更沿 has_section 级联），即使定稿 `.yaml` 已落盘，也**必须重新创作并覆盖**（重走 20→30）。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧剧本内容**，直接以当前图节点数据 + 本节 outline.md + 章级设计简报为唯一来源重新创作。重做时 depicts 边 MERGE 幂等，不主动删。
+> **status=-1 = 作废重做**：当本节 SecScript 节点被重置为 `status=-1` 时（如 SecOutline/Section/Chapter 属性变更沿 produces/has_outline/has_section 级联），即使 `台词.md` 已落盘，也**必须重新创作并覆盖**（重走 0→10）。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧台词内容**，直接以当前图节点数据 + 本节 outline.md + 章级设计简报为唯一来源重新创作。重做时 has_bgm 边 MERGE 幂等，不主动删。
 
-# 节细节对话（Section 定稿段 · status 20→30）
+# 节细节对话（SecScript 定稿段 · status 0→10）
 
-剧情创作流程的**第三段**（节级）。读 `chapter-structurer` 的**章级设计简报**（情感弧/戏剧意图）+ `chapter-outliner` 的**本节提纲 outline.md**，用**三轮打磨**（功能→声音→精简）创作逐句对话填入骨架，产出节级完整剧本 **YAML**（schema 子集 1:1，格式见 [00_init/剧本.md](../../../00_init/剧本.md)），落盘 `25_剧本/`（**创作/审阅区，非运行时**；本节定稿审通过后，全章各节由 `chapter-publisher` 合并拍平为单一章 JSON 发布到 `99_game/`）。
+剧情创作流程的**第三段**（节级）。读 `chapter-structurer` 的**章级设计简报**（情感弧/戏剧意图）+ `chapter-outliner` 的**本节提纲 outline.md**，创作逐句对话，产出节级 **`台词.md`**——自然语言 Markdown 对话文本（**实验格式**：下游配音/发布链仍以 `台词.jsonl` 为输入，md 定稿暂不进入下游）。落盘 `25_剧本/`（**创作/审阅区，非运行时**）。
 
 ## 参数
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | section_id | Section 节点 ID（snowflake） | 必传 |
-| target_status | `30`（定稿+校验→提交定稿审）或 `20`（仅草稿，回退提纲就绪） | `30` |
+| target_status | `10`（定稿→定稿待审）或 `1`（仅草稿，产出未提审；重跑本 skill 提审） | `10` |
 
 ## 流程（三段式：查状态 → 完成任务 → 保存结果）
 
-> 本 skill 是 Section 定稿段 status 的唯一写入点；节级剧本 YAML 由本 skill 直接创作产出。编剧是高自由度创作任务，**无纯产出子 skill**——创作与写图都在本 skill 内完成。
+> 本 skill 是 SecScript 产物节点的创建点 + 定稿段 status 的唯一写入点；台词.md 由本 skill 直接创作产出。编剧是高自由度创作任务，**无纯产出子 skill**——创作与写图都在本 skill 内完成。
 
 ### 1. 查询目标节点状态
 
 通过 `${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py` 查询。
 
-#### 1a. 解析 Section + 所属 Chapter + 前驱校验
+#### 1a. 解析 Section + SecOutline + SecScript + 前驱校验
 
 ```cypher
 MATCH (ch:Chapter)-[:has_section]->(sec:Section {id:'<input>'})
-RETURN sec.id AS id, sec.outline_path AS outline_path, sec.script_path AS script_path,
-       sec.status AS status, sec.section_no AS section_no, sec.title AS title,
+OPTIONAL MATCH (sec)-[:has_outline]->(ol:SecOutline)
+OPTIONAL MATCH (ol)-[:produces]->(sc:SecScript)
+RETURN sec.id AS id, sec.section_no AS section_no, sec.title AS title,
+       ol.outline_path AS outline_path, ol.status AS ol_status,
+       sc.id AS sc_id, sc.script_path AS script_path, sc.status AS sc_status,
        ch.chapter_no AS chapter_no
 LIMIT 1
 ```
 
-**前驱校验**：`sec.status = 20`（提纲就绪，`outline_path` 非空），否则停止并提示先完成本节提纲段（`chapter-outliner`）。
+**前驱校验**：`ol_status = 1`（提纲就绪，`outline_path` 非空），否则停止并提示先完成本节提纲段（`chapter-outliner`）。`sc_status` 为 `10/11` → 定稿已待审/已批，停止并提示。
 
 #### 1b. 读设计简报 + 本节提纲 + 查创作上下文
 
 **先读两份创作依据**：
 - Read `25_剧本/chapter<NN>_<章概述>/设计简报.md`（NN = chapter_no 零填充，<章概述> 取章 title）——取出情感弧线 / 戏剧意图 / 设计支柱（本节在弧线中的位置靠分节规划定位），本节对话的情感基调全靠它。
-- Read **本节** `outline.md`（`sec.outline_path`，拓扑骨架契约值 + `authoring` 散文）。**区分**：拓扑骨架里反引号标注的契约值（资源清单、场景段 id/scene/time/bgm、分支拓扑 choice/jump/ending）必须原样搬到定稿 YAML，不得改写；`authoring` 散文（方向/情感弧/约束/职责/节拍/母题锚点/衔接）是创作指引，**不进定稿**。
+- Read **本节** `outline.md`（`SecOutline.outline_path`）——场景分段（Scene 名/时段）、分支拓扑（choice/label/jump/ending）必须如实体现到台词.md（见格式规范）；`authoring` 散文（方向/情感弧/约束/职责/节拍/母题锚点/衔接）是创作指引，不进台词；「BGM 倾向」是散文参考（供 3b 兜底建 BgmTrack 命名参考）。
 
 任一缺失则停止并提示先跑上游（structurer / outliner）。
 
 再查图：
 
 ```cypher
-// (1) 出场角色 + 语言习惯（创作对话的核心依据——声音回检用它）
+// 出场角色 + 语言习惯（创作对话的核心依据）
 MATCH (char:Character) WHERE char.name IN ['<角色名1>','<角色名2>']
 OPTIONAL MATCH (char)-[:has_voice_style]->(voice:LanguageStyle)
 RETURN char.name AS name, char.description AS description, char.character_tags AS tags,
-       voice.id AS voice_id,
        voice.vocabulary AS vocabulary, voice.rhythm AS rhythm,
        voice.habits AS habits, voice.emotion_patterns AS emotion_patterns,
        voice.description AS voice_desc
 LIMIT 20
 ```
 
-```cypher
-// (2) 各角色现有立绘变体（供 portrait 选用；status=11 可直接用，<11 标注为缺口）
-MATCH (char:Character) WHERE char.name IN ['<角色名>']
-MATCH (char)-[:has_appearance]->(:AppearanceStyle)-[:produces]->(:DesignSheet)-[:produces]->(illus:IllusDesign)
-MATCH (illus)-[:expands_to]->(stand:StandingIllustration)
-RETURN char.name AS char_name, stand.id AS stand_id, stand.variant_label AS variant,
-       stand.status AS status, illus.id AS illus_id
-ORDER BY char_name, variant LIMIT 200
+### 2. 完成任务（创作细节对话）
+
+读本节 outline.md 逐场景段，据章级设计简报（情感弧/戏剧意图）+ 角色 LanguageStyle，创作逐句对话写入 `台词.md`。
+
+#### 台词.md 格式规范
+
+```markdown
+# <节标题>
+
+## <Scene 名>（<时段>）
+
+旁白:<叙述文本，一行一句>
+<角色名>:<台词>
+<角色名>:<台词>
+
+**选择**
+- <选项文本> → <去向：label 名 / 结局>
+- <选项文本> → <去向>
+
+**分支:<label 名 或 选项文本>**
+
+<角色名>:<台词>
+旁白:<叙述>
+
+**结局**:<BE|TE|HE|NE>——<落点一句话>
 ```
 
-### 2. 完成任务（三轮打磨创作细节对话）
-
-读本节 outline.md 每个场景段骨架，**以「节拍（beats）」章节为节拍依据**（beats 是引导不是约束），据章级设计简报（情感弧/戏剧意图）+ 角色 LanguageStyle，**三轮打磨**创作逐句 `lines` 填入（覆盖空的 lines 数组，保留提纲里的 choice/jump/ending 拓扑）。三轮打磨与声音标准详见 [references/对话写作方法论.md](references/对话写作方法论.md)——创作前读它。
-
-#### 第一轮·功能（戏剧职责）
-
-每段 lines 完成明确的叙事职责——揭示信息 / 建立关系 / 制造压力 / 传递后果。对齐本节 outline 拓扑 + 设计简报情感弧：这段在情感弧线上的哪个位置？要推进什么情绪？无戏剧功能的台词删掉。
-
-#### 第二轮·声音（像角色说话）
-
-每句台词符合角色 LanguageStyle（`vocabulary`/`rhythm`/`habits`/`emotion_patterns`），通过**"真人会这样说话吗？"测试**：
-
-- **避免"你也知道"式对话**——角色间不为让玩家了解情况而互相解释已知事实。
-- **避免 on-the-nose 说明文伪装成对话**——角色不直白说出自己的动机/情绪（用潜台词、行为、反应传达）。
-- **声音支柱一致性回检**：对照 1b 查到的 LanguageStyle 字段，检查产出 lines 是否真的用了该角色的 `vocabulary`（词汇偏好）/ `rhythm`（句式节奏）/ `habits`（口头禅）/ `emotion_patterns`（情绪模式）。不符则改。
-
-> 声音标准与声音支柱模板详见 [references/对话写作方法论.md](references/对话写作方法论.md)。
-> 句子层面是否**真的像角色在说话、有无机械感**（句长均匀 / 价值拔高 / 假口语化 / 心理判断腔等），按 [references/日常对白自然度技巧.md](references/日常对白自然度技巧.md) 的反模式清单自查。**反模式服从角色声音支柱**——命中角色 LanguageStyle 的说法不算机械。
-
-#### 第三轮·精简（删多余的词）
-
-删每个不值得存在的词。旁白不啰嗦、台词不留水分。精简后每条 say/narrate 都有其存在的必要。
-
-精简收尾做两遍回读：保真回读（忠于 outline / 声音一致 / 潜台词没被说破）+ 残留味回读（句长过匀 / narrator 残留 / 价值拔高收尾等 5 类）。见 [references/日常对白自然度技巧.md](references/日常对白自然度技巧.md) 第 5 章。
-
-#### 创作技术要求（格式正确性）
-
-1. **lines 指令**：用 11 条指令（`say`/`narrate`/`show`/`hide`/`bg`/`bgm`/`sfx`/`choice`/`label`/`jump`/`ending`）。每条 `say` 必带 `who`/`portrait`/`pos`/`text`/`emotion` 五字段，`pos` ∈ `left`/`center`/`right`。`emotion` 是语音情绪标签（`平静`/`高兴`/`悲伤`/`愤怒`/`震惊`/`无奈`/`调侃`/`温柔`/`冷漠`/`紧张`/`恐惧`/`坚定`，可扩），据该句当下情绪选——它驱动 `voice-publisher`→CosyVoice instruct 控制配音语气（见 [15_声音/emotion_instruct.json](../../../15_声音/emotion_instruct.json)），与 `portrait` variant（视觉情绪）配对表达同一情绪节拍（一句的视觉表情 + 语音语气应同情绪，如 `portrait: 慵懒` + `emotion: 调侃`，不要错配如 `portrait: 慵懒` + `emotion: 愤怒`）。
-2. **情感递进**：每个 scene 内部情绪有起伏（不是平铺），对齐设计简报情感弧线的该段位置。
-3. **变体选用规则**（立绘表情密度——galgame 视觉叙事的核心）：
-   - **反模式（必须避免）**：同一 scene 同一角色用同一个 portrait 通铺全场（如一段戏 5 句全用「慵懒」、12 句全用「庄严」）。立绘表情是对话情绪的视觉锚点，一表情撑全场会让情绪弧无法视觉化、剧情显得单薄。
-   - **按情绪节拍切 portrait**：同一角色在该 scene 内的情绪转折、反应变化，应尽量体现在 portrait 切换上——情绪每转向一次就换一个变体。仅当情绪真正持平的连续短句才复用同一 portrait。
-   - **优先复用 `status=11` 已有变体**；剧情需要某个不存在/未批准的变体（如「陈默.沉重」），仍写入 `portrait` 字段并记录为「缺口」——段 3c 兜底建 `StandingIllustration(status=0)` + `depicts` 边，交 `plot-design` 按 depicts 逐个推进出图。
-   - 变体数量不设上下限、不按角色优先级——由剧情情绪节拍决定，用到几个就提几个。
-4. **分支与结局**：`choice.options[]` 每项含 `label` + `to`/`scene`/`file` 至少其一；结局用 `ending{kind:BE/TE/HE/NE}`，对齐 `Event.ending_kind` 与 `option.leads_to_ending`。
-5. **Write 落盘**：`25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/完整对话.yaml`（节级定稿 YAML，与该节 outline.md 同目录）。`Section.script_path` 指向此 `.yaml` 路径。Write 自动创建章/节目录。
-6. **定稿 YAML 写作规则**（严格 schema 子集 1:1）：所有 string 双引号；多行文本用双引号 + `\n`，禁块标量；bool 小写 `true/false`；字段顺序对齐 schema properties；**不加任何额外字段**（schema `additionalProperties:false`，authoring 散文绝不搬进定稿）；`meta.requires.portraits` 在定稿段补齐（提纲段无）。**scene-block `id` 沿用本节 outline.md 反引号标注的预分配 id，不自创新 id**（保证发布合并时章内唯一）。
-
-> 格式细节、11 指令字段、跳转寻址——严格按 [00_init/剧本.md](../../../00_init/剧本.md) 与 [99_game/data/剧本.schema.json](../../../99_game/data/剧本.schema.json)。
+1. **说话行**：`角色名:台词`——一行一句，冒号用半角，角色名用 Character.name 原名。
+2. **旁白行**：`旁白:叙述`——一行一句，承载环境/动作/心理等非台词叙述。
+3. **场景分隔**：`## <Scene 名>（<时段>）` 二级标题——按 outline 场景段顺序，Scene 名/时段照搬提纲契约值（BGM 兜底按 Scene 名查图）。
+4. **选择/分支/结局**：`**选择**` 小节列各选项及去向；各分支正文以 `**分支:<名>**` 加粗行开头；`**结局**:<kind>——<落点>`。拓扑去向按 outline 如实记录，不改动分支结构。
+5. **覆盖完整**：提纲全部场景段、分支、结局都要写，不得增删场景/分支。
+6. **情感递进**：每个场景内部情绪有起伏（不是平铺），对齐设计简报情感弧线的该段位置。
+7. **Write 落盘**：`25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/台词.md`（与该节 outline.md 同目录）。`SecScript.script_path` 指向此 `.md` 路径。Write 自动创建章/节目录。
 
 #### 创作质量自检（发现 outline 破碎 → FAIL 报告）
 
-三轮打磨后，若发现**根本问题在 outline 而非台词**——即 outline 戏剧性破碎，再怎么打磨也写不出合格对话：
+创作完成后自检，若发现**根本问题在 outline 而非台词**——即 outline 戏剧性破碎，再怎么写也写不出合格对话：
 - 分支 options 无戏剧本质差异（outliner 的本质差异门控漏过的 flavor 级分支）
 - scene 间无情绪推进（提纲本身平铺，无 turning point/climax）
 - 拓扑死胡同或 ending 缺落点
 
-→ **触发创作质量 FAIL**：**不落盘定稿、不写 status**，产出「结构性问题报告」返回，列出破碎点（哪个 choice/scene/拓扑 + 为什么写不出合格对话）。由 plot-design 接住后清 `outline_path` + 回 `Section.status=0`（待提纲），重调 `chapter-outliner` 重做本节提纲。**与 outliner 素材不足报告对称**——不硬凑烂对话交付。
+→ **触发创作质量 FAIL**：**不落盘定稿、不写 SecScript status**，产出「结构性问题报告」返回，列出破碎点（哪个 choice/scene/拓扑 + 为什么写不出合格对话）。由 plot-design 接住后把 `SecOutline.status` 归 `0`（待提纲），重调 `chapter-outliner` 重做本节提纲。**与 outliner 素材不足报告对称**——不硬凑烂对话交付。
 
-> 通过自检（台词合格、问题只在格式）才进段 3 跑 schema 校验。
+> 通过自检才进段 3 写图。
 
-### 3. 保存结果（校验 + 写图 + 立绘缺口兜底）
+### 3. 保存结果（写图 + BGM 缺口兜底）
 
-#### 3a. 跑 validate 校验
+#### 3a. 写图（MERGE 兜底建 SecScript + produces 边 + 写 script_path/status）
 
-```bash
-python 99_game/tools/validate_chapter.py '<script_path>' 99_game/data/剧本.schema.json
-```
+> `台词.md` 为自然语言格式，**暂不跑 schema 校验**（validate_chapter.py 只吃 JSONL/JSON）。
 
-- 打印 `OK` → 通过，继续 3b 写 `status=30`（`target_status=30` 时）。
-- 打印 `FAIL` → 报告错误列表，**写 `status=20`**（回提纲就绪，提示修复后重跑）。
-
-#### 3b. 写图（script_path + status）
+`--multi` 单事务；`sc_id` 用 `snowflake_base62.py` 新生成（已存在 SecScript 时复用其 id）：
 
 ```cypher
-MATCH (sec:Section {id:'<sec_id>'})
-SET sec.script_path = '<script_path>',
-    sec.status = <20 | 30>;     // target_status=30 且校验通过 → 30（定稿待审）；失败/草稿 → 20
+// 1. MERGE 兜底建 SecScript 产物节点
+MERGE (sc:SecScript {id:'<sc_id>'})
+SET sc.name = '<节标题>定稿',
+    sc.script_path = '<script_path>',   // 25_剧本/.../台词.md
+    sc.status = <1 | 10>;      // target_status=10 → 10（定稿待审，直写不经 submit）；草稿 → 1
+
+// 2. 兜底建 produces 边（SecOutline→SecScript，sync=true：改提纲级联作废定稿/配音）
+MATCH (ol:SecOutline {id:'<ol_id>'}), (sc:SecScript {id:'<sc_id>'})
+MERGE (ol)-[r:produces]->(sc) SET r.sync = true;
 ```
 
-#### 3c. 立绘缺口兜底（副作用——对每个「缺口」变体 `<char_name>.<variant_label>`）
+#### 3b. BGM 缺口兜底（副作用——对本节每个场景段的 Scene）
 
-**① 选 IllusDesign**（多着装歧义处理：优先场景事件 wears 指定的着装，兜底取默认着装）：
+查 `Scene-has_bgm->BgmTrack`；**无关联或 `bgm_status=0`** 时兜底建（`bgm_id` 用 `snowflake_base62.py -n 1 -q` 新生成；name 按提纲「BGM 倾向」与场景情绪起一个短名如「晨离」，即 manifest 键/章 JSON track 名）：
 
 ```cypher
-// 优先：该场景事件 wears 指定的着装
-MATCH (s:Scene {name:'<scene_name>'})<-[:has_scene]-(loc:Location)
-MATCH (e:Event)-[:occurred_at]->(loc)
-MATCH (e)-[:wears]->(cos:CostumeStyle)<-[:has_costume]-(char:Character {name:'<char_name>'})
-MATCH (cos)-[:outfit_for]->(illus:IllusDesign)
-RETURN illus.id AS illus_id, illus.status AS illus_status LIMIT 1;
-// 兜底：无 wears 时，取角色第一套（默认）着装的 IllusDesign
-MATCH (char:Character {name:'<char_name>'})-[:has_costume]->(cos:CostumeStyle)
-MATCH (cos)-[:outfit_for]->(illus:IllusDesign)
-RETURN illus.id AS illus_id, illus.status AS illus_status ORDER BY cos.id LIMIT 1;
+// 查询：该 Scene 是否已关联 BgmTrack
+MATCH (s:Scene {name:'<scene_name>'})
+OPTIONAL MATCH (s)-[:has_bgm]->(b:BgmTrack)
+RETURN b.id AS bgm_id, b.status AS bgm_status;
+
+// 兜底建（缺关联或 status=0 时；sync=false——BGM 独立资产不随场景编辑级联）
+MERGE (b:BgmTrack {id:'<bgm_id>'})
+  ON CREATE SET b.status = 0
+SET b.name = '<track 名>';
+MATCH (s:Scene {name:'<scene_name>'}), (b:BgmTrack {id:'<bgm_id>'})
+MERGE (s)-[r:has_bgm]->(b) SET r.sync = false;
 ```
 
-- 查不到任何 IllusDesign → 角色美术链未就绪，报告「需先推进 char-design 到 IllusDesign」，该变体 portrait 仍写入（运行时占位图兜底），但跳过建节点。
+> BgmTrack 推进（prompt 生成 → 用户手动产 wav → status=2）由**用户直接触发 `bgm-designer`**，不进 plot-design 编排。
 
-**② 兜底建 StandingIllustration(status=0) + expands_to + ref_style + depicts + description**（生成新 stand_id：`snowflake_base62.py -n 1 -q`）。description 由 dialoguer 据该 portrait 在剧本中出现的情境创作（一两句氛围/情绪/动机），**可选拔填、不参与 schema 校验**，缺则留空：
+**status 写入**：定稿 → `SecScript.status=10`（定稿待审，等 dashboard `approve`→`11`）；草稿 → `1`；创作质量 FAIL → 不写 status（见段 2 末尾）。
 
-```cypher
-MERGE (stand:StandingIllustration {id:'<stand_id>'})
-  ON CREATE SET stand.status = 0, stand.variant_label = '<variant_label>'
-SET stand.description = '<该变体在剧情该时刻的氛围/情绪情境：一两句，含情绪/动机/情境张力，供出图把握表情强度与动作张力；可选拔填，缺则留空>';
-MATCH (illus:IllusDesign {id:'<illus_id>'}), (stand:StandingIllustration {id:'<stand_id>'})
-MERGE (illus)-[r:expands_to]->(stand) SET r.sync = true, r.variant_label = '<variant_label>';
-MATCH (voice:LanguageStyle {id:'<voice_id>'}), (stand:StandingIllustration {id:'<stand_id>'})
-MERGE (voice)-[r:ref_style]->(stand) SET r.sync = true;
-MATCH (s:Scene {name:'<scene_name>'}), (illus:IllusDesign {id:'<illus_id>'})
-MERGE (s)-[r:depicts]->(illus) SET r.sync = false;
-```
-
-> `expands_to`/`ref_style` 边 `sync=true`（上游更新会级联重置该立绘）；`depicts` 边 `sync=false`（编排引用，不级联）。depicts 绑在 **Scene→IllusDesign**（同 Scene 同 IllusDesign 经 MERGE 去重），变体级缺口由 expands_to 跟踪。Scene 节点不消失则引用持续生效。这些 `status=0` 的立绘缺口节点是 **plot-design 后续按 `Scene-[:depicts]->IllusDesign-[:expands_to]->stand` 两跳枚举，对 status≠11 的 stand 直调 `char-stand-designer <stand_id>` 推进**的输入。
-
-**status 写入**：定稿+校验通过 → `Section.status=30`（定稿待审，等 dashboard 终审 `approve`→`31`）；schema 失败/草稿 → `20`；创作质量 FAIL → 不写 status（见段 2 末尾）。
-
-最后汇总：定稿 `Section.script_path`、`Section.status=30`、标记的立绘缺口（stand_id + status=0，待 plot-design 推进）。若触发创作质量 FAIL，汇总「结构性问题报告」而非定稿路径。
+最后汇总：定稿 `SecScript.script_path`、`SecScript.status=10`、兜底建的 BgmTrack 缺口（若有）。若触发创作质量 FAIL，汇总「结构性问题报告」而非定稿路径。
 
 ## 参考文档
 
-- 创作方法论：[references/对话写作方法论.md](references/对话写作方法论.md) — 写作标准/声音支柱/三轮打磨/潜台词
-- 自然度技巧：[references/日常对白自然度技巧.md](references/日常对白自然度技巧.md) — 句子层面去机械感/反模式清单/回读检查（第二轮声音、第三轮精简时查）
-- 剧本格式：[00_init/剧本.md](../../../00_init/剧本.md) — YAML/JSON 结构、11 指令、跳转寻址、节级创作与发布合并
-- 剧本 schema：[99_game/data/剧本.schema.json](../../../99_game/data/剧本.schema.json) — 校验门
-- 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Section/contains/depicts 边
-- 角色美术 Schema：[00_init/Schema/角色美术.md](../../../00_init/Schema/角色美术.md) — StandingIllustration 字段
-- 上游：[chapter-structurer](../chapter-structurer/SKILL.md)（章级设计简报）/ [chapter-outliner](../chapter-outliner/SKILL.md)（本节提纲 → Section status=20）
-- 下游：plot-design agent（本节定稿审 status=31 后，按 depicts 推进立绘；全章各节 31 后 chapter-publisher 合并发布）
+- 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Section/产物链（SecOutline/SecScript/LineAudio）/contains 边
+- 上游：[chapter-structurer](../chapter-structurer/SKILL.md)（章级设计简报）/ [chapter-outliner](../chapter-outliner/SKILL.md)（本节提纲 → SecOutline status=1）
+- 下游：plot-design agent（本节定稿审 status=11）；配音（section-voice-publisher）与发布（chapter-publisher）链当前仍以 台词.jsonl 为输入，md 定稿暂不进入下游

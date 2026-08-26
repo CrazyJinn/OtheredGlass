@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **人工治理后台** | [55_dashboard/](55_dashboard/) | Streamlit 应用，浏览/编辑/审批/级联重置，与 skills 共享同一个 Neo4j |
 | **游戏运行时** | [99_game/](99_game/) | Godot 4.3+ Galgame，集中式 `ScriptInterpreter` 消费纯 JSON 剧本 |
 
-目录前缀的数字是**流水线阶段编号**（创作输入 `00_` → 叙事数据 `01_` → 剧情数据 `02_` → 美术 `06_/07_` → 后台 `55_` → 成品 `99_`），并非每个阶段都已落地，按编号即可判断某产物在链路中的位置。
+目录前缀的数字是**流水线阶段编号**（创作输入 `00_` → 叙事数据 `01_` → 剧情数据 `02_` → 美术 `06_/07_` → 声音 `14_/15_` → 后台 `55_` → 成品 `99_`），并非每个阶段都已落地，按编号即可判断某产物在链路中的位置。
 
 ## 核心架构（必须跨文件理解的大图）
 
@@ -40,11 +40,11 @@ echo "MATCH (n) RETURN count(n) AS c" | python .claude/scripts/cypher_exec.py --
 
 ### 2. Schema 是唯一事实来源
 
-节点/边的英文名、字段、方向、基数、sync 属性全部定义在 [00_init/Schema/](00_init/Schema/)（叙事基础 / 角色美术 / 场景美术 / 剧情 四个模块），总览见 [00_init/Schema总览.md](00_init/Schema总览.md)。**写 Cypher 前必须先 Read 对应 Schema**，按其中的英文标签/属性名生成。后台的 [core/schema_loader.py](55_dashboard/core/schema_loader.py) 在启动时解析这些 `.md` 表格驱动 UI 字段——**改 Schema 格式会同时影响 skills 和后台**。
+节点/边的英文名、字段、方向、基数、sync 属性全部定义在 [00_init/Schema/](00_init/Schema/)（叙事基础 / 角色美术 / 场景美术 / 剧情 / 声音 五个模块），总览见 [00_init/Schema总览.md](00_init/Schema总览.md)。**写 Cypher 前必须先 Read 对应 Schema**，按其中的英文标签/属性名生成。后台的 [core/schema_loader.py](55_dashboard/core/schema_loader.py) 在启动时解析这些 `.md` 表格驱动 UI 字段——**改 Schema 格式会同时影响 skills 和后台**。
 
 ### 3. 生产链 = DAG + status + sync 级联
 
-每条生产链是有向无环图（如角色美术：`Character → AppearanceStyle → DesignSheet → IllusDesign → StandingIllustration`；角色声音指纹：`Character →has_voice_profile→ VoiceProfile`，由 `char-voice-design` 产、`char-design` 管，下游供 `section-voice-publisher` 节级配音）。两个核心机制：
+每条生产链是有向无环图（如角色美术：`Character → AppearanceStyle → DesignSheet → IllusDesign → StandingIllustration`；角色声音设计：`Character →has_voice_design→ VoiceDesign`，由 `char-voice-design` 产、`char-design` 管（status 10 生产完成即待审→11，无 submit 步，下游配音要求 11），下游供 `section-voice-publisher` 节级配音；剧情节级产物链：`Section →has_outline→ SecOutline →produces→ SecScript →produces→ LineAudio`，Section 为纯编排容器**无 status**，三产物各用通用 status（SecOutline 0→1 / SecScript 0→10→11 / LineAudio 0→10→11），链式 sync 级联——改提纲自动作废定稿+配音、改定稿自动作废配音）。两个核心机制：
 
 - **`status` 字段**跟踪节点状态，统一语义：`-1` 作废重做 / `0` 待处理 / `1` 已完成 / `2` 图片完成 / `10` 待审 / `11` 批准。规则在 [55_dashboard/core/status.py](55_dashboard/core/status.py) 的 `NODE_STATUS` 显式定义（**刻意不解析 .md**，.md 是散文式说明、格式不稳）。
 - **`sync` 边属性**：上游节点属性变更后，沿 `sync=true` 出边 BFS，把可达下游 `status` 重置为 **`-1`**（作废重做）；`sync=false` 阻断（如叙事边 `wears`、`relation`）。级联实现在 [55_dashboard/core/cascade.py](55_dashboard/core/cascade.py)。
@@ -53,9 +53,11 @@ echo "MATCH (n) RETURN count(n) AS c" | python .claude/scripts/cypher_exec.py --
 
 读各 `SKILL.md` 的 frontmatter 与流程节即可。`char-prompt-assembler` / `infra-image-generator` 是**纯产出层**——只产 prompt/图片文件，**不读写图、不写 status**；节点字段与 status 一律由调用方的生产 skill 在「保存结果」步用 MERGE 兜底统一写入。
 
+- **先产出物再写图**：凡产物由外部生成脚本产出（图片/音频/大文件），必须先落盘并校验成功，才允许在「保存结果」步写图与 status；生成失败禁止写 status（避免图与文件系统漂移）。LLM 直产文本（prompt/设计描述）随写图语句内联交付，不受此限。
+
 ### 5. 编排 agent 是纯分发层，有铁律
 
-`char-design` / `scene-design` agent **只做**：解析角色/场景 → 只读查 status → 据 status 决策 → 用 `Skill` 工具整体委派生产 skill → 复查 → 汇报。**严禁**：亲自写 Cypher、亲自调生成脚本、拆解生产 skill 的内部步骤、直接调用纯产出子 skill（`char-prompt-assembler`/`infra-image-generator`）。判定越界的简单标准：工具调用里出现这两个子 skill 名 = 错。详见 [.claude/agents/char-design.md](.claude/agents/char-design.md)。
+`char-design` / `scene-design` agent 的入口决策**只做**：解析角色/场景 → 只读查 status → 据 status 决策 → 用 `Skill` 工具加载生产 skill → 复查 → 汇报。**严禁**在入口决策阶段：亲自写 Cypher 写入、亲自调生成脚本、绕过生产 skill 直接调用纯产出子 skill（`char-prompt-assembler`/`infra-image-generator`）。**Skill 工具是扁平的**：加载某生产 skill 后，agent 即在该 skill 流程内继续执行其三段式，**包括按其指示调用其声明的子 skill**——这是预期行为，不是越界。真正越界 = ①未先加载生产 skill 就凭空直调子 skill；②调子 skill 产出文件后不走该生产 skill 的「保存结果」步写 status。详见 [.claude/agents/char-design.md](.claude/agents/char-design.md)。
 
 ## 写 Cypher 的硬约束
 

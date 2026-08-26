@@ -22,7 +22,8 @@ def test_rank_char_order():
     assert rank("AppearanceStyle", CHAR_ORDER) == 0
     assert rank("LanguageStyle", CHAR_ORDER) == 1
     assert rank("CostumeStyle", CHAR_ORDER) == 2
-    assert rank("StandingIllustration", CHAR_ORDER) == 5
+    assert rank("VoiceDesign", CHAR_ORDER) == 3
+    assert rank("StandingIllustration", CHAR_ORDER) == 6
 
 
 def test_rank_scene_order():

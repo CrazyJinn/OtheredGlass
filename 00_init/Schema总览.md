@@ -19,8 +19,8 @@
 | [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么、在哪选择 | Character, Event, Location, Info, Choice |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
 | [场景美术.md](Schema/场景美术.md) | 场景如何从地点变成画面 | Scene, SceneLayer |
-| [剧情.md](Schema/剧情.md) | 剧本章节编排（章→节→场景；结构/提纲/定稿） | Chapter, Section |
-| [声音.md](Schema/声音.md) | 角色如何从文字变成声音 | VoiceProfile |
+| [剧情.md](Schema/剧情.md) | 剧本章节编排（章→节→场景；结构/提纲/定稿/配音产物链） | Chapter, Section, SecOutline, SecScript, LineAudio |
+| [声音.md](Schema/声音.md) | 角色如何从文字变成声音 | VoiceDesign |
 
 ---
 
@@ -45,8 +45,11 @@
 | Scene | snowflake Base62 | 地点内的子场景视觉设定 |
 | SceneLayer | snowflake Base62 | 场景的单一图层（背景/地面/陈设/遮罩） |
 | Chapter | snowflake Base62 | 剧本章节编排单元（章级：结构 / 分节规划） |
-| Section | snowflake Base62 | 章节内的节编排单元（节级：提纲 / 定稿，锚定 outline_path / script_path） |
-| VoiceProfile | snowflake Base62 | 角色基线音色档案（instruct + 参考音频 + clone prompt） |
+| Section | snowflake Base62 | 章节内的节编排容器（纯编排：节序/标题/概要，无 status 与产物路径） |
+| SecOutline | snowflake Base62 | 节级提纲产物（outline_path；0→1 无审批） |
+| SecScript | snowflake Base62 | 节级定稿产物（script_path；0→1→10→11 定稿审） |
+| LineAudio | snowflake Base62 | 节级配音产物（0→10→11 声音审；wav 按 voice key 落盘） |
+| VoiceDesign | snowflake Base62 | 角色基线音色设计（instruct + 参考音频；多候选流程：3 候选 ref + 3×3 情绪试听 → dashboard 采用固化） |
 
 ---
 
@@ -67,7 +70,7 @@
 | has_appearance | Character → AppearanceStyle | 1:1 | ✅ | 角色外貌 |
 | has_costume | Character → CostumeStyle | 1:N | ✅ | 角色着装 |
 | has_voice_style | Character → LanguageStyle | 1:1 | ✅ | 角色语言风格 |
-| has_voice_profile | Character → VoiceProfile | 1:1 | ✅ | 角色基线音色档案（区别于 has_voice_style 的文字风格） |
+| has_voice_design | Character → VoiceDesign | 1:1 | ✅ | 角色基线音色设计（区别于 has_voice_style 的文字风格） |
 | produces | AppearanceStyle → DesignSheet | 1:1 | ✅ | 外貌产出设计图 |
 | produces | DesignSheet → IllusDesign | 1:N | ✅ | 设计图→立绘设计图 |
 | outfit_for | CostumeStyle → IllusDesign | 1:1 | ✅ | 着装→立绘设计图 |
@@ -79,6 +82,9 @@
 | has_layer | Scene → SceneLayer | 1:N | ✅ | 场景→图层 |
 | **剧情** | | | | |
 | has_section | Chapter → Section | 1:N | ✅ | 章→节（组成关系，级联重做） |
+| has_outline | Section → SecOutline | 1:1 | ✅ | 节→提纲产物（编排变更级联作废产物链） |
+| produces | SecOutline → SecScript | 1:1 | ✅ | 提纲产出定稿（改提纲→定稿/配音作废） |
+| produces | SecScript → LineAudio | 1:1 | ✅ | 定稿产出配音（改定稿→配音作废） |
 | contains | Section → Scene | N:M | ❌ | 节编排场景顺序 |
 | depicts | Scene → IllusDesign | N:N | ❌ | 场景需要的着装立绘（按需出图门控；变体经 expands_to 跟踪） |
 
@@ -100,7 +106,7 @@ flowchart LR
         Appearance["AppearanceStyle"]
         Costume["CostumeStyle"]
         Language["LanguageStyle"]
-        Voice["VoiceProfile"]
+        Voice["VoiceDesign"]
     end
 
     subgraph 美术生产["美术生产"]
@@ -117,12 +123,15 @@ flowchart LR
     subgraph 剧情["剧情"]
         Chapter["Chapter"]
         Section["Section"]
+        SecOutline["SecOutline"]
+        SecScript["SecScript"]
+        LineAudio["LineAudio"]
     end
 
     Character -->|"has_appearance ✅ 1:1"| Appearance
     Character -->|"has_costume ✅ 1:N"| Costume
     Character -->|"has_voice_style ✅ 1:1"| Language
-    Character -->|"has_voice_profile ✅ 1:1"| Voice
+    Character -->|"has_voice_design ✅ 1:1"| Voice
     Appearance -->|"produces ✅ 1:1"| DesignSheet
     Costume -->|"outfit_for ✅ 1:1"| IllusDesign
     DesignSheet -->|"produces ✅ 1:N"| IllusDesign
@@ -134,6 +143,9 @@ flowchart LR
     Location -->|"has_scene ✅ 1:N"| Scene
     Scene -->|"has_layer ✅ 1:N"| SceneLayer
     Chapter -->|"has_section ✅ 1:N"| Section
+    Section -->|"has_outline ✅ 1:1"| SecOutline
+    SecOutline -->|"produces ✅ 1:1"| SecScript
+    SecScript -->|"produces ✅ 1:1"| LineAudio
     Section -->|"contains ❌ N:M"| Scene
     Scene -->|"depicts ❌ N:N"| IllusDesign
 ```

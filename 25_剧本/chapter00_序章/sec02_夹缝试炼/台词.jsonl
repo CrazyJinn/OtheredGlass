@@ -1,0 +1,33 @@
+{"op": "meta", "chapter": 0, "title": "夹缝试炼", "requires": {"characters": ["陆择", "伊芙"], "scenes": ["灵魂夹缝-夹缝空间"], "portraits": ["陆择.茫然", "陆择.沉吟", "陆择.轻佻", "伊芙.平静", "伊芙.浅笑", "伊芙.庄严", "伊芙.温柔"]}, "line_seq": 32}
+{"op": "scene", "id": "s02_夹缝", "scene": "灵魂夹缝-夹缝空间", "time": "黄昏"}
+{"id": "L0001", "op": "narrate", "text": "断裂的列柱在细雾里排成两列，苍白的暮光从残缺的山墙间斜落下来。"}
+{"id": "L0002", "op": "narrate", "text": "一条石板路穿过空旷的庭院，向远处延伸，尽头隐没在雾里。这里听不见风，也听不见任何声音。"}
+{"id": "L0003", "op": "say", "who": "陆择", "portrait": "茫然", "pos": "right", "text": "唔……这是哪？", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0003", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "9e0c9a33e540e67a7a8bcdfc3a838e224471a0d0"}}
+{"id": "L0004", "op": "narrate", "text": "不远处站着一个女孩，正安安静静地打量他。"}
+{"id": "L0005", "op": "say", "who": "伊芙", "portrait": "平静", "pos": "left", "text": "这是你意识里的世界。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0005", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "75a85cb6f82d2f3e618e0bea424997292605e95f"}}
+{"id": "L0006", "op": "say", "who": "陆择", "portrait": "茫然", "pos": "right", "text": "你是谁", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0006", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "aaa589902087dcad6ab2a6af5643c0fc69e4484c"}}
+{"id": "L0007", "op": "say", "who": "伊芙", "portrait": "浅笑", "pos": "left", "text": "按你们凡间的说法，算是天使吧", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0007", "emotion": "温柔", "status": "pending", "attempts": 1, "text_sha1": "bc6382a22025cf9184c5ae6439b8158dbedeaacd"}}
+{"id": "L0008", "op": "say", "who": "陆择", "portrait": "茫然", "pos": "right", "text": "我这是死了么？", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0008", "emotion": "震惊", "status": "pending", "attempts": 1, "text_sha1": "73bc0817d8dbcd9bac12c82f06f35b2bad9a03e5"}}
+{"id": "L0009", "op": "say", "who": "伊芙", "portrait": "平静", "pos": "left", "text": "嗯，你被一辆闯红灯的摩托车撞倒，在送去医院的路上就没了呼吸。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0009", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "82cbdc88711152cd85cd86f2c9c5531c4430e31d"}}
+{"id": "L0010", "op": "narrate", "text": "陆择瞪大了双眼，一脸不可置信地看着眼前的女孩。"}
+{"id": "L0011", "op": "say", "who": "伊芙", "portrait": "浅笑", "pos": "left", "text": "嗯……我看看接下来的流程。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0011", "emotion": "温柔", "status": "pending", "attempts": 1, "text_sha1": "1a3070433886ce7f38521e5c6e81e9b3029cc0ba"}}
+{"id": "L0012", "op": "narrate", "text": "伊芙掏出了一张羊皮纸。"}
+{"id": "L0013", "op": "say", "who": "伊芙", "portrait": "庄严", "pos": "left", "text": "你要下地狱。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0013", "emotion": "坚定", "status": "pending", "attempts": 1, "text_sha1": "d1db41a221400f014e9d481bb19e501c3247621f"}}
+{"id": "L0014", "op": "say", "who": "陆择", "portrait": "沉吟", "pos": "right", "text": "为什么，我可没做过什么伤天害理的事。", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0014", "emotion": "无奈", "status": "pending", "attempts": 1, "text_sha1": "17abecd863cc48b7c75190358d8bb3012740ba3c"}}
+{"id": "L0015", "op": "say", "who": "伊芙", "portrait": "平静", "pos": "left", "text": "这上面写着，你因为伤害了众多女孩的感情。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0015", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "003e7cde68c20570f8a31e7c8f450e72fc9ae276"}}
+{"id": "L0016", "op": "say", "who": "陆择", "portrait": "茫然", "pos": "right", "text": "这就得下地狱了？", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0016", "emotion": "震惊", "status": "pending", "attempts": 1, "text_sha1": "d49c02b837cb6a5a62564d371dac7e1f99db9a6b"}}
+{"id": "L0017", "op": "say", "who": "伊芙", "portrait": "浅笑", "pos": "left", "text": "以前还好，只是新来的那位姐姐比较严格。不过你还有一个机会拯救自己。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0017", "emotion": "温柔", "status": "pending", "attempts": 1, "text_sha1": "08b30084818600f1af1473d78646a10fa2319529"}}
+{"id": "L0018", "op": "say", "who": "陆择", "portrait": "沉吟", "pos": "right", "text": "什么机会", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0018", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "1fa63b6869ad65948038c280eb6b6ae00a919e91"}}
+{"id": "L0019", "op": "say", "who": "伊芙", "portrait": "庄严", "pos": "left", "text": "用你的特长，去拯救 6 个弱者。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0019", "emotion": "坚定", "status": "pending", "attempts": 1, "text_sha1": "84364029bc3cbb9c751e59ca3fcf1815fdab528f"}}
+{"id": "L0020", "op": "narrate", "text": "伊芙低头看了看羊皮纸，语速平稳得像在念一份公文。"}
+{"id": "L0021", "op": "say", "who": "伊芙", "portrait": "平静", "pos": "left", "text": "规则很简单。你会被送进一个弱者的身体，替他把 30 天过完——把人救下来，算过一关。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0021", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "31b9def24b926ec69d0f8d0fc72563319084f7cc"}}
+{"id": "L0022", "op": "say", "who": "陆择", "portrait": "沉吟", "pos": "right", "text": "……进别人的身体？", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0022", "emotion": "无奈", "status": "pending", "attempts": 1, "text_sha1": "bbc02f7a039bd1158e7920717b277c8664e785de"}}
+{"id": "L0023", "op": "say", "who": "伊芙", "portrait": "浅笑", "pos": "left", "text": "你的身体已经报废了，不用惦记。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0023", "emotion": "温柔", "status": "pending", "attempts": 1, "text_sha1": "e44ac45c04ff9cf7a7ade3b052c7d4bc13b28fc3"}}
+{"id": "L0024", "op": "say", "who": "陆择", "portrait": "沉吟", "pos": "right", "text": "那要怎么才算「救下来」？", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0024", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "0990829bdc11e5cb905769bbeecb5cff472312f5"}}
+{"id": "L0025", "op": "say", "who": "伊芙", "portrait": "温柔", "pos": "left", "text": "羊皮纸上没写。反正到时候，你自然会知道。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0025", "emotion": "温柔", "status": "pending", "attempts": 1, "text_sha1": "01fed602ecb9cd9f5f6130d1d8034a700809e419"}}
+{"id": "L0026", "op": "say", "who": "伊芙", "portrait": "平静", "pos": "left", "text": "一共 6 关，每关 30 天。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0026", "emotion": "平静", "status": "pending", "attempts": 1, "text_sha1": "af26f91fa599304a84672b863508e7d6a6d72626"}}
+{"id": "L0027", "op": "narrate", "text": "陆择听得将信将疑。"}
+{"id": "L0028", "op": "say", "who": "陆择", "portrait": "轻佻", "pos": "right", "text": "如果我成功了，有什么好处？", "audio": {"key": "陆择-chapter00_序章-s02_夹缝-L0028", "emotion": "调侃", "status": "pending", "attempts": 1, "text_sha1": "1b9c0dd0ebd55a249f6e8937f65a24b3ecf1a942"}}
+{"id": "L0029", "op": "say", "who": "伊芙", "portrait": "浅笑", "pos": "left", "text": "好处是……糟糕，要来不及了。", "audio": {"key": "伊芙-chapter00_序章-s02_夹缝-L0029", "emotion": "紧张", "status": "pending", "attempts": 1, "text_sha1": "380bfb5fb7c8326b85c6c710a2349816d003d451"}}
+{"id": "L0030", "op": "narrate", "text": "陆择突然眼前一花，感觉被吸入了一个巨大的漩涡。"}
+{"id": "L0031", "op": "narrate", "text": "漩涡合拢，暮光照常落在空无一人的石板路上。"}

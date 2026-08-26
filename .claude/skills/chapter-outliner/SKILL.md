@@ -1,19 +1,19 @@
 ---
 name: chapter-outliner
 description: |
-  推进 Section 图节点的提纲段：读 structurer 的章级设计简报（含分节规划）+ 本节 Section 统合的 Scene + 分支骨架 → 自检本节 event 丰满度 →（够）按分支节点图先行/本质差异/节奏门控产出节级提纲 Markdown（拓扑骨架契约值 + authoring 人读散文，lines 仅含拓扑占位，scene-block id 用 structurer 预分配）→ 落盘 25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.md + 写 Section.outline_path + status=20。
-  前驱：所属 Chapter status=11（结构已批）且本 Section status∈{-1,0}。若 event 素材不足以支撑提纲，**拒绝产出**并报告缺口（不写 status），由用户补全叙事基础后重调本 skill。
+  推进 Section 图节点的提纲段：读 structurer 的章级设计简报（含分节规划）+ 本节 Section 统合的 Scene + 分支骨架 → 自检本节 event 丰满度 →（够）按分支节点图先行/本质差异/节奏门控产出节级提纲 Markdown（拓扑骨架契约值 + authoring 人读散文，lines 仅含拓扑占位，scene-block id 用 structurer 预分配）→ 落盘 25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.md + 兜底建 SecOutline 产物节点（Section-[:has_outline]->SecOutline）写 outline_path + status=1（提纲就绪）。
+  前驱：所属 Chapter status=11（结构已批）且本节无 SecOutline 节点或 SecOutline.status∈{-1,0}。若 event 素材不足以支撑提纲，**拒绝产出**并报告缺口（不写 status），由用户补全叙事基础后重调本 skill。
 argument-hint: <section_id>
 arguments:
   - section_id
 allowed-tools: Read, Bash, Write, Edit
 ---
 
-> **status=-1 = 作废重做**：当 Section 被重置为 `status=-1` 时（如所属 Chapter 属性变更沿 has_section 级联），即使 outline.md 已落盘，也**必须重新产出并覆盖**。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧提纲内容**，直接以当前图节点数据 + 设计简报为唯一来源重新创作。
+> **status=-1 = 作废重做**：当本节 SecOutline 节点被重置为 `status=-1` 时（如 Section/Chapter 属性变更沿 has_section/has_outline 级联），即使 outline.md 已落盘，也**必须重新产出并覆盖**。`-1` 明确表示有旧产物要覆盖，**禁止因文件已存在而跳过，也禁止读旧提纲内容**，直接以当前图节点数据 + 设计简报为唯一来源重新创作。
 
-# 节提纲（Section 提纲段 · status {-1,0}→20）
+# 节提纲（SecOutline 提纲段 · status {-1,0}→1）
 
-剧情创作流程的**第二段**（节级，在章级结构段之后、节级定稿段之前）。读 `chapter-structurer` 产出的**章级设计简报**（取分节规划里**本节**的定位）+ 本节 `Section` 经 `contains` 统合的 Scene + 分支骨架，**先自检本节 event 丰满度**；够丰满才按**分支节点图先行 / 本质差异 / 节奏**三门控产出**节级提纲（outline.md，纯 Markdown）**——确定「本节分几个 scene 段、每段场景/时间/bgm、choice 分叉与汇合、ending 位置」，`lines` 留空（细节对话由 `chapter-dialoguer` 填）。提纲无审批，产出即 `Section.status=20`（提纲就绪）。
+剧情创作流程的**第二段**（节级，在章级结构段之后、节级定稿段之前）。读 `chapter-structurer` 产出的**章级设计简报**（取分节规划里**本节**的定位）+ 本节 `Section` 经 `contains` 统合的 Scene + 分支骨架，**先自检本节 event 丰满度**；够丰满才按**分支节点图先行 / 本质差异 / 节奏**三门控产出**节级提纲（outline.md，纯 Markdown）**——确定「本节分几个 scene 段、每段场景/时间/bgm、choice 分叉与汇合、ending 位置」，`lines` 留空（细节对话由 `chapter-dialoguer` 填）。提纲无审批，产出即兜底建 `SecOutline` 产物节点（`Section-[:has_outline]->SecOutline`）并写 `SecOutline.status=1`（提纲就绪）。
 
 > **素材不足门控**：若本节 event 不够丰满（事件数过少 / 事件链断裂 / Choice 指向的事件缺失 / 出场角色在本节无 involved 事件），**拒绝产出提纲**——不写 status、不落盘，只产出「素材不足报告」（列缺口）返回。用户可手动跑 `nrt-narrative-grower` 补全叙事基础后，重调本 skill 复查。
 
@@ -25,25 +25,27 @@ allowed-tools: Read, Bash, Write, Edit
 
 ## 流程（三段式：查状态 → 完成任务 → 保存结果）
 
-> 本 skill 是 Section 提纲段 status 的写入点。提纲 outline.md 由本 skill 直接创作产出，无纯产出子 skill。
+> 本 skill 是 SecOutline 产物节点的创建点 + 提纲段 status 的写入点。提纲 outline.md 由本 skill 直接创作产出，无纯产出子 skill。
 
 ### 1. 查询目标节点状态
 
 通过 `${CLAUDE_SKILL_DIR}/../../scripts/cypher_exec.py` 查询。
 
-#### 1a. 解析 Section + 所属 Chapter + 前驱校验
+#### 1a. 解析 Section + 所属 Chapter + SecOutline + 前驱校验
 
 ```cypher
 MATCH (ch:Chapter)-[:has_section]->(sec:Section {id:'<input>'})
+OPTIONAL MATCH (sec)-[:has_outline]->(ol:SecOutline)
 RETURN sec.id AS id, sec.section_no AS section_no, sec.title AS title,
-       sec.summary AS summary, sec.outline_path AS outline_path, sec.status AS status,
+       sec.summary AS summary,
+       ol.id AS ol_id, ol.outline_path AS outline_path, ol.status AS ol_status,
        ch.id AS ch_id, ch.chapter_no AS chapter_no, ch.title AS ch_title, ch.status AS ch_status
 LIMIT 1
 ```
 
-**前驱校验**：`ch.status = 11`（结构已批）AND `sec.status ∈ {-1, 0}`（待提纲 / 重做），否则停止并提示：
+**前驱校验**：`ch.status = 11`（结构已批）AND（`ol_status IS NULL` 或 `ol_status ∈ {-1, 0}`），否则停止并提示：
 - `ch.status ≠ 11` → 先完成章级结构段（`chapter-structurer`）+ 结构审。
-- `sec.status` 为 20/30/31 → 本节提纲已就绪或更靠后，停止并提示。
+- `ol_status` 为 `1` → 本节提纲已就绪，停止并提示（后续走 `chapter-dialoguer`）。
 
 #### 1b. 读设计简报 + 查创作上下文
 
@@ -112,7 +114,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 
 ### 2. 完成任务（按三门控产出节级提纲 outline.md）
 
-据设计简报（本节在情感弧中的位置 + 戏剧职责）+ 本节 Scene 序 + 分支骨架，**先结构后内容**，三步产出节级提纲（格式见 [00_init/剧本.md](../../../00_init/剧本.md) 的「提纲格式（outline.md）」节——拓扑骨架用 `key: value` 行 + 反引号标契约值，authoring 散文为 md 正文）：
+据设计简报（本节在情感弧中的位置 + 戏剧职责）+ 本节 Scene 序 + 分支骨架，**先结构后内容**，三步产出节级提纲（格式见 [剧本.md](../chapter-dialoguer/references/剧本.md) 的「提纲格式（outline.md）」节——拓扑骨架用 `key: value` 行 + 反引号标契约值，authoring 散文为 md 正文）：
 
 #### 2a. 分支节点图先行（结构验证）
 
@@ -139,7 +141,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 
 1. **节头**：一级标题 `# sec<MM> <节标题> · chapter <NN>`。
 2. **资源清单**（`## 资源清单`）：`- 出场角色：`角色名``、`- 场景：`场景名``（提纲段**不列立绘变体**，细节对话段才定）。
-3. **场景段**（每段一个 `## 场景段：`id``）：`id` 用设计简报分节规划里 structurer 预分配的本节 id（**不自创；全章节内唯一**）；段下 `- 场景：`场景名`(=Scene.name)` / `- 时段：` / `- BGM：`track`（mode, loop）`。
+3. **场景段**（每段一个 `## 场景段：`id``）：`id` 用设计简报分节规划里 structurer 预分配的本节 id（**不自创；全章节内唯一**）；段下 `- 场景：`场景名`(=Scene.name)` / `- 时段：` / `- BGM 倾向：`（自由散文写该场景的音乐情绪定位，如「轻快爵士、晨间慵懒」——**不是 track 名**：BGM 走图 `Scene-has_bgm->BgmTrack` 关联，发布时注入章 JSON；提纲的倾向描述供 `bgm-designer` 产 prompt 与 `chapter-dialoguer` 兜底建 BgmTrack 时参考）。
 4. **分支拓扑**（每场景段下 `### 分支拓扑`，仅在存在分支时）：对应定稿 `lines` 占位，用 md 列表写 `choice` 的 options（label + 跳向的 scene id）、`jump` 串联、`ending` 位置与 kind（对齐 `Event.ending_kind` / `option.leads_to_ending`）；**不写 say/narrate 台词**。无分支的段此节留空（dialoguer 填逐句对话）。
 
 > 跨节/跨章跳转：本节内用 `scene`（章内唯一 id 寻址）；跨章用 `file`（章 stem）。预分配 id 的章内唯一性保证跨节 jump 不冲突。
@@ -149,7 +151,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 - **节级**：`## 方向`（direction，一段话讲清**本节**剧情发展方向，**核心字段**）/ `## 情感弧`（emotion_arc，本节 start→end + 中途转折）/ `## 约束`（constraints，给 dialoguer 的硬约束清单）。
 - **每场景段**：`### 职责`（purpose，这场戏的戏剧职责）/ `### 节拍`（beats，节拍走向，自然语言列表，**禁写台词**——给 dialoguer 节拍依据）/ `### 母题锚点`（motif_anchors）/ `### 衔接`（transition）。
 
-字段定义详见 [00_init/剧本.md](../../../00_init/剧本.md)「提纲格式（outline.md）」节。
+字段定义详见 [剧本.md](../chapter-dialoguer/references/剧本.md)「提纲格式（outline.md）」节。
 
 #### md 写作约定（提纲不进 schema、不被代码解析，无 YAML 约束）
 
@@ -161,24 +163,32 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 
 **Write**：`25_剧本/chapter<NN>_<章概述>/sec<MM>_<节概述>/outline.md`（NN=`chapter_no`、MM=`section_no` 零填充；<章概述>取章 title、<节概述>取节 title 核心主题，清洗 Windows 非法字符）。Write 自动创建章/节目录。
 
-> 节级提纲 = 拓扑骨架契约值 + authoring 散文。`chapter-dialoguer` 读此文件，以「节拍（beats）」章节为节拍依据，在保持拓扑契约值不变的前提下填 lines 成节级定稿 `完整对话.yaml`；**authoring 散文不搬进定稿**。
+> 节级提纲 = 拓扑骨架契约值 + authoring 散文。`chapter-dialoguer` 读此文件，以「节拍（beats）」章节为节拍依据，在保持拓扑契约值不变的前提下填逐句台词成节级 `台词.jsonl`；**authoring 散文不搬进台词**。
 
-### 3. 保存结果（写 outline_path + status=20）
+### 3. 保存结果（MERGE 兜底建 SecOutline + has_outline 边 + 写 outline_path/status=1）
+
+`--multi` 单事务，节点先于边；`ol_id` 用 `snowflake_base62.py` 新生成（已存在 SecOutline 时复用其 id）：
 
 ```cypher
-MATCH (sec:Section {id:'<sec_id>'})
-SET sec.outline_path = '<OUTLINE_PATH>',
-    sec.status = 20;     // 提纲就绪，无审批，直接进入 chapter-dialoguer
+// 1. MERGE 兜底建 SecOutline 产物节点（重做时复用已有节点）
+MERGE (ol:SecOutline {id:'<ol_id>'})
+SET ol.name = '<节标题>提纲',
+    ol.outline_path = '<OUTLINE_PATH>',
+    ol.status = 1;      // 提纲就绪，无审批，直接进入 chapter-dialoguer
+
+// 2. 兜底建 has_outline 边（Section→SecOutline，sync=true：节编排变更级联作废产物链）
+MATCH (sec:Section {id:'<sec_id>'}), (ol:SecOutline {id:'<ol_id>'})
+MERGE (sec)-[r:has_outline]->(ol) SET r.sync = true;
 ```
 
-**status 写入**：节级提纲产出 → `Section.status=20`（提纲就绪）。提纲段**无审批**。
+**status 写入**：节级提纲产出 → `SecOutline.status=1`（提纲就绪）。提纲段**无审批**。Section 无 status（纯编排容器），不写。
 
-最后汇总：提纲文件 `Section.outline_path`、`Section.status=20`、分支拓扑概要（分叉/汇合/ending 位置）+ 任何 flavor 级分支的待补标注。
+最后汇总：提纲文件 `SecOutline.outline_path`、`SecOutline.status=1`、分支拓扑概要（分叉/汇合/ending 位置）+ 任何 flavor 级分支的待补标注。
 
 ## 参考文档
 
 - 创作方法论：[references/分支结构方法论.md](references/分支结构方法论.md) — 节点图先行/本质差异/后果可见/节奏
-- 剧本格式（含提纲格式）：[00_init/剧本.md](../../../00_init/剧本.md) — JSON 结构、11 指令、outline.md 提纲格式、节级创作与发布合并
-- 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Chapter/Section/has_section/contains 定义
-- 上游：[chapter-structurer](../chapter-structurer/SKILL.md)（章级建结构 + 分节 + 产设计简报 → Chapter status=11、Section status=0）
-- 下游：[chapter-dialoguer](../chapter-dialoguer/SKILL.md)（读本节提纲填细节对话 → Section status=30）
+- 剧本格式（含提纲格式）：[剧本.md](../chapter-dialoguer/references/剧本.md) — JSON 结构、11 指令、outline.md 提纲格式、节级创作与发布合并
+- 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Chapter/Section/产物链（SecOutline/SecScript/LineAudio）/has_section/has_outline/produces 定义
+- 上游：[chapter-structurer](../chapter-structurer/SKILL.md)（章级建结构 + 分节 + 产设计简报 → Chapter status=11）
+- 下游：[chapter-dialoguer](../chapter-dialoguer/SKILL.md)（读本节提纲填细节对话 → SecScript status=10）

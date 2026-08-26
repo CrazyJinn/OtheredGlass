@@ -16,7 +16,7 @@ pck 内部资源路径与全局 manifest 一致（如 assets/portraits/陈默.�
     }
 
 数据源由 chapter-publisher 提供（图查的 depicts 立绘 + has_layer 背景）；
-voices 由 voice-publisher 提供（voice_bundler list 的 voice 键 CSV）。
+voices 由 chapter-publisher 提供（从合并后章 JSON 的 say.voice 推导，voice_bundler list 出 voice 键 CSV）。
 幂等：覆盖该 stem 条目，保留其他章。无依赖（仅标准库）。
 
 CLI: chapter_packs_updater.py <stem> [--portraits a,b] [--scenes x,y] [--voices k1,k2] [--packs <path>]
@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
             data = {}
 
     entry = data.get(args.stem, {})
-    # 仅更新显式传入（非空）的字段，保留未传字段（部分更新，避免 voice-publisher 只传 --voices 时清空 portraits/scenes）
+    # 仅更新显式传入（非空）的字段，保留未传字段（部分更新，避免调用方只传 --voices 时清空 portraits/scenes）
     if args.portraits:
         entry["portraits"] = _split_csv(args.portraits)
     if args.scenes:

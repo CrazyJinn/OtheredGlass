@@ -37,14 +37,14 @@ def test_set_status_batch_uses_unwind(monkeypatch):
     assert sess.run.call_args[1]["status"] == 0
 
 
-def test_get_pending_approvals_filters_status_10_30_32(monkeypatch):
+def test_get_pending_approvals_filters_status_10(monkeypatch):
     recs = [{"id": "X", "label": "DesignSheet", "status": 10}]
     sess = _fake_session(recs)
     monkeypatch.setattr(graph_repo, "_session", lambda: sess)
     out = graph_repo.get_pending_approvals()
     assert out == recs
-    # status=10 通用待审（含 Chapter 结构审）+ status=30 Section 定稿待审 + status=32 Section 声音待审
-    assert "n.status IN [10, 30, 32]" in sess.run.call_args[0][0]
+    # status=10 通用待审（Chapter 结构审 / SecScript 定稿审 / LineAudio 声音审 / 美术与音色设计）
+    assert "n.status IN [10]" in sess.run.call_args[0][0]
 
 
 def test_get_sync_downstream_filters_sync_true(monkeypatch):
@@ -137,17 +137,19 @@ def test_get_upstream_location_id_uses_scene_edges(monkeypatch):
 
 
 def test_get_chapter_graph_uses_plot_edges_with_has_section(monkeypatch):
-    """get_chapter_graph 沿 _PLOT_EDGES（含 has_section）遍历，起点 Chapter。"""
+    """get_chapter_graph 沿 _PLOT_EDGES（含 has_section / has_outline / produces 产物链）遍历，起点 Chapter。"""
     sess = MagicMock()
     sess.__enter__.return_value = sess
     r1, r2, r3 = MagicMock(), MagicMock(), MagicMock()
     r1.__iter__ = lambda self: iter([{"id": "SEC1"}, {"id": "S1"}])
     r2.__iter__ = lambda self: iter([
-        {"id": "SEC1", "label": "Section", "status": 20, "name": None},
+        {"id": "OL1", "label": "SecOutline", "status": 1, "name": "酒店清晨提纲"},
         {"id": "S1", "label": "Scene", "status": 1, "name": "酒店-客房"},
     ])
     r3.__iter__ = lambda self: iter([
         {"f": "CH1", "t": "SEC1", "ty": "has_section", "sync": True},
+        {"f": "SEC1", "t": "OL1", "ty": "has_outline", "sync": True},
+        {"f": "OL1", "t": "SC1", "ty": "produces", "sync": True},
         {"f": "SEC1", "t": "S1", "ty": "contains", "sync": False},
     ])
     sess.run.side_effect = [r1, r2, r3]
@@ -156,12 +158,13 @@ def test_get_chapter_graph_uses_plot_edges_with_has_section(monkeypatch):
     g = graph_repo.get_chapter_graph("CH1")
     first_cypher = sess.run.call_args_list[0][0][0]
     assert "has_section" in first_cypher
+    assert "has_outline" in first_cypher and "produces" in first_cypher   # 节级产物链
     assert "contains" in first_cypher and "depicts" in first_cypher
     assert "expands_to" in first_cypher          # 变体枚举走 expands_to
-    assert "*1..4" in first_cypher                # 深度从 3 提到 4（多一跳 expands_to）
+    assert "*1..4" in first_cypher                # 产物链/场景链最长均 4 跳
     assert "Chapter" in first_cypher
     assert sess.run.call_args_list[0][1]["id"] == "CH1"
     assert len(g["nodes"]) == 2
-    assert g["nodes"][0]["label"] == "Section"
-    assert len(g["edges"]) == 2
+    assert g["nodes"][0]["label"] == "SecOutline"
+    assert len(g["edges"]) == 4
     assert g["edges"][0]["type"] == "has_section"

@@ -86,12 +86,12 @@ def build_section_deeplink(sec_id, sec_label=None):
     """生成「推进此节」的 deeplink，调 plot-design agent 单节聚焦模式。
 
     与章级入口互补：章级负责 structurer 分节 / 结构审 / 全章发布 / 全量推进；
-    节级只推进单节的提纲→定稿，不碰其他节、不触发立绘批量或发布。
+    节级只推进单节的产物链（提纲/定稿/配音）与该节关联立绘，不碰其他节、不发布。
     """
     name = sec_label or sec_id
     prompt = (
         f"使用 plot-design agent 推进小节 {name}（section id={sec_id}）的剧情创作。"
-        f"单节聚焦：推进该节的提纲/定稿，定稿已批(31)则推进该节关联的 depicts 立绘；"
+        f"单节聚焦：按该节产物链当前进度推进提纲/定稿/配音，定稿已批(SecScript=11)则推进该节关联的 depicts 立绘；"
         f"不碰其他节、不发布。"
     )
     return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
@@ -100,3 +100,24 @@ def build_section_deeplink(sec_id, sec_label=None):
 def render_section(sec_id, sec_label=None, label="推进此节"):
     import streamlit as st
     st.link_button(label, build_section_deeplink(sec_id, sec_label))
+
+
+def build_line_regen_deeplink(sec_id, line_ids):
+    """生成「重生成被驳回句音频」的 deeplink，调 plot-design agent 单节聚焦。
+
+    逐句音频审驳回后，dashboard 只标行状态（rejected），重生成走对话重推——
+    section-voice-publisher 按 --only rejected,stale 只重做被驳回/已改行。
+    """
+    ids = "、".join(line_ids)
+    prompt = (
+        f"使用 plot-design agent 推进小节（section id={sec_id}）的配音重做。"
+        f"单节聚焦：该节 LineAudio 逐句音频审驳回了以下台词行：{ids}。"
+        f"请调 section-voice-publisher 重配这些行（tasks --only rejected,stale，emotion 重新判别），"
+        f"其余已通过行不要重配。"
+    )
+    return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
+
+
+def render_regen_lines(sec_id, line_ids, label="重生成被驳回的音频"):
+    import streamlit as st
+    st.link_button(label, build_line_regen_deeplink(sec_id, line_ids))

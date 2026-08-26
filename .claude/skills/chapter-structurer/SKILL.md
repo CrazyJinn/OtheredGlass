@@ -1,7 +1,7 @@
 ---
 name: chapter-structurer
 description: |
-  推进 Chapter 图节点的结构段：解析/创建 Chapter → 校验 Scene 前驱 → 把 N 个 Scene 按情感弧规划成若干节（Section）→ 为每节建 Section 节点 + has_section/contains 边 + 预分配全章 scene-block id（章内唯一）→ 产出章节设计简报（含分节规划）→ Chapter status=1（结构就绪，待结构审），各 Section status=0（待提纲）。
+  推进 Chapter 图节点的结构段：解析/创建 Chapter → 校验 Scene 前驱 → 把 N 个 Scene 按情感弧规划成若干节（Section）→ 为每节建 Section 节点 + has_section/contains 边 + 预分配全章 scene-block id（章内唯一）→ 产出章节设计简报（含分节规划）→ Chapter status=10（结构待审，生产完成直写，无 submit 步）。Section 是纯编排容器（无 status），节级产物节点（SecOutline/SecScript/LineAudio）由下游生产 skill 兜底建。
   在需要建立章节结构或重做章节结构时使用。设计简报供下游 chapter-outliner / chapter-dialoguer 对齐。
 argument-hint: <chapter_id_or_title>
 arguments:
@@ -9,11 +9,11 @@ arguments:
 allowed-tools: Read, Bash, Write
 ---
 
-> **status=-1 = 作废重做**：当 Chapter 被 sync 级联或手动重置为 `status=-1` 时，即使 has_section/contains 边 + 设计简报已存在，也**必须重新分节、重新统合 Scene、重新产出设计简报并覆盖**（重走 0→1）。重做时先删除旧 has_section 边 + DETACH DELETE 旧 Section 节点（含其 contains 边）再重建（分节可能变）；设计简报直接覆盖。禁止因产物已存在而跳过。
+> **status=-1 = 作废重做**：当 Chapter 被 sync 级联或手动重置为 `status=-1` 时，即使 has_section/contains 边 + 设计简报已存在，也**必须重新分节、重新统合 Scene、重新产出设计简报并覆盖**（重走 0→10）。重做时先删除旧 has_section 边 + DETACH DELETE 旧 Section 节点**及其下游产物链**（SecOutline/SecScript/LineAudio，分节可能变，旧产物全部作废）再重建；设计简报直接覆盖。禁止因产物已存在而跳过。
 
-# 章节结构（Chapter 结构段 · status 0→1）
+# 章节结构（Chapter 结构段 · status 0→10）
 
-剧情创作流程的**第一段**（章级）。建立章节骨架并锚定创作意图：创建/补全 Chapter 节点的编排属性 + 把本章 N 个 Scene 按情感弧**规划成 K 个节**（每节建 `Section` 节点 + `has_section` 边，节内 Scene 用 `contains` 边统合）+ **预分配全章 scene-block id**（章内唯一，下游 outliner/dialoguer 的段 id 来源）+ **产出章节设计简报**（全链路创作意图的唯一锚点），推进到 `Chapter.status=1`（结构就绪），各 `Section.status=0`（待提纲）。**不创作对话**。
+剧情创作流程的**第一段**（章级）。建立章节骨架并锚定创作意图：创建/补全 Chapter 节点的编排属性 + 把本章 N 个 Scene 按情感弧**规划成 K 个节**（每节建 `Section` 节点 + `has_section` 边，节内 Scene 用 `contains` 边统合；Section 是纯编排容器——只存 section_no/title/summary，**无 status、无产物路径**，节级产物链 SecOutline/SecScript/LineAudio 由下游 skill 兜底建）+ **预分配全章 scene-block id**（章内唯一，下游 outliner/dialoguer 的段 id 来源）+ **产出章节设计简报**（全链路创作意图的唯一锚点），推进到 `Chapter.status=10`（结构待审，直写不经 submit）。**不创作对话**。
 
 > 结构段只定 Scene 序 + 分节，不定分支拓扑（分支/结局拓扑由 chapter-outliner 在节级提纲里定）。
 
@@ -41,7 +41,7 @@ RETURN ch.id AS id, ch.title AS title, ch.chapter_no AS chapter_no,
 LIMIT 1
 ```
 
-- **已存在**：用其 `id` + `summary` 作为统合依据。`status=-1` 进入重做（段 3 先清旧 has_section 边 + 删旧 Section）。
+- **已存在**：用其 `id` + `summary` 作为统合依据。`status=-1` 进入重做（段 3 先清旧 has_section 边 + 删旧 Section 及其下游产物链）。
 - **不存在**（首次创建）：需从调用方（plot-design agent / 用户）获取 `title`/`chapter_no`/`summary`/`branch_summary`；缺失则停止并提示。生成新 id：
   ```bash
   python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q
@@ -90,25 +90,29 @@ ORDER BY s.name LIMIT 50
 
 ### 3. 保存结果（MERGE 兜底 + 建 Section + 写 status）
 
-`--multi` 单事务，节点先于边；`status=-1` 重做时先清旧 has_section 边 + 删旧 Section（含其 contains 边）：
+`--multi` 单事务，节点先于边；`status=-1` 重做时先删旧 Section 及其下游产物链（SecOutline/SecScript/LineAudio）再重建：
 
 ```cypher
-// 0.（仅 status=-1 重做时）清旧 has_section 边 + DETACH DELETE 旧 Section（分节可能变）
+// 0.（仅 status=-1 重做时）清旧 has_section 边 + 删旧 Section 的产物链 + DETACH DELETE 旧 Section
+//    （分节可能变，旧产物全部作废；DETACH DELETE 只删 Section 本身，产物链须显式先删）
 MATCH (ch:Chapter {id:'<chapter_id>'})-[r:has_section]->() DELETE r;
+MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(sec:Section)
+OPTIONAL MATCH (sec)-[:has_outline|produces*1..3]->(p)
+DETACH DELETE p;
 MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(sec:Section) DETACH DELETE sec;
 
-// 1. Chapter 编排属性 + status=1（不再写 outline_path/script_path——已下放 Section）
+// 1. Chapter 编排属性 + brief_path + status=10（不再写 outline_path/script_path——产物路径已下放 SecOutline/SecScript 节点）
 MATCH (ch:Chapter {id:'<chapter_id>'})
 SET ch.title = '<title>',
     ch.chapter_no = <chapter_no>,
     ch.summary = '<summary>',
     ch.branch_summary = '<branch_summary>',
-    ch.status = 1;     // 结构就绪，待 dashboard submit→10 结构审
+    ch.brief_path = '25_剧本/chapter<NN>_<章概述>/设计简报.md',   // dashboard 结构审渲染简报内容的数据源
+    ch.status = 10;    // 结构待审（生产完成直写，无 submit 步），待 dashboard approve→11
 
-// 2. 每节：MERGE Section + has_section(sync=true)；节内每 Scene：contains(order,sync=false)
+// 2. 每节：MERGE Section（纯编排，无 status）+ has_section(sync=true)；节内每 Scene：contains(order,sync=false)
 //    （对 K 个节循环；每个 sec_id 用 snowflake_base62.py 新生成）
-MERGE (sec:Section {id:'<sec_id>'})
-  ON CREATE SET sec.status = 0;
+MERGE (sec:Section {id:'<sec_id>'});
 MATCH (sec:Section {id:'<sec_id>'})
 SET sec.section_no = <MM>, sec.title = '<sec_title>', sec.summary = '<sec_summary>';
 MATCH (ch:Chapter {id:'<chapter_id>'}), (sec:Section {id:'<sec_id>'})
@@ -118,15 +122,15 @@ MATCH (sec:Section {id:'<sec_id>'}), (s:Scene {name:'<scene_name>'})
 MERGE (sec)-[r:contains]->(s) SET r.order = <order>, r.sync = false;
 ```
 
-> `has_section` 边 `sync=true`（组成关系：人改 Chapter 属性时级联重置所有 Section→-1）；`contains` 边 `sync=false`（编排引用，不级联）。Section 的 `status=0` 表示「待提纲」。
+> `has_section` 边 `sync=true`（组成关系：人改 Chapter 属性时级联重置 Section 及其产物链→-1）；`contains` 边 `sync=false`（编排引用，不级联）。Section 无 status——「待提纲」表现为**尚无 SecOutline 节点**（由 chapter-outliner 兜底建）。
 
-**status 写入**：结构段完成 → `Chapter.status=1`（结构就绪），各 `Section.status=0`（待提纲）。后续由 dashboard `submit` 1→10（结构待审）→ `approve` 10→11（结构已批），才进入各节的 `chapter-outliner`。
+**status 写入**：结构段完成 → `Chapter.status=10`（结构待审，直写不经 submit）。后续由 dashboard `approve` 10→11（结构已批），才进入各节的 `chapter-outliner`。
 
-最后汇总：设计简报路径 `25_剧本/chapter<NN>_<章概述>/设计简报.md`、分节列表（section_no/title/所含 Scene+order+预分配 id）、Chapter `status=1`、K 个 Section `status=0`。
+最后汇总：设计简报路径 `25_剧本/chapter<NN>_<章概述>/设计简报.md`（已写入 `ch.brief_path`，dashboard 结构审渲染简报全文）、分节列表（section_no/title/所含 Scene+order+预分配 id）、Chapter `status=10`（结构待审）、K 个 Section（纯编排容器）。
 
 ## 参考文档
 
 - 创作方法论：[references/设计简报方法论.md](references/设计简报方法论.md) — 设计支柱/情感弧线/戏剧意图/核心循环/分节规划各节写法
-- 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Chapter/Section/has_section/contains 定义、status 流转
+- 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Chapter/Section/产物链（SecOutline/SecScript/LineAudio）/has_section/has_outline/produces/contains 定义、status 流转
 - 场景美术 Schema：[00_init/Schema/场景美术.md](../../../00_init/Schema/场景美术.md) — Scene 字段
 - 下游：[chapter-outliner](../chapter-outliner/SKILL.md)（读设计简报 + 结构批 status=11 后按节产出提纲）
