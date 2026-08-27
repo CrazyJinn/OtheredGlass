@@ -1,4 +1,9 @@
-"""剧本章节 Schema 校验。支持 JSON / YAML / 台词 JSONL 输入（按后缀分流加载）。本环境（bash + python）可立即运行。"""
+"""剧本章节 Schema 校验（发布产出的运行时章 JSON / YAML）。本环境（bash + python）可立即运行。
+
+校验对象是 99_game/data/chapters/ 下的章 JSON（merge_sections_to_chapter.py 从图投影产出，
+chapter-publisher 发布流程必跑）。台词.jsonl 已停产，创作侧 台词.md 的机器可解析性由
+script_splitter.parse_md 在拆分时把关。
+"""
 import json
 import sys
 from pathlib import Path
@@ -15,32 +20,20 @@ except ImportError:
     sys.stderr.write("缺少依赖：pip install -r tools/requirements.txt (PyYAML)\n")
     raise
 
-_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / ".claude" / "scripts"  # 项目根/.claude/scripts
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-import jsonl_script  # noqa: E402
-
 
 def _load_doc(path: str):
-    """按后缀分流加载文档：.json→json.load，.yaml/.yml→yaml.safe_load。其余后缀报错。
-
-    （.jsonl 不走本函数——行级校验 + 投影 + schema 由 validate_chapter 整体分流处理。）
-    """
+    """按后缀分流加载文档：.json→json.load，.yaml/.yml→yaml.safe_load。其余后缀报错。"""
     suffix = Path(path).suffix.lower()
     with open(path, "r", encoding="utf-8") as f:
         if suffix in (".yaml", ".yml"):
             return yaml.safe_load(f)
         if suffix == ".json":
             return json.load(f)
-        raise ValueError(f"不支持的文件格式: {suffix}（仅支持 .json/.yaml/.yml/.jsonl）")
+        raise ValueError(f"不支持的文件格式: {suffix}（仅支持 .json/.yaml/.yml）")
 
 
 def validate_chapter(path: str, schema_path: str) -> tuple[bool, list[str]]:
     """返回 (是否通过, 错误消息列表)。"""
-    # 台词 JSONL：行级规则（8 行类型/行 id 水位/say 四字段）+ 投影后走章 JSON schema，一步到位
-    if Path(path).suffix.lower() == ".jsonl":
-        return jsonl_script.validate(path, schema_path)
-
     errors: list[str] = []
     try:
         doc = _load_doc(path)
@@ -72,7 +65,7 @@ def validate_chapter(path: str, schema_path: str) -> tuple[bool, list[str]]:
 
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
-        sys.stderr.write("用法: python validate_chapter.py <chapter.json|chapter.yaml|台词.jsonl> <schema.json>\n")
+        sys.stderr.write("用法: python validate_chapter.py <chapter.json|chapter.yaml> <schema.json>\n")
         return 2
     ok, errors = validate_chapter(argv[1], argv[2])
     if ok:

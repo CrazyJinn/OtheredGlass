@@ -29,7 +29,7 @@ instruct 是给模型的**参数化描述**，不是角色小传。五条原则�
 | **演绎方式**（表演层） | 说话习惯与性格 | 气质腔调一词（玩世不恭/温柔/傲慢/逢迎）、语速、起音（硬/软）、**尾音**（上扬/下沉/拖音/短促收——辨识度最强） |
 | **情绪域**（动态层） | 基准线与波动幅度 | 基准（冷淡↔高昂）+ 波动（内敛↔外露），各一个词 |
 
-> 情绪域衔接下游：逐句情绪由 `say.emotion`（12 词表，见 [.claude/scripts/voice/emotion_instruct.json](../../../../.claude/scripts/voice/emotion_instruct.json)）在配音时控制——instruct 只定**基准线与波动幅度**，各一个词即可，不展开。
+> 情绪域衔接下游：逐句情绪演绎由配音期的 `tts_text` 变体承载（仅标点/停顿级修饰，禁增删改汉字；`emotion` 12 词表仅作图标注与筛选，不进合成参数）——instruct 只定**基准线与波动幅度**，各一个词即可，不展开。
 
 ## 六维 → 素材映射（数据依据）
 
@@ -72,8 +72,8 @@ instruct 是给模型的**参数化描述**，不是角色小传。五条原则�
   | 高兴 | 太好了，我们真的赢了，今晚我请大家吃饭！ |
   | 愤怒 | 我说过多少次了，这份文件不能再出错！ |
 
-  > 试听引擎（Qwen3 Base，语义自适应）与下游配音引擎（CosyVoice3，按 say.emotion 映射 instruct 控情绪）不同——试听预览音色与韵律基线，成品情绪表现以配音结果为准。
-- **产物布局**（`14_声音设计/<char>/candidates/` 临时文件夹，dashboard 采用后整夹删除；绝不放 `15_声音/`——voice_bundler sync 会拷进运行时；设计阶段不产 16k 文件）：
+  > 试听与下游配音**同引擎**（Qwen3 Base Voice Clone，配音期情绪由 tts_text 变体承载）——试听即成品引擎的真实预览。
+- **产物布局**（`14_声音设计/<char>/candidates/` 临时文件夹，dashboard 采用后整夹删除；绝不放 `15_声音/`——voice_bundler sync 会拷进运行时；设计阶段无重采样副产物）：
 
   | 文件 | 说明 |
   |------|------|
@@ -81,7 +81,7 @@ instruct 是给模型的**参数化描述**，不是角色小传。五条原则�
   | `<char>_cN_平静/高兴/愤怒.wav` | 9 个情绪试听（Qwen3 Base clone，试听文本=上表） |
   | `candidates.json` | manifest（instruct/ref_text/audition_texts + 候选路径，dashboard 采用流程消费） |
 
-- 采用后固化 `<char>_ref.wav` 为角色目录下唯一正式产物（图 `ref_audio_path` 指向它；下游 CosyVoice publish 按需重采样 `<char>_ref_16k.wav`）。
+- 采用后固化 `<char>_ref.wav` 为角色目录下唯一正式产物（图 `ref_audio_path` 指向它；下游 voice_clone_runner publish 直接消费该 24k ref，无重采样副产物）。
 
 ## 反模式（避免）
 

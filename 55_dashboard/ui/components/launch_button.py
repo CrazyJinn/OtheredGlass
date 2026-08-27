@@ -105,15 +105,15 @@ def render_section(sec_id, sec_label=None, label="推进此节"):
 def build_line_regen_deeplink(sec_id, line_ids):
     """生成「重生成被驳回句音频」的 deeplink，调 plot-design agent 单节聚焦。
 
-    逐句音频审驳回后，dashboard 只标行状态（rejected），重生成走对话重推——
-    section-voice-publisher 按 --only rejected,stale 只重做被驳回/已改行。
+    逐句音频审驳回后，dashboard 只标行节点 status=0，重生成走对话重推——
+    section-voice-publisher 按 --nodes 只重做被驳回行（行节点 id 寻址）。
     """
     ids = "、".join(line_ids)
     prompt = (
         f"使用 plot-design agent 推进小节（section id={sec_id}）的配音重做。"
-        f"单节聚焦：该节 LineAudio 逐句音频审驳回了以下台词行：{ids}。"
-        f"请调 section-voice-publisher 重配这些行（tasks --only rejected,stale，emotion 重新判别），"
-        f"其余已通过行不要重配。"
+        f"单节聚焦：该节 LineAudio 逐句音频审驳回了以下台词行节点：{ids}。"
+        f"请调 section-voice-publisher 重配这些行（voice_bundler tasks-from-graph --nodes 指定行，"
+        f"emotion/tts_text 重新判别），其余已通过行不要重配。"
     )
     return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
 

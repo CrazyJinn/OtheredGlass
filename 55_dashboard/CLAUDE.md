@@ -60,7 +60,7 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 - 美术有审批（completion=2，可 submit→10→11）：`DesignSheet`/`IllusDesign`/`StandingIllustration`/`SceneLayer`
 - **VoiceDesign 生产完成直写 10（待审），无 submit 步**（completion=10）；`2` 为旧流程兼容值（存量可经编辑器 submit 迁 10）
 - 美术无审批（completion=1）：`AppearanceStyle`/`LanguageStyle`/`CostumeStyle`/`Scene`
-- **剧情产物链**：`Chapter` 章级结构段（`0→10→11`，结构审，completion=11，10 由 structurer 直写不经 submit）；节级三产物 `Section →has_outline→ SecOutline →produces→ SecScript →produces→ LineAudio`——SecOutline（`0→1`，completion=1，无审批）、SecScript（`0→1→10→11`，定稿审，completion=11，10 由 dialoguer 直写不经 submit）、LineAudio（`0→10→11`，声音审，completion=11，10 由 section-voice-publisher 直写）。「节完成」= SecOutline=1 ∧ SecScript=11 ∧ LineAudio=11（派生判断）
+- **剧情产物链**：`Chapter` 章级结构段（`0→10→11`，结构审，completion=11，10 由 structurer 直写不经 submit）；节级三产物 `Section →has_outline→ SecOutline →produces→ SecScript -[:produces{order}]-> LineAudio(×N 逐句台词行)`——SecOutline（`0→1`，completion=1，无审批）、SecScript（`0→1→10→11`，定稿审 **台词.md**，completion=11，10 由 dialoguer 直写不经 submit）、LineAudio 逐句行（say 行 `0→10→11` **行级音频审**——行 status 只代表音频（文字审批已在定稿审完成），10 由 section-voice-publisher 的 bind-graph 直写；非 say 行拆分即 11）。「节完成」= SecOutline=1 ∧ SecScript=11 ∧ 该节全部行 LineAudio=11（派生判断，无节级批准按钮）
 - `Character`/`Location`/`Section` **无 status 字段**（Section 是纯编排容器），只作级联触发源。
 
 > 判断节点"有无 status"必须用 `is not None`——`status=0`（待处理）是合法 falsy，真值判断会误隐藏。
@@ -79,11 +79,12 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 
 ## 剧情章节进度
 
-[page_chapter_overview.py](ui/page_chapter_overview.py) 是剧情模块唯一页面，按「章 + 节」两层展开：列出全部 `Chapter`（按 `chapter_no`），每章卡片下展示各 `Section`（按 `section_no`）的产物链状态（提纲/定稿/配音三段徽章，Section 无 status）+ 编排子图（`has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio` 与 `Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration`）+ 节级定稿 YAML 的逐句预览（review 对白质量，区别于美术节点审批看图）。
+[page_chapter_overview.py](ui/page_chapter_overview.py) 是剧情模块唯一页面，按「章 + 节」两层展开：列出全部 `Chapter`（按 `chapter_no`），每章卡片下展示各 `Section`（按 `section_no`）的产物链状态（提纲/定稿/配音三段徽章，Section 无 status；音频段为该节 LineAudio 行状态聚合的瓶颈值，附行数）+ 编排子图（`has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio` 与 `Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration`）+ 节级 **台词.md 预览**（人读定稿格式，review 对白质量，区别于美术节点审批看图）。
 
 审批落点：
 - **Chapter 结构审**（`10→11`）：就地按钮（章卡片内）。
-- **SecScript 定稿审 / LineAudio 声音审**（均 `10→11`）：走全局「审批中心」（[page_approval.py](ui/page_approval.py)），不在本页（声音审试听路径经 `get_upstream_script_path` 取上游 SecScript.script_path）。
+- **SecScript 定稿审**（审 台词.md，`10→11`）：走全局「审批中心」（[page_approval.py](ui/page_approval.py)），渲染 md 全文。
+- **LineAudio 逐句音频审**（行 `10→11`）：审批中心把 status=10 的行节点**按节聚合**为一张卡（[script_lines_view.render_audio_review](ui/components/script_lines_view.py)）：试听 + 单句通过=11/驳回=0（写行节点 status，经 [core/script_lines.py](core/script_lines.py)）；「节完成」= 全部行 11（派生，无节级批准按钮）；整节驳回 = say 行全置 0。
 
 推进入口分两级（生成 `vscode://` deeplink 唤起 `plot-design` agent，见 [launch_button.py](ui/components/launch_button.py)）：
 - 章行「推进剧情创作」= **章节全量**（structurer 分节 / 结构审 / 全量循环推进，到全章就绪即止）。**发布（chapter-publisher）由用户直接触发，不在 plot-design 职责内**。

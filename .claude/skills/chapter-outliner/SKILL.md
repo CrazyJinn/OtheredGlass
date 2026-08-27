@@ -114,7 +114,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 
 ### 2. 完成任务（按三门控产出节级提纲 outline.md）
 
-据设计简报（本节在情感弧中的位置 + 戏剧职责）+ 本节 Scene 序 + 分支骨架，**先结构后内容**，三步产出节级提纲（格式见 [剧本.md](../chapter-dialoguer/references/剧本.md) 的「提纲格式（outline.md）」节——拓扑骨架用 `key: value` 行 + 反引号标契约值，authoring 散文为 md 正文）：
+据设计简报（本节在情感弧中的位置 + 戏剧职责）+ 本节 Scene 序 + 分支骨架，**先结构后内容**，三步产出节级提纲（格式见 [提纲格式.md](references/提纲格式.md)——拓扑骨架用 `key: value` 行 + 反引号标契约值，authoring 散文为 md 正文）：
 
 #### 2a. 分支节点图先行（结构验证）
 
@@ -141,7 +141,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 
 1. **节头**：一级标题 `# sec<MM> <节标题> · chapter <NN>`。
 2. **资源清单**（`## 资源清单`）：`- 出场角色：`角色名``、`- 场景：`场景名``（提纲段**不列立绘变体**，细节对话段才定）。
-3. **场景段**（每段一个 `## 场景段：`id``）：`id` 用设计简报分节规划里 structurer 预分配的本节 id（**不自创；全章节内唯一**）；段下 `- 场景：`场景名`(=Scene.name)` / `- 时段：` / `- BGM 倾向：`（自由散文写该场景的音乐情绪定位，如「轻快爵士、晨间慵懒」——**不是 track 名**：BGM 走图 `Scene-has_bgm->BgmTrack` 关联，发布时注入章 JSON；提纲的倾向描述供 `bgm-designer` 产 prompt 与 `chapter-dialoguer` 兜底建 BgmTrack 时参考）。
+3. **场景段**（每段一个 `## 场景段：`id``）：`id` 用设计简报分节规划里 structurer 预分配的本节 id（**不自创；全章节内唯一**）；段下 `- 场景：`场景名`(=Scene.name)` / `- 时段：` / `- BGM 倾向：`（自由散文写该场景的音乐情绪定位，如「轻快爵士、晨间慵懒」——**不是 track 名**：BGM 走图 `Scene-has_bgm->BgmTrack` 关联（scene-design 编排 `bgm-designer` 管理），发布时注入章 JSON；提纲的倾向描述供 `bgm-designer` 产 prompt 时参考）。
 4. **分支拓扑**（每场景段下 `### 分支拓扑`，仅在存在分支时）：对应定稿 `lines` 占位，用 md 列表写 `choice` 的 options（label + 跳向的 scene id）、`jump` 串联、`ending` 位置与 kind（对齐 `Event.ending_kind` / `option.leads_to_ending`）；**不写 say/narrate 台词**。无分支的段此节留空（dialoguer 填逐句对话）。
 
 > 跨节/跨章跳转：本节内用 `scene`（章内唯一 id 寻址）；跨章用 `file`（章 stem）。预分配 id 的章内唯一性保证跨节 jump 不冲突。
@@ -151,7 +151,7 @@ RETURN char.name AS char, count(DISTINCT e) AS event_count;
 - **节级**：`## 方向`（direction，一段话讲清**本节**剧情发展方向，**核心字段**）/ `## 情感弧`（emotion_arc，本节 start→end + 中途转折）/ `## 约束`（constraints，给 dialoguer 的硬约束清单）。
 - **每场景段**：`### 职责`（purpose，这场戏的戏剧职责）/ `### 节拍`（beats，节拍走向，自然语言列表，**禁写台词**——给 dialoguer 节拍依据）/ `### 母题锚点`（motif_anchors）/ `### 衔接`（transition）。
 
-字段定义详见 [剧本.md](../chapter-dialoguer/references/剧本.md)「提纲格式（outline.md）」节。
+字段定义详见 [提纲格式.md](references/提纲格式.md)。
 
 #### md 写作约定（提纲不进 schema、不被代码解析，无 YAML 约束）
 
@@ -188,7 +188,7 @@ MERGE (sec)-[r:has_outline]->(ol) SET r.sync = true;
 ## 参考文档
 
 - 创作方法论：[references/分支结构方法论.md](references/分支结构方法论.md) — 节点图先行/本质差异/后果可见/节奏
-- 剧本格式（含提纲格式）：[剧本.md](../chapter-dialoguer/references/剧本.md) — JSON 结构、11 指令、outline.md 提纲格式、节级创作与发布合并
+- 提纲格式（outline.md 拓扑骨架 + authoring 散文）：[提纲格式.md](references/提纲格式.md)；运行时章 JSON 权威 schema：[剧本.schema.json](../../../99_game/data/剧本.schema.json)
 - 剧情 Schema：[00_init/Schema/剧情.md](../../../00_init/Schema/剧情.md) — Chapter/Section/产物链（SecOutline/SecScript/LineAudio）/has_section/has_outline/produces 定义
 - 上游：[chapter-structurer](../chapter-structurer/SKILL.md)（章级建结构 + 分节 + 产设计简报 → Chapter status=11）
 - 下游：[chapter-dialoguer](../chapter-dialoguer/SKILL.md)（读本节提纲填细节对话 → SecScript status=10）

@@ -1,8 +1,8 @@
 """审批中心：列出待审节点（status=10：通用/结构审/定稿审/逐句音频审），通过/驳回。
 
-全图统一待审 10 → 批准 11 / 驳回 0。剧情产物：SecScript(10)=定稿审（渲染台词 JSONL 逐句预览）、
-LineAudio(10)=逐句音频审（逐句试听 + 单句通过/驳回，节级「通过」gate=全部行 approved）、
-Chapter(10)=结构审（渲染 brief_path 设计简报）。
+全图统一待审 10 → 批准 11 / 驳回 0。剧情产物：SecScript(10)=定稿审（渲染 台词.md 全文）、
+LineAudio(10)=**逐句行节点**（按节聚合为一张「逐句音频审」卡：逐句试听 + 单句通过=11/驳回=0，
+「节完成」= 全部行 11 的派生判断，无节级批准按钮）、Chapter(10)=结构审（渲染 brief_path 设计简报）。
 
 VoiceDesign status=10 两态（由 candidates_path 区分）：
 - 非空 = 候选待选——渲染 3 候选卡（ref + 3 情绪试听），「采用」固化候选（status 仍 10），
@@ -13,8 +13,8 @@ import streamlit as st
 
 from config import settings
 from repo import graph_repo
-from core import approval, voice_candidates, script_jsonl as js
-from ui.components import image_viewer, status_badge, audio_player, script_jsonl_view, markdown_viewer
+from core import approval, voice_candidates, script_lines as sl
+from ui.components import image_viewer, status_badge, audio_player, script_lines_view, markdown_viewer
 
 
 def _render_voice_candidates(node_id, manifest):
@@ -47,10 +47,28 @@ def _render_voice_candidates(node_id, manifest):
     st.caption("三个候选都不理想？驳回 → 0 重跑 char-voice-design 重新采样。")
 
 
-def _abs(path):
-    from pathlib import Path
-    p = Path(path)
-    return p if p.is_absolute() else settings.PROJECT_ROOT / p
+def _render_lineaudio_groups(items):
+    """LineAudio 逐句行节点按节聚合：每节一张「逐句音频审」卡（行级 11/0）。
+
+    「节完成」= 全部行 status=11（派生判断）——全部通过后待审行消失，组卡随之消失，
+    无节级批准按钮；整节驳回 = 该节 say 行全置 0（重配语义，台词不变）。
+    """
+    groups = {}  # sc_id -> {"sec_id", "name", "lines": [行]}
+    for n in items:
+        info = graph_repo.get_script_of_line(n["id"])
+        if not info:
+            continue
+        g = groups.setdefault(info["sc_id"], {"sec_id": info["sec_id"], "name": info["sc_name"], "n": 0})
+        g["n"] += 1
+    for sc_id, g in groups.items():
+        with st.container(border=True):
+            st.write(f"**LineAudio · {g['name']}（逐句音频审）** · 待审行 {g['n']} 句")
+            script_lines_view.render_audio_review(g["sec_id"], sc_id)
+            if st.button("整节驳回（全部 say 行重配）", key=f"la_rej_sec_{sc_id}"):
+                n = sl.reject_section(sl.get_lines(sc_id))
+                # toast 而非 inline：紧随的 st.rerun() 会丢弃本轮输出
+                st.toast(f"已整节驳回：{n} 行置 0（重配，台词与已产 wav 不变）", icon="❌")
+                st.rerun()
 
 
 def render():
@@ -62,36 +80,30 @@ def render():
     labels = sorted({n["label"] for n in pendings})
     sel = st.selectbox("按类型筛选", ["全部"] + labels)
     items = [n for n in pendings if sel == "全部" or n["label"] == sel]
+    # LineAudio 逐句行按节聚合渲染（不逐行出现）
+    line_items = [n for n in items if n["label"] == "LineAudio"]
+    if line_items:
+        _render_lineaudio_groups(line_items)
     for n in items:
+        if n["label"] == "LineAudio":
+            continue
         full = graph_repo.get_node(n["id"]) or {}
         with st.container(border=True):
-            # 显式标注审批类型：Chapter 结构审 / SecScript 定稿审 / LineAudio 逐句音频审 / VoiceDesign 声音审
+            # 显式标注审批类型：Chapter 结构审 / SecScript 定稿审 / VoiceDesign 声音审
             review_tag = ""
             if n["label"] == "Chapter" and n["status"] == 10:
                 review_tag = "（结构审）"
             elif n["label"] == "SecScript" and n["status"] == 10:
                 review_tag = "（定稿审）"
-            elif n["label"] == "LineAudio" and n["status"] == 10:
-                review_tag = "（逐句音频审）"
             elif n["label"] == "VoiceDesign" and n["status"] == 10:
                 review_tag = "（声音审）"
             label_text = full.get("title") or full.get("name") or n["id"]
             st.write(f"**{n['label']}** · {label_text}{review_tag}")
             status_badge.render(n["status"])
-            show_approve = True  # 候选待选态/LineAudio 行级 gate 置 False（防未逐句审完就整节批准）
-            if n["label"] == "LineAudio" and n["status"] == 10:
-                # 逐句音频审：行级三态在台词 JSONL 的 audio.status；节级「通过」gate=全部行 approved
-                path = graph_repo.get_upstream_script_path(n["id"])
-                script_jsonl_view.render_audio_review(path, n["id"])
-                try:
-                    show_approve = js.all_approved(js.load(_abs(path))) if path else False
-                except (OSError, ValueError):
-                    show_approve = False
-                if not show_approve:
-                    st.caption("⏳ 逐句审批未完成（全部行「通过」后此处才可整节批准）")
-            elif n["label"] == "SecScript" and n["status"] == 10:
-                # 定稿审：渲染台词 JSONL 逐句预览（review 对白质量）
-                script_jsonl_view.render_preview(full.get("script_path"), label_text)
+            show_approve = True  # 候选待选态置 False（防未选先批）
+            if n["label"] == "SecScript" and n["status"] == 10:
+                # 定稿审：渲染 台词.md 全文（人读格式，review 对白质量；拆分进图在批准后）
+                script_lines_view.render_script_md(full.get("script_path"), label_text)
             elif n["label"] == "Chapter" and n["status"] == 10:
                 # 结构审：渲染设计简报（brief_path）
                 markdown_viewer.render(full.get("brief_path"), "📑 章节设计简报")
@@ -127,15 +139,5 @@ def render():
                 if st.button("驳回", key=f"no_{n['id']}"):
                     new_status = approval.reject(n["status"])
                     graph_repo.set_status(n["id"], new_status)
-                    # LineAudio 整节驳回：全部行 audio 归 pending（重配语义，台词不变）
-                    if n["label"] == "LineAudio" and n["status"] == 10:
-                        path = graph_repo.get_upstream_script_path(n["id"])
-                        if path:
-                            try:
-                                rows = js.load(_abs(path))
-                                js.reset_all_audio(rows)
-                                js.save(_abs(path), rows)
-                            except (OSError, ValueError):
-                                pass
                     st.toast(f"已驳回（status={new_status}）" + (f"：{reason}" if reason else ""), icon="❌")
                     st.rerun()

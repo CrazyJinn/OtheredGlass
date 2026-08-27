@@ -5,22 +5,22 @@ get_location_graph。dialog 复用同一 session_state["_dialog_node"] key（点
 一节点编辑器——Section/SecOutline/SecScript/LineAudio 均被 schema_loader 自动注册）。
 
 Section 是纯编排容器（无 status），节级进度看**产物链**：
-Section→has_outline→SecOutline(提纲)→produces→SecScript(定稿)→produces→LineAudio(音频)。
-节完成 = SecOutline=1 ∧ SecScript=11 ∧ LineAudio=11（派生判断）。
+Section→has_outline→SecOutline(提纲)→produces→SecScript(定稿)→produces→LineAudio(逐句台词行)。
+节完成 = SecOutline=1 ∧ SecScript=11 ∧ 该节全部行 LineAudio=11（派生判断；行状态聚合显示瓶颈值）。
 
-节级预览（读各 SecScript.script_path 的台词 JSONL 渲染逐句对话）是剧情审批的核心——review 对白
-质量，区别于美术节点审批（看图片）。Chapter 审批按钮 status=10→11（结构审通过，卡片内渲染
-brief_path 设计简报）/→0（驳回重做）；SecScript 定稿审与 LineAudio 逐句音频审走审批中心
-（page_approval）。**人工微调回路**：用户直接编辑台词 JSONL 单句后点「重新提交审批」
-（SecScript 0/1/11→10 + LineAudio 级联 -1，stale 机制后续只重配被改句）——不经 dialoguer，
-手改不丢。
+节级预览渲染各 SecScript.script_path 指向的 **台词.md**（人读定稿格式）——review 对白质量，
+区别于美术节点审批（看图片）。Chapter 审批按钮 status=10→11（结构审通过，卡片内渲染
+brief_path 设计简报）/→0（驳回重做）；SecScript 定稿审（审 md）与 LineAudio 逐句音频审（按节
+聚合）走审批中心（page_approval）。**人工微调回路**：用户直接编辑 台词.md 单句后点「重新提交
+审批」（仅 SecScript 0/1/11→10，**不动行节点**；重批后 section-voice-publisher 重拆，text_sha1
+匹配的行原样保留审批结果，只有被改句重配）——不经 dialoguer，手改不丢。
 """
 import streamlit as st
 
 from config import settings
 from repo import graph_repo
 from core import approval
-from ui.components import launch_button, status_badge, script_jsonl_view, markdown_viewer
+from ui.components import launch_button, status_badge, script_lines_view, markdown_viewer
 from ui import page_node_editor
 
 
@@ -56,17 +56,24 @@ def _sections_sorted(g):
     """从章节子图取 Section 列表，按 section_no 排序，附产物链状态与定稿路径。
 
     Section 无 status（纯编排容器），节级进度看产物链：
-    has_outline→SecOutline.status / SecOutline-produces→SecScript.status / SecScript-produces→LineAudio.status。
-    subgraph 的 nodes 只含 id/label/status/name，节编排字段与 script_path 逐个 get_node 补全。
+    has_outline→SecOutline.status / SecOutline-produces→SecScript.status /
+    SecScript-produces→LineAudio 行（1:N）——行状态聚合为瓶颈值（min：-1 < 0 < 10 < 11），
+    无行视为 None。subgraph 的 nodes 只含 id/label/status/name，节编排字段与
+    script_path 逐个 get_node 补全。
     """
     nodes_by_id = {n["id"]: n for n in g["nodes"]}
-    ol_of = {}    # sec_id -> ol_id（has_outline）
-    prod_of = {}  # 上游 id -> 下游 id（produces：SecOutline→SecScript / SecScript→LineAudio）
+    ol_of = {}     # sec_id -> ol_id（has_outline）
+    lines_of = {}  # sc_id -> [line_id]（produces：SecScript→LineAudio 1:N）
+    sc_of = {}     # ol_id -> sc_id（produces：SecOutline→SecScript）
     for e in g["edges"]:
         if e["type"] == "has_outline":
             ol_of[e["from"]] = e["to"]
         elif e["type"] == "produces":
-            prod_of[e["from"]] = e["to"]
+            frm = e["from"]
+            if frm in nodes_by_id and nodes_by_id[frm]["label"] == "SecScript":
+                lines_of.setdefault(frm, []).append(e["to"])
+            else:
+                sc_of[frm] = e["to"]
 
     secs = [n for n in g["nodes"] if n["label"] == "Section"]
     out = []
@@ -74,8 +81,10 @@ def _sections_sorted(g):
         full = graph_repo.get_node(s["id"]) or {}
         no = full.get("section_no")
         ol_id = ol_of.get(s["id"])
-        sc_id = prod_of.get(ol_id) if ol_id else None
-        vo_id = prod_of.get(sc_id) if sc_id else None
+        sc_id = sc_of.get(ol_id) if ol_id else None
+        line_ids = lines_of.get(sc_id, []) if sc_id else []
+        statuses = [nodes_by_id[lid]["status"] for lid in line_ids if lid in nodes_by_id
+                    and nodes_by_id[lid]["status"] is not None]
         sc_full = (graph_repo.get_node(sc_id) or {}) if sc_id else {}
         out.append({
             "id": s["id"],
@@ -84,8 +93,8 @@ def _sections_sorted(g):
             "ol_status": nodes_by_id[ol_id]["status"] if ol_id in nodes_by_id else None,
             "sc_id": sc_id,
             "sc_status": nodes_by_id[sc_id]["status"] if sc_id in nodes_by_id else None,
-            "vo_id": vo_id,
-            "vo_status": nodes_by_id[vo_id]["status"] if vo_id in nodes_by_id else None,
+            "vo_count": len(statuses),
+            "vo_status": min(statuses) if statuses else None,  # 瓶颈：任一行未就绪即该值
             "script_path": sc_full.get("script_path"),
         })
     out.sort(key=lambda s: (s["_no"], s["id"]))
@@ -93,12 +102,12 @@ def _sections_sorted(g):
 
 
 def _section_done(s):
-    """节产物链就绪 = SecOutline=1 ∧ SecScript=11 ∧ LineAudio=11（派生判断，非字段）。"""
-    return s["ol_status"] == 1 and s["sc_status"] == 11 and s["vo_status"] == 11
+    """节产物链就绪 = SecOutline=1 ∧ SecScript=11 ∧ 该节全部台词行 LineAudio=11（派生判断）。"""
+    return s["ol_status"] == 1 and s["sc_status"] == 11 and s["vo_count"] > 0 and s["vo_status"] == 11
 
 
 def _render_product_chain(s):
-    """产物链三段徽章：提纲 / 定稿 / 音频（无节点显示 —）。"""
+    """产物链三段徽章：提纲 / 定稿 / 音频（逐句行聚合瓶颈值，附行数；无行显示 —）。"""
     parts = []
     for label, st_val in (("提纲", s["ol_status"]), ("定稿", s["sc_status"]), ("音频", s["vo_status"])):
         if st_val is None:
@@ -106,7 +115,8 @@ def _render_product_chain(s):
         else:
             color = status_badge.badge_color(st_val)
             text = status_badge.badge_text(st_val)
-            parts.append(f"{label}：:{color}[{text}]")
+            suffix = f"（{s.get('vo_count', 0)} 行）" if label == "音频" else ""
+            parts.append(f"{label}：:{color}[{text}]{suffix}")
     st.markdown(" · ".join(parts))
 
 
@@ -132,17 +142,16 @@ def _render_section_row(s, ch_status):
                 launch_button.render_section(s["id"], f"第{s['_no']}节 · {title}")
         else:
             st.caption("待章结构审批")
-        # 人工微调回路：直接编辑台词 JSONL 后重新送审（不经 dialoguer，手改不丢）。
+        # 人工微调回路：直接编辑 台词.md 后重新送审（不经 dialoguer，手改不丢）。
+        # 只置 sc→10、不动行节点——重批后重拆按 text_sha1 恢复未变句审批结果，只重配被改句。
         # 显示条件含驳回后的 0——否则驳回态手改会被 plot-design 触发的 dialoguer 整篇覆盖。
         if ch_status == 11 and s.get("script_path") and s["sc_status"] in (0, 1, 11):
             if st.button("重新提交审批", key=f"resub_{s['id']}",
-                         help="直接编辑 台词.jsonl 改单句后点此重审：SecScript→10；已改台词的音频作废（-1），"
-                              "重配时只重做被改句。注意：点「推进此节」会让 dialoguer 整篇重写覆盖手改。"):
+                         help="直接编辑 台词.md 改单句后点此重审：仅 SecScript→10（行节点不动）。"
+                              "重批后「推进此节」重拆：未变句审批结果原样保留，只有被改句重配。"
+                              "注意：点「推进此节」在 sc=0/1 时会让 dialoguer 整篇重写覆盖手改。"):
                 graph_repo.set_status(s["sc_id"], approval.resubmit("SecScript", s["sc_status"]))
-                if s["vo_id"] and (s["vo_status"] is not None and s["vo_status"] >= 0):
-                    # 顺序先 sc→10 再 vo→-1（漏后者会旧音频带新台词上线）
-                    graph_repo.set_status(s["vo_id"], -1)
-                st.toast("已重新提交定稿审（SecScript=10）；该节音频已作废（-1），改过的句子重配时自动重做",
+                st.toast("已重新提交定稿审（SecScript=10）；重批后重拆只重配被改句，未变句审批结果保留",
                          icon="🔁")
                 st.rerun()
 
@@ -211,11 +220,11 @@ def _render_chapter_row(schema, ch):
             for s in sections:
                 _render_section_row(s, status)
 
-        # 各节台词预览（核心：review 对白质量）——读 SecScript.script_path 的台词 JSONL
+        # 各节台词预览（核心：review 对白质量）——渲染 SecScript.script_path 指向的 台词.md
         for s in sections:
             sp = s.get("script_path")
             if sp:
-                script_jsonl_view.render_preview(
+                script_lines_view.render_script_md(
                     sp, f"第{s['_no']}节 · {s['_full'].get('title') or s['id']}")
 
         # 编排子图：has_section→Section→contains→Scene→depicts→立绘缺口

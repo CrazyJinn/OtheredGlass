@@ -2,7 +2,9 @@
 
 # -1 作废重做（sync 级联重置后）；0 待处理；生产态 1/2；审批专属 10 待审 / 11 批准；驳回归 0。
 # 剧情：Chapter 章级结构段（0→10→11，10 由 structurer 直写无 submit 步，completion=11）；节级产物链
-# SecOutline（0→1 无审批）/ SecScript（0→1→10→11 定稿审）/ LineAudio（0→10→11 逐句音频审）各自独立节点，
+# SecOutline（0→1 无审批）/ SecScript（0→1→10→11 定稿审，script_path 指台词.md）/ LineAudio
+# （**逐句节点**：SecScript-[:produces {order}]->LineAudio 1:N；行级 status 只代表音频审批——
+# 台词文字的审批已在 SecScript 定稿审完成。say 行 0→10→11，非 say 行拆分即 11）。
 # Section 为纯编排容器无 status。
 NODE_STATUS = {
     "AppearanceStyle":     {"legal": [-1, 0, 1],          "completion": 1, "has_approval": False},
@@ -35,6 +37,10 @@ ENUM_OPTIONS = {
     "priority": ["P0", "P1", "P2"],
     "scene_type": ["dialogue", "functional", "combat", "ui"],
     "layer_type": ["background", "floor", "decor", "mask"],
+    # LineAudio 逐句行：op 行类型（choice/jump 暂不进图，建模后续设计）；pos 立绘位；kind 结局类型
+    "op": ["say", "narrate", "scene", "label", "ending"],
+    "pos": ["left", "center", "right"],
+    "kind": ["BE", "TE", "HE", "NE"],
 }
 
 STATUS_LABEL = {

@@ -19,8 +19,8 @@
 | [叙事基础.md](Schema/叙事基础.md) | 角色是谁、做了什么、在哪里、知道什么、在哪选择 | Character, Event, Location, Info, Choice |
 | [角色美术.md](Schema/角色美术.md) | 角色如何从文字变成画面 | AppearanceStyle, CostumeStyle, LanguageStyle, DesignSheet, IllusDesign, StandingIllustration |
 | [场景美术.md](Schema/场景美术.md) | 场景如何从地点变成画面 | Scene, SceneLayer |
-| [剧情.md](Schema/剧情.md) | 剧本章节编排（章→节→场景；结构/提纲/定稿/配音产物链） | Chapter, Section, SecOutline, SecScript, LineAudio |
-| [声音.md](Schema/声音.md) | 角色如何从文字变成声音 | VoiceDesign |
+| [剧情.md](Schema/剧情.md) | 剧本章节编排（章→节→场景；结构/提纲/定稿/逐句台词行产物链） | Chapter, Section, SecOutline, SecScript, LineAudio |
+| [声音.md](Schema/声音.md) | 角色如何从文字变成声音 + 场景 BGM | VoiceDesign, BgmTrack |
 
 ---
 
@@ -47,9 +47,10 @@
 | Chapter | snowflake Base62 | 剧本章节编排单元（章级：结构 / 分节规划） |
 | Section | snowflake Base62 | 章节内的节编排容器（纯编排：节序/标题/概要，无 status 与产物路径） |
 | SecOutline | snowflake Base62 | 节级提纲产物（outline_path；0→1 无审批） |
-| SecScript | snowflake Base62 | 节级定稿产物（script_path；0→1→10→11 定稿审） |
-| LineAudio | snowflake Base62 | 节级配音产物（0→10→11 声音审；wav 按 voice key 落盘） |
+| SecScript | snowflake Base62 | 节级定稿产物（script_path 指 台词.md；0→1→10→11 定稿审） |
+| LineAudio | snowflake Base62 | **逐句台词行**（SecScript-produces{order}-> 1:N；节点 id=行身份；行 status 只代表音频审批 0→10→11，非 say 行拆分即 11；wav 按 voice key 落盘） |
 | VoiceDesign | snowflake Base62 | 角色基线音色设计（instruct + 参考音频；多候选流程：3 候选 ref + 3×3 情绪试听 → dashboard 采用固化） |
+| BgmTrack | snowflake Base62 | 场景背景音乐（人工生成链；0→1 描述产出→2 用户手动放 wav 归档；无审批） |
 
 ---
 
@@ -83,10 +84,14 @@
 | **剧情** | | | | |
 | has_section | Chapter → Section | 1:N | ✅ | 章→节（组成关系，级联重做） |
 | has_outline | Section → SecOutline | 1:1 | ✅ | 节→提纲产物（编排变更级联作废产物链） |
-| produces | SecOutline → SecScript | 1:1 | ✅ | 提纲产出定稿（改提纲→定稿/配音作废） |
-| produces | SecScript → LineAudio | 1:1 | ✅ | 定稿产出配音（改定稿→配音作废） |
+| produces | SecOutline → SecScript | 1:1 | ✅ | 提纲产出定稿（改提纲→定稿/全部行作废） |
+| produces | SecScript → LineAudio | 1:N | ✅ | 定稿产出**逐句台词行**（order 大间距排序：初始 ×1000，句间插入取中点；改定稿→全部行作废，重拆按 text_sha1 恢复未变句） |
 | contains | Section → Scene | N:M | ❌ | 节编排场景顺序 |
+| stages | LineAudio(op=scene) → Scene | N:1 | ❌ | 场景块行→场景实体（块时段投影读 Scene.time_of_day） |
 | depicts | Scene → IllusDesign | N:N | ❌ | 场景需要的着装立绘（按需出图门控；变体经 expands_to 跟踪） |
+| **声音** | | | | |
+| has_voice_design | Character → VoiceDesign | 1:1 | ✅ | 角色基线音色设计 |
+| has_bgm | Scene → BgmTrack | 1:1 | ❌ | 场景→背景音乐（BGM 独立资产不级联；scene-design 编排推进） |
 
 ---
 
@@ -106,7 +111,6 @@ flowchart LR
         Appearance["AppearanceStyle"]
         Costume["CostumeStyle"]
         Language["LanguageStyle"]
-        Voice["VoiceDesign"]
     end
 
     subgraph 美术生产["美术生产"]
@@ -120,12 +124,17 @@ flowchart LR
         SceneLayer["SceneLayer"]
     end
 
+    subgraph 声音["声音"]
+        Voice["VoiceDesign"]
+        BgmTrack["BgmTrack"]
+    end
+
     subgraph 剧情["剧情"]
         Chapter["Chapter"]
         Section["Section"]
         SecOutline["SecOutline"]
         SecScript["SecScript"]
-        LineAudio["LineAudio"]
+        LineAudio["LineAudio（逐句行）"]
     end
 
     Character -->|"has_appearance ✅ 1:1"| Appearance
@@ -145,7 +154,9 @@ flowchart LR
     Chapter -->|"has_section ✅ 1:N"| Section
     Section -->|"has_outline ✅ 1:1"| SecOutline
     SecOutline -->|"produces ✅ 1:1"| SecScript
-    SecScript -->|"produces ✅ 1:1"| LineAudio
+    SecScript -->|"produces ✅ 1:N order"| LineAudio
     Section -->|"contains ❌ N:M"| Scene
+    LineAudio -->|"stages ❌ (scene行)"| Scene
     Scene -->|"depicts ❌ N:N"| IllusDesign
+    Scene -->|"has_bgm ❌ 1:1"| BgmTrack
 ```

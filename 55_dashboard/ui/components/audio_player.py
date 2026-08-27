@@ -1,7 +1,7 @@
 """声音审听组件：单 wav 试听（VoiceDesign 审批用）。
 
-逐句音频审（LineAudio）已迁移到 script_jsonl_view.render_audio_review（读台词 JSONL 行级
-audio 三态）；本组件只剩 render_wav 供 VoiceDesign 声音审（status=10）单文件试听 ref_audio。
+逐句音频审（LineAudio 逐句行）在 script_lines_view.render_audio_review（图行节点 status，
+按节聚合）；本组件只剩 render_wav 供 VoiceDesign 声音审（status=10）单文件试听 ref_audio。
 """
 from pathlib import Path
 import streamlit as st

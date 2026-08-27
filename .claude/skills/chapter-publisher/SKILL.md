@@ -1,8 +1,8 @@
 ---
 name: chapter-publisher
 description: |
-  把全章各节产物就绪（各节 SecOutline=1 ∧ SecScript=11 ∧ LineAudio=11，且所属 Chapter.status=11）的章节从创作区 `25_剧本/` 合并发布到运行时 `99_game/`：
-  用 generate_portrait_map.py（产出 chapter-map：portraits + bgm 两段）+ merge_sections_to_chapter.py --chapter-map 把各节 台词.jsonl 投影合并为单一章 JSON（立绘引用改写为 guid 整键 `<char>-<costume>-<variant>-<stand_id>`，解决同角色换装同名覆盖；BGM 从图 Scene-has_bgm->BgmTrack 注入 scene-block）拷到 99_game/data/chapters/ + status=11 的立绘/背景资源 + status=2 的 BgmTrack 音频到 99_game/assets/ + 更新 manifest + 产出章资源清单 chapter_packs.json（Web 按章分包依据）。
+  把全章各节产物就绪（各节 SecOutline=1 ∧ SecScript=11 ∧ 该节全部台词行 LineAudio=11，且所属 Chapter.status=11）的章节从图发布到运行时 `99_game/`：
+  用 generate_portrait_map.py（产出 chapter-map：portraits + bgm 两段）+ merge_sections_to_chapter.py --chapter --chapter-map 把全章图行（SecScript-produces{order}->LineAudio 逐句行，按节序/order 投影）合并为单一章 JSON（立绘引用改写为 guid 整键 `<char>-<costume>-<variant>-<stand_id>`，解决同角色换装同名覆盖；BGM 从图 Scene-has_bgm->BgmTrack 注入 scene-block）拷到 99_game/data/chapters/ + status=11 的立绘/背景资源 + status=2 的 BgmTrack 音频到 99_game/assets/ + 更新 manifest + 产出章资源清单 chapter_packs.json（Web 按章分包依据）。
   在全章各节定稿+逐句音频审批通过且所需立绘就绪、需发布到 Godot 运行时时使用；由用户直接触发（不在 plot-design 职责内，plot-design 推进到全章就绪即止）。
 argument-hint: <chapter_id>
 arguments:
@@ -12,8 +12,8 @@ allowed-tools: Read, Bash, Write, Edit
 
 # 章节发布（Chapter + 各 Section → 99_game）
 
-把审阅通过的章节从**创作/审阅区**（`25_剧本/`，按节存放）发布到**运行时区**（`99_game/`）：
-**把全章各节 `台词.jsonl` 投影合并为一个章 JSON** 落到 `99_game/data/chapters/`（Godot 只读 JSON，运行时不感知节层；台词行 id/audio 被投影丢弃，say.voice 取自行内 audio.key），拷贝章节涉及的立绘/背景图片/BGM 音频到 `99_game/assets/`，更新 `manifest.json`，并产出**章资源清单** `chapter_packs.json`（Web 按章分包导出依据）。
+把审阅通过的章节从**图**（LineAudio 逐句行，台词.md 为人机界面）发布到**运行时区**（`99_game/`）：
+**从图投影全章各节台词行合并为一个章 JSON** 落到 `99_game/data/chapters/`（Godot 只读 JSON，运行时不感知节层；行节点 id 等图字段被投影丢弃，say.voice 取自行节点 voice_key），拷贝章节涉及的立绘/背景图片/BGM 音频到 `99_game/assets/`，更新 `manifest.json`，并产出**章资源清单** `chapter_packs.json`（Web 按章分包导出依据）。
 发布是**确定性转换+拷贝**（非 LLM 创作），幂等——重复发布覆盖旧文件，无副作用。
 
 ## 参数
@@ -32,15 +32,16 @@ allowed-tools: Read, Bash, Write, Edit
 // (1) Chapter 本体 + 前驱校验
 MATCH (ch:Chapter {id:'<chapter_id>'})
 RETURN ch.title AS title, ch.chapter_no AS no, ch.status AS status;
-// (2) 各 Section（按 section_no）+ 产物链（SecOutline/SecScript/LineAudio）+ 前驱校验
+// (2) 各 Section（按 section_no）+ 产物链（SecOutline/SecScript + 逐句行聚合）+ 前驱校验
 MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(sec:Section)
 OPTIONAL MATCH (sec)-[:has_outline]->(ol:SecOutline)
 OPTIONAL MATCH (ol)-[:produces]->(sc:SecScript)
-OPTIONAL MATCH (sc)-[:produces]->(vo:LineAudio)
+OPTIONAL MATCH (sc)-[:produces]->(l:LineAudio)
 RETURN sec.section_no AS no, sec.title AS title,
        ol.status AS ol_status, ol.outline_path AS outline_path,
        sc.status AS sc_status, sc.script_path AS script_path,
-       vo.status AS vo_status
+       count(l) AS line_count,
+       sum(CASE WHEN coalesce(l.status, 0) = 11 THEN 1 ELSE 0 END) AS line_done
 ORDER BY sec.section_no;
 // (3) 全章 background 图层（Chapter→has_section→Section→contains→Scene→has_layer→SceneLayer）
 MATCH (ch:Chapter {id:'<chapter_id>'})-[:has_section]->(:Section)-[:contains]->(s:Scene)
@@ -58,14 +59,14 @@ RETURN DISTINCT char.name AS char_name, stand.id AS stand_id, stand.variant_labe
 ```
 
 **前驱校验**：
-- `ch.status` 必须 = `11`（结构已批）；**每节产物链必须就绪：`ol_status=1` ∧ `sc_status=11` ∧ `vo_status=11`**（提纲完成 + 定稿已批 + 声音已批）——章真正可发布 = `Chapter.status==11` AND 全部节产物就绪。任一不满足则停止并提示先在 dashboard 推进/审批对应节（含定稿审 10→11、配音、声音审 10→11）。
+- `ch.status` 必须 = `11`（结构已批）；**每节产物链必须就绪：`ol_status=1` ∧ `sc_status=11` ∧ `line_count>0 ∧ line_done=line_count`**（提纲完成 + 定稿已批 + 该节全部台词行声音已批）——章真正可发布 = `Chapter.status==11` AND 全部节产物就绪。任一不满足则停止并提示先在 dashboard 推进/审批对应节（含定稿审 10→11、拆分配音、逐句音频审）。
 - depicts 立绘：`status=11` 且 `image_path` 非空的才拷贝；`status≠11` 的逐个**警告**（运行时该变体走占位图），不阻断发布（让已就绪资源先上线）。
 - background SceneLayer：同理，`status=11` 且 `image_path` 非空才拷贝。
 - BgmTrack：`status=2` 且 `audio_path` 文件存在的才拷贝/注入；`<2` 或文件缺失逐个**警告**（该场景运行时无 BGM，静默），不阻断发布。
 
 ### 2. 合并拍平 + 拷贝资源到 99_game/
 
-**章 stem**：用 [voice_bundler.chapter_stem_from_meta](../../../.claude/scripts/voice/voice_bundler.py)(no, title) 构造 `chapter<NN>_<章概述>`（NN=`chapter_no` 零填充，章概述取 `ch.title` 核心主题，清洗 Windows 非法字符）——与 section-voice-publisher 共用此函数，保证节级 voice key 的 stem 与章 JSON 文件名**单一源、不漂移**。运行时文件名用 `<stem>.json`。各节定稿按 `section_no` 升序作为合并输入。
+**章 stem**：用 [voice_bundler.chapter_stem_from_meta](../../../.claude/scripts/voice/voice_bundler.py)(no, title) 构造 `chapter<NN>_<章概述>`（NN=`chapter_no` 零填充，章概述取 `ch.title` 核心主题，清洗 Windows 非法字符）——与 section-voice-publisher 共用此函数，保证节级 voice key 的 stem 与章 JSON 文件名**单一源、不漂移**。运行时文件名用 `<stem>.json`。合并输入 = 全章图行（工具内部按 section_no 节序 + produces.order 行序投影）。
 
 ```bash
 # 确保目标目录存在
@@ -76,17 +77,17 @@ mkdir -p 99_game/data/chapters 99_game/assets/portraits 99_game/assets/scenes 99
 #       创作区台词与 variant_label 不动）+ bgm 段（Scene-has_bgm->BgmTrack，仅 status=2 进 map）
 python 99_game/tools/generate_portrait_map.py '<chapter_id>' -o '99_game/data/.cache/chapter-map-<stem>.json'
 
-# (a) 剧本：各节 台词.jsonl 投影合并 → 99_game/data/chapters/<stem>.json（scenes[] 按 section_no 拼接；
+# (a) 剧本：从图投影全章台词行 → 99_game/data/chapters/<stem>.json（Chapter→Section(section_no)→
+#     SecScript-produces{order}->LineAudio；前置校验各节产物就绪；
 #     --chapter-map 改写 say.portrait 为整键 + 注入 scene-block.bgm，requires.portraits 随之重推导；
-#     台词行的 id/audio 投影丢弃，say.voice = 行内 audio.key）
+#     行节点 id 等图字段投影丢弃，say.voice = 行节点 voice_key）
 python 99_game/tools/merge_sections_to_chapter.py \
-  '<sec00_script_path>' '<sec01_script_path>' ... \
-  --chapter <NN> --title '<章标题>' \
+  --chapter '<chapter_id>' \
   --chapter-map '99_game/data/.cache/chapter-map-<stem>.json' \
   -o '99_game/data/chapters/<stem>.json'
 python 99_game/tools/validate_chapter.py '99_game/data/chapters/<stem>.json' 99_game/data/剧本.schema.json
-#   validate FAIL → 中断发布，报警（剧本 schema 不合，先回 25_剧本/ 修对应节台词 JSONL）
-#   注：合并工具内置 scene-block id 章内唯一性校验（重复则报错）——若报 id 重复，说明 structurer 预分配 / dialoguer 落盘环节 id 冲突，需回上游修正。
+#   validate FAIL → 中断发布，报警（剧本 schema 不合，回 台词.md 修对应节并重新走拆分/审批）
+#   注：合并工具内置 scene-block id 章内唯一性校验（重复则报错）——若报 id 重复，说明 structurer 预分配环节 id 冲突，需回上游修正。
 
 # (b) 立绘：绿幕原图 → opencv 抠绿+发丝精修+头位归一化 → 99_game/assets/portraits/<整键>.png
 #     4角采样自适应抠绿（替代硬编码色）+ grabCut 发丝精修 + despill 去绿边；以人物高/7.5 头长为尺度、
@@ -171,18 +172,18 @@ python 99_game/tools/chapter_packs_updater.py '<stem>' \
 
 ## 与 section-voice-publisher 的边界
 
-`voice` 字段（`say.voice`）由 [section-voice-publisher](../section-voice-publisher/SKILL.md) 在**节级定稿后**经 `bind-audio` 写进台词行 `audio.key`，本 skill 投影合并时自动带进章 JSON：
+`voice` 字段（`say.voice`）由 [section-voice-publisher](../section-voice-publisher/SKILL.md) 在**节级定稿后**经 `bind-graph` 写进行节点 `voice_key`，本 skill 图投影合并时自动带进章 JSON：
 
-- **生产时序**：chapter-dialoguer（台词.jsonl → SecScript=10→11）→ **section-voice-publisher**（节级 TTS + bind-audio 写行级 audio → LineAudio=10→逐句审→11）→ **chapter-publisher**（投影台词行[voice=audio.key] + 立绘/BGM + 补 manifest.voices / chapter_packs.voices）。
-- 本 skill 合并时台词行已含 audio.key（投影函数 `jsonl_script.project` 把 `audio.key` 投为 `say.voice`）→ 合并后章 JSON 每 say 自带 voice，**无需再注入**。
+- **生产时序**：chapter-dialoguer（台词.md → SecScript=10→11）→ **section-voice-publisher**（拆分进图 → 节级 TTS + bind-graph 写行节点 → 行 status=10→逐句审→11）→ **chapter-publisher**（图投影台词行[voice=voice_key] + 立绘/BGM + 补 manifest.voices / chapter_packs.voices）。
+- 本 skill 合并时 say 行节点已含 voice_key（投影把 `voice_key` 投为 `say.voice`）→ 合并后章 JSON 每 say 自带 voice，**无需再注入**。
 - **本 skill 末尾补 manifest.voices + chapter_packs.voices**（节级阶段章未合并，这两处无法写；合并后用 voice_bundler 读章 JSON 推导补齐，见第 3、4 步）。
-- **行 id 稳定寻址**：voice key 末段是台词行 id（非数组下标）——台词插入/删除/移动行不影响其他行 key；某句台词被改（stale 重配）后重跑该节 section-voice-publisher 覆盖对应 wav 即可，无全节重配。
-- chapter JSON 的 `meta.requires` 不含 voices（voice 键按行 id 算，不进 requires）。
+- **行身份稳定寻址**：voice key 末段是 LineAudio 行节点雪花 id——台词.md 插入/删除/移动行不影响其他行 key；某句台词被改（stale 重配）后重跑该节 section-voice-publisher 覆盖对应 wav 即可，无全节重配。
+- chapter JSON 的 `meta.requires` 不含 voices（voice 键按行节点 id 算，不进 requires）。
 
 ## 参考文档
 
-- 剧本格式与 manifest 映射（含节级创作与发布合并）：[剧本.md](../chapter-dialoguer/references/剧本.md)
-- 节合并工具：[99_game/tools/merge_sections_to_chapter.py](../../../99_game/tools/merge_sections_to_chapter.py)（N 节 YAML → 1 章 JSON）
+- 台词.md 格式（人读定稿）与图行投影：[script_splitter.py](../../../.claude/scripts/script_splitter.py)（parse_md——格式规范的机器侧权威）+ [merge_sections_to_chapter.py](../../../99_game/tools/merge_sections_to_chapter.py)（graph_lines_to_doc 图行投影）
+- 节合并工具：[99_game/tools/merge_sections_to_chapter.py](../../../99_game/tools/merge_sections_to_chapter.py)（图行 → 1 章 JSON）
 - manifest 生成器：[99_game/tools/manifest_builder.py](../../../99_game/tools/manifest_builder.py)
 - 章资源清单更新器：[99_game/tools/chapter_packs_updater.py](../../../99_game/tools/chapter_packs_updater.py)
 - 剧本加密（Web）：[99_game/tools/encrypt_chapter.py](../../../99_game/tools/encrypt_chapter.py) ↔ 运行时 [99_game/scripts/util/ScriptCipher.gd](../../../99_game/scripts/util/ScriptCipher.gd)

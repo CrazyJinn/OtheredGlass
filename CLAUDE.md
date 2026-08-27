@@ -44,7 +44,7 @@ echo "MATCH (n) RETURN count(n) AS c" | python .claude/scripts/cypher_exec.py --
 
 ### 3. 生产链 = DAG + status + sync 级联
 
-每条生产链是有向无环图（如角色美术：`Character → AppearanceStyle → DesignSheet → IllusDesign → StandingIllustration`；角色声音设计：`Character →has_voice_design→ VoiceDesign`，由 `char-voice-design` 产、`char-design` 管（status 10 生产完成即待审→11，无 submit 步，下游配音要求 11），下游供 `section-voice-publisher` 节级配音；剧情节级产物链：`Section →has_outline→ SecOutline →produces→ SecScript →produces→ LineAudio`，Section 为纯编排容器**无 status**，三产物各用通用 status（SecOutline 0→1 / SecScript 0→10→11 / LineAudio 0→10→11），链式 sync 级联——改提纲自动作废定稿+配音、改定稿自动作废配音）。两个核心机制：
+每条生产链是有向无环图（如角色美术：`Character → AppearanceStyle → DesignSheet → IllusDesign → StandingIllustration`；角色声音设计：`Character →has_voice_design→ VoiceDesign`，由 `char-voice-design` 产、`char-design` 管（status 10 生产完成即待审→11，无 submit 步，下游配音要求 11），下游供 `section-voice-publisher` 节级配音；剧情节级产物链：`Section →has_outline→ SecOutline →produces→ SecScript -[:produces {order}]-> LineAudio(×N 逐句台词行)`，Section 为纯编排容器**无 status**，三产物各用通用 status（SecOutline 0→1 / SecScript 0→1→10→11 / LineAudio 逐句行：say 行 0→10→11 行级音频审、非 say 行拆分即 11），链式 sync 级联——改提纲自动作废定稿+全部行、改定稿自动作废全部行，重拆时 text_sha1 匹配且 wav 在的未变句恢复 10 只重配被改句）。**台词双轨分离**：`台词.md` 是人读/人改的唯一定稿格式（机器可解析，script_splitter.parse_md）；图行是结构化真相——行身份=节点雪花 id（voice key 末段，md 插入/删除行不漂移）、顺序=produces 边 order（大间距 ×1000，句间插入取中点）；`台词.jsonl` 已停产。两个核心机制：
 
 - **`status` 字段**跟踪节点状态，统一语义：`-1` 作废重做 / `0` 待处理 / `1` 已完成 / `2` 图片完成 / `10` 待审 / `11` 批准。规则在 [55_dashboard/core/status.py](55_dashboard/core/status.py) 的 `NODE_STATUS` 显式定义（**刻意不解析 .md**，.md 是散文式说明、格式不稳）。
 - **`sync` 边属性**：上游节点属性变更后，沿 `sync=true` 出边 BFS，把可达下游 `status` 重置为 **`-1`**（作废重做）；`sync=false` 阻断（如叙事边 `wears`、`relation`）。级联实现在 [55_dashboard/core/cascade.py](55_dashboard/core/cascade.py)。
@@ -117,7 +117,7 @@ godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit   # GUT 单
 ## 何时用 skill / agent
 
 - 要推进某角色的整条美术链 → 调 `char-design` agent（传角色名或 ID）。
-- 要推进某场景的美术 → 调 `scene-design` agent。
+- 要推进某场景的美术或 BGM → 调 `scene-design` agent（BgmTrack 缺口由其编排 `bgm-designer` 兜底建并产描述；wav 由用户手动生成归档）。
 - 要从创作文本提取叙事实体/关系 → `nrt-narrative-extractor`（离线产 CSV + import.cypher）。
 - 要手动加节点/边或发现图缺口 → `nrt-graph-builder`。
 - 要给叙事图做体检/补全缺口、按角色聚焦多轮增长 → `nrt-narrative-grower`（可选聚焦入参 + 多轮迭代，产 `02_剧情数据/<日期>_round<N>_建议.json`，dashboard 审批写回；范围限定基础节点 Character/Event/Location/Info/Choice）。

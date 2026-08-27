@@ -80,7 +80,7 @@ RETURN DISTINCT other.name AS name, vd.instruct AS instruct, vd.description AS d
 
 ```bash
 rm -rf '14_声音设计/<角色名>/candidates'
-rm -f '14_声音设计/<角色名>/<角色名>_ref.wav' '14_声音设计/<角色名>/<角色名>_ref_16k.wav'
+rm -f '14_声音设计/<角色名>/<角色名>_ref.wav'
 ```
 
 **② design-candidates**（Qwen 同一 instruct × 3 次采样出候选 ref 24k + manifest）：
@@ -123,11 +123,11 @@ SET v.name = '<角色名>声音设计',
     v.status = 10;
 ```
 
-> `ref_audio_path` 提前写惯例正式路径（此刻文件尚不存在，无害——下游配音门是 status=11；dashboard「采用」时固化为该路径，下游 CosyVoice publish 按需重采样 16k）。不写 `clone_prompt_path`：CosyVoice 路线不产 `.pt`，该字段为遗留兼容字段（见 [声音.md](../../../00_init/Schema/声音.md) 废弃说明）。
+> `ref_audio_path` 提前写惯例正式路径（此刻文件尚不存在，无害——下游配音门是 status=11；dashboard「采用」时固化为该路径，下游 voice_clone_runner publish 以 24k 原生直接消费，无重采样副产物）。不写 `clone_prompt_path`：Qwen3 Base clone 的 prompt 在合成时内存构建、不落盘 `.pt`，该字段为遗留兼容字段（见 [声音.md](../../../00_init/Schema/声音.md) 废弃说明）。
 
 ### 4. 汇报
 
-列出：角色名、VD_ID、新建/复用、instruct 全文、ref_text、候选数（3）与试听数（9，Qwen3 Base 引擎）、manifest 路径（candidates.json）、status=10（候选待选）。附提示：到 dashboard 审批中心（声音审）逐候选试听 ref + 3 情绪试听 →「采用」（固化为 `<角色名>_ref.wav` 并清理临时文件夹，status 仍 10）→ 二审通过→11（下游配音要求 11）/驳回→0；三个候选都不理想可驳回后重跑本 skill（候选会重新采样覆盖）。注意向用户说明：**试听引擎（Qwen3 Base，情绪靠文本语义自适应）与下游配音引擎（CosyVoice3，按 say.emotion instruct 控情绪）不同**，成品音色表现以配音结果为准。
+列出：角色名、VD_ID、新建/复用、instruct 全文、ref_text、候选数（3）与试听数（9，Qwen3 Base 引擎）、manifest 路径（candidates.json）、status=10（候选待选）。附提示：到 dashboard 审批中心（声音审）逐候选试听 ref + 3 情绪试听 →「采用」（固化为 `<角色名>_ref.wav` 并清理临时文件夹，status 仍 10）→ 二审通过→11（下游配音要求 11）/驳回→0；三个候选都不理想可驳回后重跑本 skill（候选会重新采样覆盖）。注意向用户说明：**试听与下游配音同引擎（Qwen3 Base Voice Clone）、同 ref+ref_text**——试听即成品引擎的真实预览；情绪演绎靠文本语义自适应（配音期由 tts_text 变体承载），试听句的韵律表现可直接外推到成品。
 
 ## 参考文档
 

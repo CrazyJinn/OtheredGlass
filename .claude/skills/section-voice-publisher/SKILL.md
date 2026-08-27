@@ -1,35 +1,39 @@
 ---
 name: section-voice-publisher
 description: |
-  把单节定稿（SecScript.status=11）的台词 JSONL 逐句克隆 TTS 语音：
-  按本节出场角色 VoiceDesign（图 Character→has_voice_design→VoiceDesign，status=11 已批准）：
-  tasks-from-section --only 挑行（missing/rejected/stale——驳回重生成与台词改动只重做需重配的句，未变句的 wav 与 approved 状态原样复用）→ **LLM 逐句判别 emotion**（12 词表，按台词上下文）→ Qwen VoiceDesign ensure-ref（env/.venv-qwen，voice_clone_runner.py）→ CosyVoice3 inference_instruct2（env/.venv-cosyvoice，cosyvoice_runner.py publish，按判别 emotion 映射 instruct）逐句克隆 → 母带落 15_声音/<char>/<key>.wav → voice_bundler.py sync 拷贝运行时副本到 99_game/assets/voices/ + bind-audio 写回 台词.jsonl say 行 audio{key,emotion,status:pending,attempts,text_sha1}。
-  voice key = <char>-<chapter_stem>-<scene_id>-<line_id>（行 id 稳定寻址，插入/删除行不漂移）。兜底建 LineAudio 产物节点（SecScript-[:produces]->LineAudio）写 status=10（逐句音频审）。在单节定稿已批、需要配音或重配被驳回/已改句时使用（由 plot-design 单节聚焦触发）。
+  把单节已批定稿（SecScript.status=11 的 台词.md）拆分进图并逐句克隆 TTS 语音：
+  ① 拆分对齐进图（script_splitter.py：台词.md ↔ 已有 LineAudio 逐句行对齐——新增建节点+produces{order 中点}、修改沿用节点置 0、删除 DETACH DELETE、级联作废未变句恢复，幂等）→
+  ② 兜底建立绘缺口（据拆分后图行 (scene, who, portrait) 引用：选定 IllusDesign 建 depicts 边 + 为每个被引用变体建 StandingIllustration(status=0) + expands_to/ref_style 边——台词.md 的 [表情] 标注在此变成图结构）→
+  ③ 按本节出场角色 VoiceDesign（图 Character→has_voice_design→VoiceDesign，status=11 已批准）挑行（图查 say 行 status=0——待配/被驳回/stale 均归一于此）→
+  ④ LLM 逐句判别 emotion（12 词表）+ 产 tts_text 配音变体（原文加省略号/叹号等语气符号）→
+  ⑤ Qwen3 单 venv（env/.venv-qwen，voice_clone_runner.py）：ensure-ref 出/复用 ref → publish 按 Qwen3 Base Voice Clone 逐句克隆（输入 tts_text 变体承载情绪，emotion 仅作图标注）→
+  母带落 15_声音/<char>/<key>.wav → voice_bundler.py sync 拷贝运行时副本到 99_game/assets/voices/ + bind-graph 写回图行节点（voice_key/emotion/tts_text/attempts/text_sha1/status=10 待审）。
+  voice key = <char>-<chapter_stem>-<scene_block_id>-<行节点id>（节点 id 即行身份，插入/删除行不漂移）。在单节定稿已批、需要拆分/配音或重配被驳回/已改句时使用（由 plot-design 单节聚焦触发）。
 argument-hint: <section_id>
 arguments:
   - section_id
 allowed-tools: Read, Bash, Write, Edit
 ---
 
-# 节级配音发布（SecScript 定稿 → 台词 JSONL 行级 audio 绑定）
+# 节级拆分进图 + 配音发布（SecScript 定稿 → 逐句 LineAudio → 行级 TTS）
 
-把**单节 `台词.jsonl`** 的 say 行按需克隆出 TTS 语音，行级结果写回 JSONL 的 `audio` 对象：
-按本节出场角色 `VoiceDesign`，用 [voice_clone_runner.py](../../../.claude/scripts/voice/voice_clone_runner.py) ensure-ref 出/复用 ref_audio → [cosyvoice_runner.py](../../../.claude/scripts/voice/cosyvoice_runner.py) 按判别 emotion 逐句 clone → 母带落 `15_声音/<角色名>/`，`sync` 拷贝运行时副本到 `99_game/assets/voices/`，再用 [voice_bundler.py](../../../.claude/scripts/voice/voice_bundler.py) `bind-audio` 给每个（重）生成 say 行写 `audio`（`status:"pending"` 待审）。
+把**单节已批定稿**（`SecScript.status=11` 的 `台词.md`）先**拆分对齐进图**（逐句 LineAudio 节点 + `SecScript-[:produces {order}]->LineAudio`），再对图中 say 行按需克隆 TTS 语音，行级结果写回图节点属性：
+按本节出场角色 `VoiceDesign`，用 [voice_clone_runner.py](../../../.claude/scripts/voice/voice_clone_runner.py) ensure-ref 出/复用 ref_audio → 同脚本 `publish` 逐句 clone（Qwen3 Base Voice Clone，输入 tts_text 变体承载情绪，均 env/.venv-qwen）→ 母带落 `15_声音/<角色名>/`，`sync` 拷贝运行时副本到 `99_game/assets/voices/`，再用 [voice_bundler.py](../../../.claude/scripts/voice/voice_bundler.py) `bind-graph` 给每个（重）生成行写节点属性（`status=10` 待审）。
 
-> **按需挑行**：`tasks-from-section --only missing,rejected,stale` 只把「未配音 / 被驳回 / 台词已改（text_sha1 不匹配）」的句生成任务——**approved 且未改的句不重配**（wav 与行状态原样复用）。首次配音时全部 say 行都是 missing，等价全量。
-> **voice key 行 id 寻址**：`<char>-<chapter_stem>-<scene_id>-<line_id>`，line_id 是台词行稳定 id（节内递增永不复用）——插入/删除/移动行不改变其他行的 key，旧 wav 不成孤儿。
+> **拆分幂等**（script_splitter.py 对齐算法）：台词.md 与图行按签名（op+who+text）difflib 对齐——未变行原样保留（级联 -1 的未变 say 行且 wav 在 → 恢复 10，**resubmit 微调回路下未变行连 status 都不动**，已批 11 保持）；text 变化行沿用节点置 0（voice key 不变覆盖 wav）；md 新增行建新节点（order 取上下句中点，**单句插入不丢任何行**）；md 删除行 DETACH DELETE。order 中点耗尽时全节重排（order 不进 voice key，安全）。
+> **行身份 = 节点雪花 id**（voice key 末段，永不复用）——md 插入/删除/移动行不改变其他行的 key，旧 wav 不成孤儿。
 
 ## 参数
 
 | 参数 | 说明 |
 |------|------|
-| section_id | Section 节点 ID（snowflake）。用于沿产物链查 SecScript.script_path + 所属 Chapter（算 stem） |
+| section_id | Section 节点 ID（snowflake）。沿产物链查 SecScript + 所属 Chapter（算 stem）+ 逐句行 |
 
 ## 前置条件
 
 - 本节 `SecScript.status=11`（定稿已批）；否则停止，提示先走 chapter-dialoguer + 定稿审。
 - 所属 `Chapter.status=11`（结构已批）。
-- 本节出场角色的 `VoiceDesign.status=11`（声音已批）。未就绪（无 VoiceDesign 或 status≠11）角色**警告跳过**（该角色台词行保持 missing，运行时静默不播），提示先经 `char-design` 跑 `char-voice-design` 并审批，不阻断其他角色配音。
+- 本节出场角色的 `VoiceDesign.status=11`（声音已批）。未就绪（无 VoiceDesign 或 status≠11）角色**警告跳过**（该角色 say 行保持 status=0 待配，运行时静默不播），提示先经 `char-design` 跑 `char-voice-design` 并审批，不阻断其他角色配音。
 
 ## 流程
 
@@ -42,7 +46,8 @@ RETURN sc.script_path AS script_path, sc.status AS sc_status, sc.id AS sc_id,
        ch.chapter_no AS no, ch.title AS title, ch.status AS ch_status;
 ```
 
-读台词 JSONL `<script_path>` 的 meta 行取 `requires.characters`（本节出场角色名列表），再查其 VoiceDesign：
+- `sc_status≠11` → 停止（先定稿审）。
+- 出场角色 = 图行 distinct `who`（首拆图无行时读 `台词.md` 的说话行 `who` 集合）。再查其 VoiceDesign：
 
 ```cypher
 // (2) 本节出场角色 VoiceDesign
@@ -55,38 +60,83 @@ RETURN c.name AS char, v.status AS vstatus, v.instruct AS instruct,
 - `vstatus≠11` 的角色警告跳过（不写进 profiles）。
 - **stem 构造**：由 `voice_bundler.chapter_stem_from_meta(no, title)` 算（`chapter<NN>_<title>`，NN=chapter_no 零填充），与 chapter-publisher 产出的章 JSON 文件名一致——本 skill 与 chapter-publisher 共用此函数，杜绝 stem 漂移。
 
-### 2. 算 tasks（挑行 → LLM 判别 emotion → 写 tasks JSON）
-
-#### 2a. 挑行算任务
+### 2. 拆分对齐进图（幂等——每次配音前必跑）
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_bundler.py" tasks-from-section '<script_path>' \
-  --chapter-no <no> --chapter-title '<title>' \
-  --only 'missing,rejected,stale' \
+python "${CLAUDE_SKILL_DIR}/../../scripts/script_splitter.py" split \
+  --section '<section_id>' \
+  --report '99_game/data/.cache/split-<stem>-sec<MM>.json'
+```
+
+- 前置：SecScript=11（脚本自校验）。解析失败（md 格式违例）→ 脚本报**行号+原文**，就地修 md 后重跑（**不要**绕过拆分直接配音）。
+- 读报告：`created/updated/deleted/restored/reordered` 计数与 warnings（Scene 缺失等）。**首次拆分** = 全部 created；**微调重拆** = 仅 updated（被改句）；**级联重拆** = restored（恢复 10）+ 0（重配）。
+- 报告 warnings 里的 Scene 缺失 → 提示用户先跑 scene-designer 建场景（stages 边缺不阻塞配音）。
+
+### 2b. 兜底建立绘缺口（台词.md 的 [表情] 标注 → 图结构）
+
+拆分后图行已带 portrait 引用（`LineAudio.portrait`）。对**本节出现的每个 (scene, who, portrait) 组合**（say 行且 portrait 非空）检查立绘可用性，缺则兜底建——这是台词.md `[表情]` 标注变成图结构的地方（chapter-dialoguer 只写文字不建缺口）：
+
+1. **选定 IllusDesign**（着装决策）：查该角色着装候选——优先场景相关事件着装（`Character-[:involved]->(:Event)-[:wears]->(:CostumeStyle)-[:outfit_for]->(illus)`），兜底角色默认着装（`Character-[:has_costume]->(:CostumeStyle)-[:outfit_for]->(illus)`）。选定一个 IllusDesign 后：
+
+```cypher
+// depicts 边（sync=false 引用边；同 Scene 同 IllusDesign 经 MERGE 去重）
+MATCH (s:Scene {name:'<scene_name>'}), (i:IllusDesign {id:'<illus_id>'})
+MERGE (s)-[r:depicts]->(i) SET r.sync = false;
+```
+
+2. **建变体缺口节点**（该 (IllusDesign, portrait) 变体尚不存在时；`stand_id` 用 `snowflake_base62.py -n 1 -q` 新生成）：
+
+```cypher
+// 查变体是否已存在（同 IllusDesign 下同 variant_label）
+MATCH (i:IllusDesign {id:'<illus_id>'})-[:expands_to]->(stand:StandingIllustration)
+WHERE stand.variant_label = '<portrait>'
+RETURN stand.id AS id;
+
+// 不存在则兜底建（status=0 待 plot-design 按需出图）+ ref_style 参考边
+MERGE (stand:StandingIllustration {id:'<stand_id>'})
+SET stand.variant_label = '<portrait>', stand.status = 0;
+MATCH (i:IllusDesign {id:'<illus_id>'}), (stand:StandingIllustration {id:'<stand_id>'})
+MERGE (i)-[r1:expands_to]->(stand) SET r1.sync = true;
+MATCH (char:Character {name:'<who>'})-[:has_voice_style]->(ls:LanguageStyle),
+      (stand:StandingIllustration {id:'<stand_id>'})
+MERGE (ls)-[r2:ref_style]->(stand) SET r2.sync = true;
+```
+
+- 同一 IllusDesign 被多 Scene 引用时变体池共用（出图按 IllusDesign 级一次出多场景用）；已存在的 (IllusDesign, variant) 只补 depicts 边，不重建变体。
+- 缺口建立的变体清单进段 7 汇报（plot-design 后续沿 `Scene-depicts->IllusDesign-expands_to->stand` 推进出图）。
+
+### 3. 算 tasks（挑行 → LLM 判 emotion + 产 tts_text 变体 → 写 tasks JSON）
+
+#### 3a. 挑行算任务（图查 say 行 status=0）
+
+```bash
+python "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_bundler.py" tasks-from-graph \
+  --section '<section_id>' \
   -o '99_game/data/.cache/voice-tasks-<stem>-sec<MM>.json'
 ```
 
-`tasks-from-section`：读台词 JSONL，只挑行状态 ∈ `--only` 的 say 行（stale = `audio.text_sha1 ≠ sha1(当前 text)`），产出 `{char: [{key, text, scene_id, line_id}]}`——**不含 emotion**（下一步判别）。key 与章级推导同源（行 id 寻址）。
+`tasks-from-graph`：图查 `say 且 status=0` 的行（待配/被驳回/stale 拆分时已归一于此）→ 按 produces.order 遍历切块推导 scene_block_id → 产出 `{char: [{key, text, scene_id, node_id}]}`——**不含 emotion/tts_text**（下一步做）。key = `<char>-<stem>-<scene_block_id>-<节点id>`。`--nodes <id,...>` 可只挑指定行（dashboard 重生成 deeplink 用）。
 
-#### 2b. LLM 逐句判别 emotion（本 skill 的核心判断步骤）
+#### 3b. LLM 逐句判别 emotion + 产 tts_text 配音变体（本 skill 的核心判断步骤）
 
-**读本节台词 JSONL 全文**（对话上下文），对 tasks 里的每个任务句，从 12 情绪词表选一个：
+**读本节 `台词.md` 全文**（对话上下文），对 tasks 里的每个任务句做两件事：
 
-`平静` / `高兴` / `悲伤` / `愤怒` / `震惊` / `无奈` / `调侃` / `温柔` / `冷漠` / `紧张` / `恐惧` / `坚定`
+1. **判别 emotion**（12 词表选一）：`平静` / `高兴` / `悲伤` / `愤怒` / `震惊` / `无奈` / `调侃` / `温柔` / `冷漠` / `紧张` / `恐惧` / `坚定`。判别依据：该句台词文本 + 前后对话语境 + 该角色在此刻的情绪走向。
+2. **产 tts_text 配音变体**：在台词原文基础上做**仅标点/停顿级修饰**——按情绪加省略号（迟疑/喃喃）、叹号（惊讶/愤怒）、问号强化、破折号拖音、逗号停顿；**禁止增删改任何汉字**（运行时字幕显示原文 text，变体发声必须与字幕字面一致——加字会音字不符出戏）。原文已足够口语化时 `tts_text` 等于原文。强烈语气诉求（语气词/引导词，如「哼」「咦」「你说」）不写在变体里，而是建议作者写进台词.md 原文（text 层改动走 stale 自动重配，字幕同步）。驳回句重配时变体保持原文级（标点至多微调），靠**同文本重采样**的韵律随机性换演绎——仍不满意说明是 ref 音色问题，回 char-voice-design 层调 instruct。
 
-判别依据：该句台词文本 + 前后对话语境 + 该角色在此刻的情绪走向（台词文件无 emotion 字段——情绪判断完全在本步骤做）。**编辑 tasks JSON** 给每个任务项写入 `"emotion": "<词表项>"`（Edit 工具改第 2a 产出的文件）。词表即 [emotion_instruct.json](../../../.claude/scripts/voice/emotion_instruct.json) 的键（未映射词 publish 兜底"用自然的语气说"）。
+**编辑 tasks JSON**（Edit 工具改第 3a 产出的文件）给每个任务项写入 `"emotion": "<词表项>"` 与 `"tts_text": "<变体>"`。emotion 仅作图标注与 dashboard 筛选展示（Qwen Base clone 无 instruct 通道，不参与合成参数）；**情绪表达全部由 tts_text 变体承载**；缺 tts_text 回落原文。
 
-> 重生成（rejected/stale）句也要重判——驳回往往因为语气不对。
+> 重生成（被驳回/stale）句也要重判重写——驳回往往因为语气不对。
 
-### 3. 构造单节 profiles.json
+### 4. 构造单节 profiles.json
 
 把第 1 步查到的就绪角色 VoiceDesign（`instruct/ref_text/ref_audio_path` 三字段）写成 `99_game/data/.cache/voice-profiles-<stem>-sec<MM>.json`，格式 `{char: {instruct, ref_text, ref_audio_path}}`。
 
-### 4. 批量克隆 wav（双 venv）
+### 5. 批量克隆 wav（单 venv）
 
-> CosyVoice 要 `transformers==4.51`，与 Qwen3-TTS（4.57）冲突，故两套 python 分离（见 [15_声音/README.md](../../../15_声音/README.md)）：`env/.venv-qwen`（Python 3.14，VoiceDesign 出 ref）+ `env/.venv-cosyvoice`（Python 3.10，CosyVoice3 clone）。
+> 两步同 venv `env/.venv-qwen`（Python 3.14 + Qwen3-TTS）——项目唯一声音链 venv（见 [15_声音/README.md](../../../15_声音/README.md)）。
 
-#### 4a. Qwen VoiceDesign ensure-ref（env/.venv-qwen）
+#### 5a. Qwen VoiceDesign ensure-ref（env/.venv-qwen）
 
 ```bash
 env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_clone_runner.py" ensure-ref \
@@ -95,68 +145,52 @@ env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice
 
 `ref_audio_path` 文件存在则复用，否则 Qwen VoiceDesign 合成（`14_声音设计/<char>/<char>_ref.wav`，24kHz）。正常情况下 ref_audio 已由 char-voice-design 在设计阶段合成，此处多为 [reuse]。
 
-#### 4b. CosyVoice3 clone（env/.venv-cosyvoice，按判别 emotion instruct）
+#### 5b. Qwen3 Base Voice Clone 逐句合成（env/.venv-qwen，输入 tts_text 变体承载情绪）
 
 ```bash
-PYTHONPATH="$(python "${CLAUDE_SKILL_DIR}/../../scripts/voice/paths.py" --pythonpath)" \
-  env/.venv-cosyvoice/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../../scripts/voice/cosyvoice_runner.py" publish \
+env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_clone_runner.py" publish \
   '99_game/data/.cache/voice-tasks-<stem>-sec<MM>.json' \
   --profiles '99_game/data/.cache/voice-profiles-<stem>-sec<MM>.json' \
-  --out-dir '15_声音'   # 母带 <out-dir>/<角色名>/<key>.wav
+  --out-dir '15_声音'   # 母带 <out-dir>/<角色名>/<key>.wav（24kHz 原生）
 ```
 
-逐句 try/except：单句失败记入 failed 列表（退出码 1 + stderr 逐条列出）——**失败句不 bind**（保持 missing/rejected 下轮重挑），成功句正常。汇报必须包含 failed 清单。
+逐句 try/except：单句失败记入 failed 列表（退出码 1 + stderr 逐条列出）——**失败句不 bind**（保持 status=0 下轮重挑），成功句正常。汇报必须包含 failed 清单。
 
-#### 4c. 同步运行时副本（母带 → 99_game/assets/voices/，dashboard 逐句审在此试听）
+#### 5c. 同步运行时副本（母带 → 99_game/assets/voices/，dashboard 逐句审在此试听）
 
 ```bash
 python "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_bundler.py" sync
 ```
 
-### 5. 行级结果写回台词 JSONL（bind-audio）
+### 6. 行级结果写回图节点（bind-graph）
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_bundler.py" bind-audio '<script_path>' \
+python "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_bundler.py" bind-graph \
   --tasks '99_game/data/.cache/voice-tasks-<stem>-sec<MM>.json' \
   --keys '<成功句的 key 逗号列表，失败句排除>'
 ```
 
-`bind-audio`（经 jsonl_script，保行字节稳定——只 diff 被 bind 的行）：给每个成功句的 say 行写
-`audio: {key, emotion: <判别值>, status: "pending", attempts: <旧+1，缺省 1>, text_sha1: <当前台词 sha1>}`。
-4b 无失败时省略 `--keys`（默认全部）。
+`bind-graph`（单事务）：给每个成功行节点写 `voice_key / emotion / tts_text / attempts=旧+1 / text_sha1=sha1(原文) / status=10`（配完待审，dashboard 逐句音频审）。5b 无失败时省略 `--keys`（默认全部）。
 
 > **不碰** manifest.voices / chapter_packs.voices：章 JSON 还没合并，此时写入会污染或残缺。这两处由 chapter-publisher 合并完成后统一补（读合并后章 JSON 推导，覆盖式写入）。
 
-### 6. 写 status（MERGE 兜底建 LineAudio + produces 边 + 写 status=10）
+### 7. 汇报与审批去向
 
-`--multi` 单事务；`vo_id` 用 `snowflake_base62.py` 新生成（已存在 LineAudio 时复用其 id）：
-
-```cypher
-// 1. MERGE 兜底建 LineAudio 产物节点
-MERGE (vo:LineAudio {id:'<vo_id>'})
-SET vo.name = '<节标题>配音',
-    vo.status = 10;      // 逐句音频审（直写，不经 submit）
-
-// 2. 兜底建 produces 边（SecScript→LineAudio，sync=true：改定稿级联作废配音）
-MATCH (sc:SecScript {id:'<sc_id>'}), (vo:LineAudio {id:'<vo_id>'})
-MERGE (sc)-[r:produces]->(vo) SET r.sync = true;
-```
-
-status=10 进 dashboard 审批中心「逐句音频审」：每 say 行一张卡（文本 + 判别 emotion 徽章 + wav 试听 + 单句通过/驳回），**节级「通过」gate = 全部含 audio 的 say 行 approved 且无 rejected**。单句驳回 → 行 `status:"rejected"` + 卡片下方出现「重生成」deeplink 唤起 plot-design 单节聚焦重跑本 skill（`--only rejected,stale` 只重做被驳回句）。整节驳回 → 全行归 pending + 节点归 0（重配，不改台词）。
+status=10 的行进 dashboard 审批中心「逐句音频审」（按节分组）：每 say 行一张卡（原文/变体对照 + 判别 emotion 徽章 + wav 试听 + 单句通过=11/驳回=0），**节级「通过」gate = 该节全部行 status=11**。单句驳回 → 行 status=0 + 卡片下方「重生成」deeplink 唤起 plot-design 单节聚焦重跑本 skill（`--nodes <被驳回行id>` 只重做该句）。整节驳回 → 该节 say 行全置 0（重配，台词不变）。
 
 ## 重做与对齐
 
-- **行 id 不漂移**：voice key 末段是行 id（非数组下标）——台词 JSONL 插入/删除/移动行不会使其他行的 key 失效，旧 wav 不成孤儿。台词被改的行由 `text_sha1` 判 stale 自动重挑重配；人工微调走 dashboard「重新提交审批」（SecScript 11→10 + LineAudio -1），重配时同样只重做 stale 句。
-- **status=-1 级联**：若 LineAudio（或上游）被 sync 级联重置，LineAudio `-1` 直接重跑本 skill（missing/stale 全挑，覆盖 wav）；若 SecScript `-1`，先经 dialoguer 重做定稿升 11，再重跑本 skill。
+- **行身份不漂移**：voice key 末段是 LineAudio 节点雪花 id——台词.md 插入/删除/移动行不会使其他行的 key 失效，旧 wav 不成孤儿。台词被改的行在重拆时判 stale 置 0 自动重配；人工微调走 dashboard「重新提交审批」（仅 sc→10，**不动行节点**），重批后重拆只重做被改句，未变句审批结果原样保留。
+- **status=-1 级联**：SecScript/上游被 sync 级联 → 该节全部行 -1。重跑本 skill：拆分对齐把「text_sha1 匹配且 wav 在」的行恢复 10（音频复用不重配），其余置 0 重配；若 SecScript 本身 -1，先经 dialoguer 重做定稿升 11，再重跑本 skill。
 
 ## 汇报
 
-列出：节 script_path、stem、本轮挑行统计（missing/rejected/stale 各 N 句，approved 复用 M 句）、各角色产出 wav 数（`{char: N}`）、跳过的角色（无 VoiceDesign 或未就绪）、**failed 清单（char/key/错误）**、bind 的行数、LineAudio.status=10。提示用户去 dashboard 审批中心做逐句音频审。
+列出：节 script_path、stem、拆分对齐统计（created/updated/deleted/restored/reordered）、本轮挑行统计（待配 N 句，复用保持 M 句）、各角色产出 wav 数（`{char: N}`）、跳过的角色（无 VoiceDesign 或未就绪）、**failed 清单（char/key/错误）**、bind 的行数、行级 status=10 计数。提示用户去 dashboard 审批中心做逐句音频审。
 
 ## 参考文档
 
-- 台词 JSONL 与 audio 行级状态：[jsonl_script.py](../../../.claude/scripts/jsonl_script.py)（load/save/needs_regen/set_audio——行字节稳定与 stale 判定的唯一实现）
-- voice 键生成与绑定：[voice_bundler.py](../../../.claude/scripts/voice/voice_bundler.py)（make_voice_key / tasks-from-section --only / bind-audio）
+- 拆分对齐：[script_splitter.py](../../../.claude/scripts/script_splitter.py)（parse_md/align/split——台词.md↔图行对齐与 order 中点的唯一实现）
+- 挑行与绑定：[voice_bundler.py](../../../.claude/scripts/voice/voice_bundler.py)（make_voice_key / tasks-from-graph --nodes / bind-graph）
 - 基线音色设计：[char-voice-design](../char-voice-design/SKILL.md)（VoiceDesign 生成）
-- 合并衔接：[chapter-publisher](../chapter-publisher/SKILL.md)（audio.key 随投影进章 JSON + 补 manifest/chapter_packs）
+- 合并衔接：[chapter-publisher](../chapter-publisher/SKILL.md)（voice_key 随图投影进章 JSON + 补 manifest/chapter_packs）
 - 声音 Schema：[00_init/Schema/声音.md](../../../00_init/Schema/声音.md)（含 BgmTrack）

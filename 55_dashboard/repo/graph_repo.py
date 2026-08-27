@@ -48,12 +48,12 @@ def get_nodes(label):
 # 美术生产链边类型（限定遍历范围，避免把叙事 Event/Info/其他角色拉进美术子图）
 _ART_EDGES = "has_appearance|has_voice_style|has_voice_design|has_costume|produces|outfit_for|expands_to|ref_style"
 
-# 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
-_SCENE_EDGES = "has_scene|has_layer"
+# 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图；has_bgm 让 BgmTrack 进场景子图）
+_SCENE_EDGES = "has_scene|has_layer|has_bgm"
 
 # 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio；
-# Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration）
-_PLOT_EDGES = "has_section|has_outline|produces|contains|depicts|expands_to"
+# Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration；LineAudio(scene行)→stages→Scene）
+_PLOT_EDGES = "has_section|has_outline|produces|contains|depicts|expands_to|stages"
 
 
 def get_character_graph(char_id):
@@ -213,6 +213,57 @@ def get_section_of_lineaudio(vo_id):
             id=vo_id,
         ).single()
     return rec["sid"] if rec else None
+
+
+def get_script_lines(sc_id):
+    """取 SecScript 的逐句行（LineAudio，按 produces.order 升序）。
+
+    行 dict 含节点属性 + order +（op=scene 行）stages→Scene 的 name/time_of_day。
+    块归属/voice key 的 scene 段由调用方按 order 遍历遇 op=scene 行切块推导（行上不冗余存）。
+    """
+    with _session() as s:
+        rs = s.run(
+            """
+            MATCH (sc:SecScript {id:$id})-[p:produces]->(l:LineAudio)
+            OPTIONAL MATCH (l)-[:stages]->(s:Scene)
+            RETURN l.id AS id, l.name AS name, l.op AS op, l.who AS who,
+                   l.portrait AS portrait, l.pos AS pos, l.text AS text,
+                   l.tts_text AS tts_text, l.scene_block_id AS scene_block_id,
+                   l.voice_key AS voice_key, l.emotion AS emotion,
+                   l.attempts AS attempts, l.text_sha1 AS text_sha1,
+                   l.status AS status, p.order AS ord,
+                   s.name AS scene_name, s.time_of_day AS scene_time
+            ORDER BY p.order
+            """,
+            id=sc_id,
+        )
+        return [dict(r) for r in rs]
+
+
+def get_script_id_of_section(sec_id):
+    """取 Section 的 SecScript id + status（行查询入口）。无 SecScript 返回 (None, None)。"""
+    with _session() as s:
+        rec = s.run(
+            "MATCH (:Section {id:$id})-[:has_outline]->()-[:produces]->(sc:SecScript) "
+            "RETURN sc.id AS sid, sc.status AS st LIMIT 1",
+            id=sec_id,
+        ).single()
+    return (rec["sid"], rec["st"]) if rec else (None, None)
+
+
+def get_script_of_line(line_id):
+    """取 LineAudio 行节点的上游 SecScript + 所属 Section（逐句审批分组用）。
+
+    返回 {"sc_id", "sc_name", "sec_id"} 或 None。
+    """
+    with _session() as s:
+        rec = s.run(
+            "MATCH (sec:Section)-[:has_outline]->()-[:produces]->(sc:SecScript)"
+            "-[:produces]->(:LineAudio {id:$id}) "
+            "RETURN sc.id AS sc_id, sc.name AS sc_name, sec.id AS sec_id LIMIT 1",
+            id=line_id,
+        ).single()
+    return dict(rec) if rec else None
 
 
 def get_upstream_character_id(node_id):

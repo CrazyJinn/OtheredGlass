@@ -1,28 +1,32 @@
-"""voice 资源键生成与 chapter JSON 绑定（搬运层共享逻辑）。
+"""voice 资源键生成与图行级 audio 绑定（搬运层共享逻辑）。
 
 被 section-voice-publisher / chapter-publisher 与手动流程共用，保证
-「wav/ogg 文件名 / manifest.voices 键 / chapter JSON 的 say.voice 字段」三处对齐。
+「wav/ogg 文件名 / manifest.voices 键 / 章 JSON 的 say.voice 字段」三处对齐。
 
-键格式：<char>-<chapter_stem>-<scene_id>-<line_id>
+键格式：<char>-<chapter_stem>-<scene_block_id>-<行节点id>
   - chapter_stem = chapter JSON 文件名（去扩展名），如 chapter00_序章
-  - scene_id = scene 分隔行的 id（章内唯一，由 chapter-structurer 预分配）
-  - line_id = 台词行 id（L<NNNN>，节内递增永不复用，水位在台词.jsonl 的 meta.line_seq）
-→ scene_id 章内唯一 + line_id 节内唯一 → 章内全局唯一；stem 保证跨章不冲突。
-**稳定寻址**：插入/删除/移动行不改变其他行的 key（替代旧 line_idx 位置寻址的漂移痛点）。
+  - scene_block_id = scene 行的块 id（章内唯一，由 chapter-structurer 预分配）；
+    行上不冗余存块归属，由挑行时按 produces.order 遍历遇 op=scene 行切块推导
+  - 行节点 id = LineAudio 节点雪花 id（行身份，永不复用；台词.jsonl 已停产）
+→ scene_block_id 章内唯一 + 节点 id 全局唯一 → 章内全局唯一；stem 保证跨章不冲突。
+**稳定寻址**：md 插入/删除/移动行不改变其他行的 key（wav 不成孤儿）。
 
+节级挑行/绑定走图（tasks-from-graph / bind-graph，经 cypher_exec.py）：
+拆分对齐进图见 script_splitter.py（section-voice-publisher 第一步）。
 与 portrait_key.make_key 同源设计：纯函数无 I/O、Windows 非法字符清洗、三处对齐契约。
-节级读写台词 JSONL 一律经 jsonl_script（.claude/scripts/jsonl_script.py，本项目唯一实现）。
 """
 import argparse
+import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]  # .claude/scripts/
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
-import jsonl_script  # noqa: E402
+CYPHER_EXEC = _SCRIPTS_DIR / "cypher_exec.py"
 
 # 键进入 wav/ogg 文件名（assets/voices/<key>.wav），需清洗 Windows 非法字符
 _ILLEGAL = re.compile(r'[\\/:*?"<>|]')
@@ -34,12 +38,51 @@ def _sanitize(s) -> str:
     return _ILLEGAL.sub("_", str(s).strip())
 
 
-def make_voice_key(char: str, chapter_stem: str, scene_id, line_id) -> str:
-    """生成 voice 资源键：<char>-<chapter_stem>-<scene_id>-<line_id>。
+def _text_sha1(text: str) -> str:
+    """与 script_splitter.text_sha1 同实现（stale 判定依据，不做 normalize）。"""
+    return hashlib.sha1((text or "").encode("utf-8")).hexdigest()
 
-    如 陆择-chapter00_序章-s00_酒店-L0002。line_id 是台词行稳定 id（非数组下标）。
+
+def _q(v) -> str:
+    """Cypher 字符串字面量（单引号，转义 \\ 与 '）。None → null。"""
+    if v is None:
+        return "null"
+    s = str(v).replace("\\", "\\\\").replace("'", "\\'")
+    return f"'{s}'"
+
+
+def _run_cypher(cypher: str) -> list:
+    """调 cypher_exec.py --json，提取返回的 JSON 数组（cypher_exec 输出含连接提示行）。"""
+    proc = subprocess.run(
+        [sys.executable, str(CYPHER_EXEC), "-c", cypher, "--json"],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    out = proc.stdout
+    start, end = out.find("["), out.rfind("]")
+    if start == -1 or end == -1:
+        raise RuntimeError(
+            f"cypher_exec 未返回 JSON（退出码 {proc.returncode}）:\nstderr: {proc.stderr}\nstdout: {out}"
+        )
+    return json.loads(out[start:end + 1])
+
+
+def _run_cypher_multi(statements: list) -> None:
+    """多语句单事务写图（--stdin --multi）；任一失败整体回滚。"""
+    proc = subprocess.run(
+        [sys.executable, str(CYPHER_EXEC), "--stdin", "--multi"],
+        input="\n".join(statements), capture_output=True, text=True, encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"写图失败（退出码 {proc.returncode}）:\n{proc.stderr}")
+
+
+def make_voice_key(char: str, chapter_stem: str, scene_block_id, node_id) -> str:
+    """生成 voice 资源键：<char>-<chapter_stem>-<scene_block_id>-<行节点id>。
+
+    如 陆择-chapter00_序章-s00_酒店-Nv93TkkkgC。末段是 LineAudio 行节点雪花 id
+    （行身份，永不复用）。
     """
-    parts = [_sanitize(char), _sanitize(chapter_stem), _sanitize(scene_id), _sanitize(line_id)]
+    parts = [_sanitize(char), _sanitize(chapter_stem), _sanitize(scene_block_id), _sanitize(node_id)]
     return "-".join(parts)
 
 
@@ -53,14 +96,12 @@ def chapter_stem_from_meta(no, title) -> str:
 
     节级配音（section-voice-publisher）在章 JSON 合并前就要算 key，靠本函数从 Chapter 节点
     字段算出与章级等价的 stem，保证节级/章级 voice key 单一源、不漂移。如 (0, '序章') → 'chapter00_序章'。
-    chapter-publisher 算 stem 也应改调本函数。
     """
     return f"chapter{int(no):02d}_{_sanitize(title)}"
 
 
-# ── 章级（读合并后章 JSON {meta, scenes}；voice 键已由节级 bind-audio 落进台词 JSONL，
-#    章 JSON 的 say.voice 是 jsonl_script.project 投影 audio.key 的结果，此处四模式服务
-#    全章重算/清单推导等搬运场景）──
+# ── 章级（读合并后章 JSON {meta, scenes}；say.voice 是发布投影 voice_key 的结果，
+#    此处三模式服务全章重算/清单推导等搬运场景）──
 
 def iter_say_lines(chapter: dict):
     """遍历 chapter JSON 的所有 say 行，yield (scene_id, line, line_voice_key_or_None)。"""
@@ -72,10 +113,7 @@ def iter_say_lines(chapter: dict):
 
 
 def collect_voice_keys(chapter: dict) -> list:
-    """列本章所有 say 的 voice 键（供 chapter_packs_updater --voices）。
-
-    章内 say.voice 由投影带入；缺失（未配音行）跳过。
-    """
+    """列本章所有 say 的 voice 键（供 chapter_packs_updater --voices）。"""
     return [v for _, _, v in iter_say_lines(chapter) if v]
 
 
@@ -85,60 +123,96 @@ def build_manifest_voices(chapter: dict, ext: str = "wav") -> dict:
     return {k: f"assets/voices/{k}.{ext}" for k in collect_voice_keys(chapter)}
 
 
-# ── 节级（读台词 JSONL，经 jsonl_script）──
+# ── 节级（图行：LineAudio 按 produces.order；拆分对齐见 script_splitter.py）──
 
-def collect_section_tasks(rows, chapter_stem: str, only=(), line_ids=()) -> dict:
-    """台词 JSONL rows → 按角色分组的待配任务：{char: [{key, text, scene_id, line_id}]}。
+def fetch_section(section_id: str) -> dict:
+    """查节产物链 + Chapter（stem）+ 全部行（ORDER BY order）。
 
-    only：行状态过滤（jsonl_script.needs_regen 的 reason 集合，如 missing,rejected,stale；
-    缺省 = 全部 say 行）。line_ids：行 id 白名单（缺省不过滤）。
-    emotion **不预填**——由 section-voice-publisher 的 LLM 逐句判别后写入 tasks JSON，
-    cosyvoice_runner 缺省兜底 '平静'。
+    返回 {sc_id, sc_status, script_path, chapter_no, chapter_title, lines:[...]}。
+    行含 op/who/text/status 等节点属性 + ord + scene 行的 scene_block_id。
     """
-    wanted = {s.strip() for s in line_ids if s.strip()}
+    head = _run_cypher(
+        "MATCH (ch:Chapter)-[:has_section]->(:Section {id:'" + section_id + "'})"
+        "-[:has_outline]->(:SecOutline)-[:produces]->(sc:SecScript) "
+        "RETURN sc.id AS sc_id, sc.status AS sc_status, sc.script_path AS p, "
+        "ch.chapter_no AS no, ch.title AS title LIMIT 1"
+    )
+    if not head:
+        raise ValueError(f"Section {section_id} 无产物链（先跑 chapter-dialoguer）")
+    lines = _run_cypher(
+        "MATCH (:Section {id:'" + section_id + "'})-[:has_outline]->(:SecOutline)"
+        "-[:produces]->(sc:SecScript)-[p:produces]->(l:LineAudio) "
+        "RETURN l.id AS id, l.op AS op, l.who AS who, l.text AS text, "
+        "l.status AS status, l.attempts AS attempts, l.voice_key AS voice_key, "
+        "l.text_sha1 AS text_sha1, l.scene_block_id AS scene_block_id, p.order AS ord "
+        "ORDER BY p.order"
+    )
+    out = dict(head[0])
+    out["lines"] = lines
+    return out
+
+
+def collect_graph_tasks(lines: list, chapter_stem: str, node_ids=()) -> dict:
+    """图行 → 按角色分组的待配任务：{char: [{key, text, scene_id, node_id}]}。
+
+    挑行条件 = say 行 status=0（待配/被驳回；stale 句在拆分对齐时已被置 0）。
+    node_ids：行节点 id 白名单（重生成 deeplink 定位被驳回句；缺省不过滤）。
+    emotion / tts_text **不预填**——由 section-voice-publisher 的 LLM 逐句判别/变体后
+    写入 tasks JSON，publish 缺省回落原文。
+    """
+    wanted = {s.strip() for s in node_ids if s.strip()}
     tasks = {}
-    for scene_id, r in jsonl_script.iter_say_rows(rows):
-        if wanted and r.get("id") not in wanted:
+    scene_id = ""
+    for l in lines:
+        if l.get("op") == "scene":
+            scene_id = l.get("scene_block_id") or ""
             continue
-        if only and jsonl_script.line_state(r) not in only:
+        if l.get("op") != "say" or l.get("status") != 0:
             continue
-        who = r.get("who", "")
+        if wanted and l.get("id") not in wanted:
+            continue
+        who = l.get("who") or ""
         tasks.setdefault(who, []).append({
-            "key": make_voice_key(who, chapter_stem, scene_id, r.get("id", "")),
-            "text": r.get("text", ""),
+            "key": make_voice_key(who, chapter_stem, scene_id, l.get("id", "")),
+            "text": l.get("text") or "",
             "scene_id": scene_id,
-            "line_id": r.get("id", ""),
+            "node_id": l.get("id", ""),
         })
     return tasks
 
 
-def bind_audio(path, tasks: dict, keys=None) -> dict:
-    """把（重）生成结果写回台词 JSONL 的 say 行 audio（经 jsonl_script.save，保行字节稳定）。
+def bind_graph(tasks: dict, keys=None) -> dict:
+    """把（重）生成结果写回图行节点（经 cypher_exec --stdin --multi 单事务）。
 
-    tasks：{char: [{key, text, scene_id, line_id, emotion?}]}（cosyvoice publish 的成功集）。
-    keys：可选键过滤（只 bind 生成成功的句）。写：key/emotion/status='pending'/
-    attempts=旧+1（缺省 1）/text_sha1=当前台词。返回 {bound, skipped} 统计。
+    tasks：{char: [{key, text, node_id, emotion?, tts_text?}]}（publish 的成功集）。
+    keys：可选键过滤（只 bind 生成成功的句）。写：voice_key/emotion/tts_text/
+    attempts=旧+1/text_sha1=当前台词 sha1/status=10（配完待审）。
+    返回 {bound, skipped} 统计。
     """
-    rows = jsonl_script.load(path)
     key_set = {k.strip() for k in keys if k.strip()} if keys else None
+    stmts = []
     bound = skipped = 0
     for char, items in tasks.items():
         for it in items:
             if key_set is not None and it.get("key") not in key_set:
                 skipped += 1
                 continue
-            row = jsonl_script.find_row(rows, it.get("line_id", ""))
-            if row is None:
+            node_id = it.get("node_id") or ""
+            if not node_id:
                 skipped += 1
                 continue
-            old = row.get("audio") or {}
-            jsonl_script.set_audio(
-                rows, it["line_id"],
-                key=it["key"], emotion=it.get("emotion"), status="pending",
-                attempts=int(old.get("attempts", 0)) + 1, resha1=True,
+            stmts.append(
+                f"MATCH (l:LineAudio {{id:{_q(node_id)}}}) "
+                f"SET l.voice_key={_q(it.get('key'))}, "
+                f"l.emotion={_q(it.get('emotion'))}, "
+                f"l.tts_text={_q(it.get('tts_text'))}, "
+                f"l.attempts=coalesce(l.attempts,0)+1, "
+                f"l.text_sha1={_q(_text_sha1(it.get('text') or ''))}, "
+                f"l.status=10;"
             )
             bound += 1
-    jsonl_script.save(path, rows)
+    if stmts:
+        _run_cypher_multi(stmts)
     return {"bound": bound, "skipped": skipped}
 
 
@@ -149,7 +223,6 @@ def sync_runtime(master_dir, runtime_dir, ext: str = "wav"):
     返回 {copied, skipped, missing_master} 统计。
     """
     import shutil
-
     master, runtime = Path(master_dir), Path(runtime_dir)
     runtime.mkdir(parents=True, exist_ok=True)
     copied = skipped = 0
@@ -180,12 +253,10 @@ def _write_tasks(tasks, out):
     else:
         Path(out).parent.mkdir(parents=True, exist_ok=True)
         Path(out).write_text(data, encoding="utf-8")
-        n_lines = sum(len(v) for v in tasks.values())
-        return n_lines
     return sum(len(v) for v in tasks.values())
 
 
-# ── CLI（4 章级 + 2 节级 + 1 同步）──
+# ── CLI（3 章级 + 2 节级图版 + 1 同步）──
 
 def _cmd_manifest(args):
     path = Path(args.chapter_json)
@@ -204,24 +275,25 @@ def _cmd_list(args):
     print(",".join(keys))  # CSV，供 chapter_packs_updater --voices
 
 
-def _cmd_tasks_from_section(args):
-    """台词 JSONL → 按角色分组任务 JSON（节级配音；只挑待配行，emotion 留给 skill 判别）。"""
-    stem = chapter_stem_from_meta(args.chapter_no, args.chapter_title)
-    rows = jsonl_script.load(args.sec_jsonl)
-    only = tuple(s.strip() for s in args.only.split(",") if s.strip()) if args.only else ()
-    line_ids = tuple(s.strip() for s in args.lines.split(",")) if args.lines else ()
-    tasks = collect_section_tasks(rows, stem, only=only, line_ids=line_ids)
+def _cmd_tasks_from_graph(args):
+    """图行（say 且 status=0）→ 按角色分组任务 JSON（节级配音；emotion/tts_text 留给 skill）。"""
+    info = fetch_section(args.section)
+    if info["sc_status"] != 11:
+        raise ValueError(f"SecScript.status={info['sc_status']}（须 11 定稿已批；先拆分对齐见 script_splitter）")
+    stem = chapter_stem_from_meta(info["no"], info["title"])
+    node_ids = tuple(s.strip() for s in args.nodes.split(",")) if args.nodes else ()
+    tasks = collect_graph_tasks(info["lines"], stem, node_ids=node_ids)
     n_lines = _write_tasks(tasks, args.out)
-    print(f"[tasks-from-section] stem={stem} {n_lines} lines / {len(tasks)} chars"
-          + (f" only={args.only}" if args.only else "") + f" -> {args.out or 'stdout'}")
+    print(f"[tasks-from-graph] stem={stem} {n_lines} lines / {len(tasks)} chars"
+          + (f" nodes={args.nodes}" if args.nodes else "") + f" -> {args.out or 'stdout'}")
 
 
-def _cmd_bind_audio(args):
-    """把生成结果（含判别 emotion）写回台词 JSONL say 行的 audio（pending 待审）。"""
+def _cmd_bind_graph(args):
+    """把生成结果（含判别 emotion + tts_text 变体）写回图行节点（status=10 待审）。"""
     tasks = _load_json(args.tasks)
     keys = [s.strip() for s in args.keys.split(",")] if args.keys else None
-    stats = bind_audio(args.sec_jsonl, tasks, keys)
-    print(f"[bind-audio] bound={stats['bound']} skipped={stats['skipped']} -> {args.sec_jsonl}")
+    stats = bind_graph(tasks, keys)
+    print(f"[bind-graph] bound={stats['bound']} skipped={stats['skipped']} -> LineAudio")
 
 
 def _cmd_sync(args):
@@ -230,7 +302,7 @@ def _cmd_sync(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="voice 资源键生成与 chapter JSON 绑定（三处对齐）")
+    ap = argparse.ArgumentParser(description="voice 资源键生成与图行级 audio 绑定（三处对齐）")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p_man = sub.add_parser("manifest", help="推导 manifest.voices 段并合并写入 manifest.json（读章 JSON）")
@@ -243,21 +315,16 @@ def main():
     p_list.add_argument("chapter_json")
     p_list.set_defaults(func=_cmd_list)
 
-    p_tfs = sub.add_parser("tasks-from-section", help="台词 JSONL → 按角色分组任务 JSON（节级配音，供 cosyvoice_runner publish；只挑待配行）")
-    p_tfs.add_argument("sec_jsonl", help="台词 JSONL 路径（SecScript.script_path）")
-    p_tfs.add_argument("--chapter-no", type=int, required=True, help="Chapter.chapter_no")
-    p_tfs.add_argument("--chapter-title", required=True, help="Chapter.title")
-    p_tfs.add_argument("--only", default=None,
-                       help="行状态过滤（逗号分隔：missing,rejected,stale；缺省=全部 say 行）")
-    p_tfs.add_argument("--lines", default=None, help="行 id 白名单（逗号分隔，缺省不过滤）")
-    p_tfs.add_argument("-o", "--out", help="输出 JSON 路径（缺省打印到 stdout）")
-    p_tfs.set_defaults(func=_cmd_tasks_from_section)
+    p_tfg = sub.add_parser("tasks-from-graph", help="图行（say 且 status=0）→ 按角色分组任务 JSON（节级配音，供 voice_clone_runner publish）")
+    p_tfg.add_argument("--section", required=True, help="Section 节点 ID（snowflake）")
+    p_tfg.add_argument("--nodes", default=None, help="行节点 id 白名单（逗号分隔，重生成被驳回句用；缺省不过滤）")
+    p_tfg.add_argument("-o", "--out", help="输出 JSON 路径（缺省打印到 stdout）")
+    p_tfg.set_defaults(func=_cmd_tasks_from_graph)
 
-    p_ba = sub.add_parser("bind-audio", help="把生成结果（含判别 emotion）写回台词 JSONL say 行 audio（pending 待审）")
-    p_ba.add_argument("sec_jsonl", help="台词 JSONL 路径（SecScript.script_path）")
-    p_ba.add_argument("--tasks", required=True, help="tasks JSON 路径（tasks-from-section 产出 + skill 已填 emotion）")
-    p_ba.add_argument("--keys", default=None, help="只 bind 指定 key（逗号分隔，cosyvoice 失败句排除用；缺省=全部）")
-    p_ba.set_defaults(func=_cmd_bind_audio)
+    p_bg = sub.add_parser("bind-graph", help="把生成结果（含 emotion + tts_text 变体）写回图行节点（status=10 待审）")
+    p_bg.add_argument("--tasks", required=True, help="tasks JSON 路径（tasks-from-graph 产出 + skill 已填 emotion/tts_text）")
+    p_bg.add_argument("--keys", default=None, help="只 bind 指定 key（逗号分隔，publish 失败句排除用；缺省=全部）")
+    p_bg.set_defaults(func=_cmd_bind_graph)
 
     p_sync = sub.add_parser("sync", help="把 15_声音/<char>/<key>.wav 母带同步拷贝到 99_game/assets/voices/（运行时副本，manifest 键不变）")
     p_sync.add_argument("--master", default="15_声音", help="母带根目录（<master>/<char>/<key>.wav）")
@@ -266,7 +333,11 @@ def main():
     p_sync.set_defaults(func=_cmd_sync)
 
     args = ap.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except (ValueError, RuntimeError) as e:
+        sys.stderr.write(f"失败: {e}\n")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

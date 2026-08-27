@@ -1,27 +1,27 @@
-"""Qwen VoiceDesign ref 生成器（char-voice-design 候选/试听 + section-voice-publisher ref 复用，env/.venv-qwen 跑）。
+"""Qwen3 声音链脚本（设计 + 配音全链：char-voice-design 候选/试听 + section-voice-publisher 逐句配音）。
 
-全章配音的 ref_audio 由本脚本用 Qwen3-TTS VoiceDesign 合成（按 VoiceDesign.instruct）。
-CosyVoice clone（[cosyvoice_runner.py](cosyvoice_runner.py)，env/.venv-cosyvoice 跑）消费这些 ref_audio。
+**env/.venv-qwen（项目内 venv, Python 3.14 + Qwen3-TTS）跑——项目唯一声音链 venv。**
 
-**env/.venv-qwen（项目内 venv, Python 3.14 + Qwen3-TTS）跑**；CosyVoice clone 在 env/.venv-cosyvoice（Python 3.10）跑——
-两个 venv 分离（transformers 4.51 vs 4.57 冲突）。调用方 skill 编排两套 venv。
-
-> 本脚本只负责「设计音色 → 出 ref_audio」。clone（逐句台词 → wav）由 cosyvoice_runner 做。
-> 早期版本的 Qwen Base clone（.pt + generate_voice_clone）已废弃——CosyVoice 替代（支持情绪 instruct）。
+> 本脚本承担声音链全部合成：设计音色出 ref_audio（VoiceDesign）+ 逐句配音 clone
+> （Base Voice Clone，`publish` 子命令）。早期 CosyVoice3 inference_instruct2 后端
+> （cosyvoice_runner.py）已废弃删除。
 >
 > 子命令：`ensure-ref`（单 ref，下游配音用） / `design-candidates`（多候选流程第一步：
 > 同一 instruct × N 次采样出候选 ref 24k + candidates.json manifest） / `audition`
-> （第二步：Qwen3 Base Voice Clone 出每候选 3 情绪试听，情绪靠试听句文本语义自适应）。
+> （第二步：Qwen3 Base Voice Clone 出每候选 3 情绪试听，情绪靠试听句文本语义自适应） /
+> `publish`（逐句配音：按角色 ref + tts_text 变体逐句 clone，母带 → 15_声音/<char>/；
+> 情绪由 tts_text 变体承载，emotion 不参与合成参数）。
 
 前置：
-  - Qwen VoiceDesign 模型路径：from paths import（QWEN_VOICE_DESIGN，读 settings.json）
+  - Qwen VoiceDesign / Base 模型路径：from paths import（读 settings.json）
   - VoiceDesign（instruct + ref_text + ref_audio_path）
 
-输出：ref_audio 落 VoiceDesign.ref_audio_path（如 14_声音设计/<char>/<char>_ref.wav，24kHz），CosyVoice 用。
+输出：ref_audio 落 VoiceDesign.ref_audio_path（如 14_声音设计/<char>/<char>_ref.wav，24kHz），publish 用。
 """
 import argparse
 import json
 import os
+import sys
 
 # 脚本所在目录自动在 sys.path[0]，无需 insert 即可 `from paths import`
 import torch
@@ -208,8 +208,67 @@ def audition(manifest_path: str, device="cuda:0") -> dict:
     return {"produced": produced, "failed": failed}
 
 
+def publish(tasks: dict, profiles: dict, out_dir, keys=None, device="cuda:0") -> dict:
+    """按角色批量 Qwen3 Base Voice Clone（逐句配音母带落 out_dir/<char>/<key>.wav）。
+
+    tasks: {char: [{key, text, tts_text?, emotion, ...}]}（voice_bundler tasks-from-graph 产
+           + skill 已填 emotion/tts_text）
+    profiles: {char: {ref_audio_path, ref_text, ...}}（VoiceDesign 字典；ref_text 供 clone
+           prompt 构建，须与 ref 音频逐字一致——统一长句天然满足）
+    keys: 可选键过滤（列表）——单句/批量重生成只跑指定句；缺省 = tasks 全部。
+    ref 以 24k 原生消费（Qwen3 clone 原生采样率，无 16k 重采样副产物）。
+    emotion 不参与合成参数（Base clone 无 instruct 通道）——情绪全部由 tts_text 变体承载，
+    缺 tts_text 回落 text 原文；emotion 仅随 bind-graph 写图作标注。
+    返回 {produced: {char: [wav_path]}, skipped: [char], failed: [{char, key, error}]}。
+    逐句 try/except：单句失败记入 failed 不炸整批（bind-graph 只 bind 成功句，失败句保持
+    status=0 下轮重挑）。
+    """
+    key_set = {k.strip() for k in keys if k.strip()} if keys else None
+    model = None  # 懒加载一次（全部角色 skip 时不加载）
+    produced, skipped, failed = {}, [], []
+    for char, items in tasks.items():
+        profile = profiles.get(char) or {}
+        ref_path = profile.get("ref_audio_path")
+        ref_text = profile.get("ref_text")
+        if not ref_path or not os.path.exists(ref_path) or not ref_text:
+            print(f"[skip] {char}: 缺 ref_audio_path/ref_text 或文件不存在（先跑 ensure-ref / 补 profiles ref_text）")
+            skipped.append(char)
+            continue
+        todo = [it for it in items if key_set is None or it.get("key") in key_set]
+        if not todo:
+            continue
+        char_dir = os.path.join(out_dir, char)
+        os.makedirs(char_dir, exist_ok=True)
+        try:
+            if model is None:
+                model = load_base_model(device=device)
+            # 每角色构建一次可复用 prompt（提取 codec code + 说话人向量），同 audition
+            prompt = model.create_voice_clone_prompt(ref_audio=ref_path, ref_text=ref_text)
+        except Exception as e:  # 模型加载/prompt 构建失败：该角色全部句记 failed，不炸整批
+            for it in todo:
+                failed.append({"char": char, "key": it.get("key"), "error": str(e)})
+            print(f"[fail] {char}: clone prompt 构建失败: {e}")
+            continue
+        paths = []
+        for it in todo:
+            try:
+                # 情绪承载唯一通道：tts_text 变体（LLM 由原文产，加语气符号引导）；缺省回落原文
+                tts_input = it.get("tts_text") or it["text"]
+                wavs, sr = model.generate_voice_clone(
+                    text=tts_input, language="Chinese", voice_clone_prompt=prompt)
+                out = os.path.join(char_dir, f"{it['key']}.wav")
+                sf.write(out, wavs[0], sr)
+                paths.append(out)
+            except Exception as e:  # 单句失败不炸整批
+                failed.append({"char": char, "key": it.get("key"), "error": str(e)})
+                print(f"[fail] {char}/{it.get('key')}: {e}")
+        produced[char] = paths
+        print(f"[ok] {char}: {len(paths)} wav -> {char_dir}")
+    return {"produced": produced, "skipped": skipped, "failed": failed}
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Qwen VoiceDesign ref 生成器（配音链 ref 来源，系统 python）")
+    ap = argparse.ArgumentParser(description="Qwen3 声音链脚本（设计 ref + 逐句配音 clone，env/.venv-qwen 跑）")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p_ref = sub.add_parser("ensure-ref", help="确保各角色 ref_audio 就绪（复用或 VoiceDesign 合成）")
@@ -233,6 +292,16 @@ def main():
     p_aud.add_argument("--device", default="cuda:0")
     p_aud.set_defaults(_mode="audition")
 
+    p_pub = sub.add_parser(
+        "publish",
+        help="按角色批量 Qwen3 Base Voice Clone（逐句配音母带 → 15_声音/<char>/，消费 tasks.json + profiles.json）")
+    p_pub.add_argument("tasks", help="voice_bundler.py tasks-from-graph 产出的 tasks.json（skill 已填 emotion/tts_text）")
+    p_pub.add_argument("--profiles", required=True, help="{char: VoiceDesign dict} JSON（需 ref_audio_path + ref_text）")
+    p_pub.add_argument("--out-dir", default="15_声音", help="母带根目录（写 <out-dir>/<char>/<key>.wav；运行时副本走 voice_bundler sync）")
+    p_pub.add_argument("--keys", default=None, help="只生成指定 key（逗号分隔，单句/批量重生成用；缺省=全部）")
+    p_pub.add_argument("--device", default="cuda:0")
+    p_pub.set_defaults(_mode="publish")
+
     args = ap.parse_args()
     if args._mode == "ensure-ref":
         profiles = json.loads(open(args.profiles, encoding="utf-8").read())
@@ -243,10 +312,20 @@ def main():
         manifests = design_candidates(profiles, device=args.device)
         print(f"[design-candidates] {len(manifests)} 角色 manifest 就绪")
     elif args._mode == "audition":
-        import sys
         result = audition(args.manifest, device=args.device)
         if result["failed"]:
             sys.exit(1)  # 供 skill 感知失败（先产物后写图约束）
+    elif args._mode == "publish":
+        tasks = json.loads(open(args.tasks, encoding="utf-8").read())
+        profiles = json.loads(open(args.profiles, encoding="utf-8").read())
+        keys = args.keys.split(",") if args.keys else None
+        result = publish(tasks, profiles, args.out_dir, keys=keys, device=args.device)
+        total = sum(len(v) for v in result["produced"].values())
+        print(f"[publish] produced={total} wav, skipped={result['skipped']}, failed={len(result['failed'])}")
+        if result["failed"]:
+            for f in result["failed"]:
+                print(f"  failed: {f['char']}/{f['key']}: {f['error']}")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
