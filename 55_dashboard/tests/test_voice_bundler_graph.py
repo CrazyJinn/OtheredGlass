@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-for p in (_PROJECT_ROOT / ".claude" / "scripts", _PROJECT_ROOT / ".claude" / "scripts" / "voice"):
+for p in (_PROJECT_ROOT / ".claude" / "scripts", _PROJECT_ROOT / ".claude" / "skills" / "section-voice-publisher" / "scripts"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
@@ -11,14 +11,18 @@ import voice_bundler as vb  # noqa: E402
 
 
 def _lines():
-    """图行序列（fetch_section 的 lines 形状，按 ord）：scene + narrate + 3 say。"""
+    """图行序列（fetch_section 的 lines 形状，按 ord）：narrate + 3 say（scene 行已去图化，
+    块归属在各行 scene_block_id 上直读）。"""
     return [
-        {"id": "S0", "op": "scene", "scene_block_id": "s00_酒店", "status": 11, "who": None, "text": None},
-        {"id": "N1", "op": "narrate", "text": "清晨。", "status": 11, "who": None},
+        {"id": "N1", "op": "narrate", "text": "清晨。", "status": 11, "who": None,
+         "scene_block_id": "s00_酒店"},
         {"id": "N2", "op": "say", "who": "陆择", "text": "早。", "status": 0, "attempts": 1,
+         "scene_block_id": "s00_酒店",
          "voice_key": "陆择-chapter00_序章-s00_酒店-N2"},
-        {"id": "N3", "op": "say", "who": "顾盈", "text": "醒了。", "status": 0, "attempts": 0},
-        {"id": "N4", "op": "say", "who": "陆择", "text": "嗯。", "status": 0, "attempts": None},
+        {"id": "N3", "op": "say", "who": "顾盈", "text": "醒了。", "status": 0, "attempts": 0,
+         "scene_block_id": "s00_酒店"},
+        {"id": "N4", "op": "say", "who": "陆择", "text": "嗯。", "status": 0, "attempts": None,
+         "scene_block_id": "s00_酒店"},
     ]
 
 
@@ -32,13 +36,13 @@ def _keys(lines, node_ids=()):
     return {it["node_id"]: it["key"] for items in tasks.values() for it in items}
 
 
-def test_collect_graph_tasks_picks_status_zero_and_derives_scene():
-    """挑行 = say 且 status=0（待配/被驳回/stale 拆分已归一）；scene 段按 order 遍历推导。"""
+def test_collect_graph_tasks_picks_status_zero_and_reads_block():
+    """挑行 = say 且 status=0（待配/被驳回/stale 拆分已归一）；块归属行上直读。"""
     lines = _lines()
-    lines[1]["status"] = 0  # narrate 置 0 也不挑（无音频语义）
+    lines[0]["status"] = 0  # narrate 置 0 也不挑（无音频语义）
     picked = _keys(lines)
     assert sorted(picked) == ["N2", "N3", "N4"]
-    assert picked["N3"] == "顾盈-chapter00_序章-s00_酒店-N3"  # scene_block_id 从前驱 scene 行推导
+    assert picked["N3"] == "顾盈-chapter00_序章-s00_酒店-N3"  # scene_block_id 行上直读
 
 
 def test_collect_graph_tasks_node_whitelist_and_grouping():
@@ -92,3 +96,88 @@ def test_bind_graph_builds_statements(monkeypatch):
     stats = vb.bind_graph(tasks, keys=["顾盈-chapter00_序章-s00_酒店-N3"])
     assert stats == {"bound": 1, "skipped": 2}
     assert len(captured) == 1
+
+
+# ── clone_mode（icl/xvec 演绎通道：透传初值 → LLM 判别 → bind 归一终值）──
+
+def test_normalize_clone_mode():
+    """归一：'xvec' 原样（大小写/空白宽容）；None/'icl'/脏值一律 'icl'（缺省）。"""
+    assert vb.normalize_clone_mode("xvec") == "xvec"
+    assert vb.normalize_clone_mode(" XVEC ") == "xvec"
+    assert vb.normalize_clone_mode("icl") == "icl"
+    assert vb.normalize_clone_mode(None) == "icl"
+    assert vb.normalize_clone_mode("garbage") == "icl"
+
+
+def test_collect_graph_tasks_passes_through_clone_mode():
+    """透传：图上现值（上轮 bind 终值/人工改值）进 task 项作 3b 判别初值；未判过=None。"""
+    lines = _lines()
+    lines[1]["clone_mode"] = "xvec"  # N2：人工在 dashboard 改过
+    lines[2]["clone_mode"] = "icl"   # N3：上轮 bind 写的终值
+    items = {it["node_id"]: it
+             for v in vb.collect_graph_tasks(lines, "chapter00_序章").values() for it in v}
+    assert items["N2"]["clone_mode"] == "xvec"
+    assert items["N3"]["clone_mode"] == "icl"
+    assert items["N4"]["clone_mode"] is None  # 从未判过（缺省 icl 语义）
+
+
+def test_bind_graph_writes_normalized_clone_mode(monkeypatch):
+    """bind 写归一化终值（=本句实际合成模式，下轮重配初值）：None→icl、脏值归一。"""
+    captured = []
+    monkeypatch.setattr(vb, "_run_cypher_multi", lambda stmts: captured.extend(stmts))
+    tasks = vb.collect_graph_tasks(_lines(), "chapter00_序章")
+    items = {it["node_id"]: it for v in tasks.values() for it in v}
+    items["N2"]["clone_mode"] = "xvec"
+    items["N3"]["clone_mode"] = None
+    items["N4"]["clone_mode"] = "XVEC "
+    vb.bind_graph(tasks)
+    by_node = {nid: s for nid in ("N2", "N3", "N4") for s in captured if f"id:'{nid}'" in s}
+    assert "l.clone_mode='xvec'" in by_node["N2"]
+    assert "l.clone_mode='icl'" in by_node["N3"]   # 从未判过 → 缺省 icl 落图
+    assert "l.clone_mode='xvec'" in by_node["N4"]  # LLM 脏值归一
+
+
+def test_collect_graph_tasks_picks_invalidated_lines():
+    """-1 可重配：级联作废/存量迁移重做行与 0 同为待配（禁止把 -1 滤掉）。"""
+    lines = _lines()
+    lines[3]["status"] = -1  # N4：级联作废（编辑已批 SecScript 触发）
+    picked = _keys(lines)
+    assert sorted(picked) == ["N2", "N3", "N4"]
+
+
+# ── publish（发布期：已批音频键 → 母带拷运行时；生成期 sync 已废除）──
+
+def test_collect_approved_audio_keys_field_driven():
+    """以 vk/at 字段存在为准（不看 op——narrate 内嵌声景同样发布）、去重、滤 null。"""
+    rows = [
+        {"vk": "陆择-chapter00_序章-s00_酒店-N2", "at": None},
+        {"vk": None, "at": "amb-chapter00_序章-s01_路口-Pz3xmsRauP"},  # narrate 内嵌声景
+        {"vk": "陆择-chapter00_序章-s00_酒店-N2", "at": None},          # 重复
+    ]
+    assert vb.collect_approved_audio_keys(rows) == [
+        "陆择-chapter00_序章-s00_酒店-N2", "amb-chapter00_序章-s01_路口-Pz3xmsRauP",
+    ]
+
+
+def test_publish_runtime_routes_and_idempotent(tmp_path):
+    """amb- 前缀路由 sfx、voice key 路由 voices；母带缺失计 missing；幂等重跑全 skipped。"""
+    mk = "陆择-chapter00_序章-s00_酒店-N2"
+    ak = "amb-chapter00_序章-s01_路口-Pz3xmsRauP"
+    mk_missing = "amb-chapter00_序章-s02_夹缝-N9"
+    for key in (mk, ak):
+        src = vb.voice_master_path(tmp_path, key)
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_bytes(b"wav-bytes")
+    voices, sfx = tmp_path / "voices", tmp_path / "sfx"
+
+    stats = vb.publish_runtime(tmp_path, [mk, ak, mk_missing], voices, runtime_sfx=sfx)
+    assert stats["copied"] == 1 and stats["missing"] == 0
+    assert stats["copied_sfx"] == 1 and stats["missing_sfx"] == 1
+    assert (voices / f"{mk}.wav").read_bytes() == b"wav-bytes"
+    assert (sfx / f"{ak}.wav").read_bytes() == b"wav-bytes"
+    assert not (sfx / f"{mk_missing}.wav").exists()
+
+    # 幂等：母带未变重跑 → 全 skipped，不再拷贝
+    stats2 = vb.publish_runtime(tmp_path, [mk, ak], voices, runtime_sfx=sfx)
+    assert stats2["skipped"] == 1 and stats2["skipped_sfx"] == 1
+    assert stats2["copied"] == 0 and stats2["copied_sfx"] == 0

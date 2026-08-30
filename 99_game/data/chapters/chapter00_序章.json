@@ -1,0 +1,551 @@
+{
+  "meta": {
+    "chapter": 0,
+    "title": "序章",
+    "requires": {
+      "characters": [
+        "顾盈",
+        "陆择",
+        "小夏",
+        "伊芙"
+      ],
+      "scenes": [
+        "酒店-客房",
+        "街角咖啡店-点餐台",
+        "马路-路口",
+        "灵魂夹缝-夹缝空间"
+      ],
+      "portraits": [
+        "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+        "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+        "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
+        "陆择-赤裸上身-调笑-Q0nt4xSlyi",
+        "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+        "陆择-赤裸上身-玩味-PHSE4iftNR",
+        "小夏-咖啡店店员工作服-职业微笑-Q0oS9EGk08",
+        "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+        "陆择-商务休闲着装-轻佻-PJajqyM6s6",
+        "小夏-咖啡店店员工作服-羞赧-Q0oSM8AMXw",
+        "陆择-商务休闲着装-懊恼-Q0oTbcNH1s",
+        "陆择-麻衣苦行-茫然-P2vQL2d9dd",
+        "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
+        "伊芙-天使灵魂引路人着装-浅笑-P2vQL2d9di",
+        "陆择-麻衣苦行-错愕-Q0oa0CYNKS",
+        "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
+        "陆择-麻衣苦行-沉吟-P2vQL2d9de",
+        "伊芙-天使灵魂引路人着装-温柔-P2vQL2d9dg",
+        "陆择-麻衣苦行-轻佻-PRodLgg4dE",
+        "伊芙-天使灵魂引路人着装-慌张-Q0od8DNmQS"
+      ]
+    }
+  },
+  "scenes": [
+    {
+      "id": "s00_酒店",
+      "scene": "酒店-客房",
+      "time": "清晨",
+      "lines": [
+        {
+          "op": "narrate",
+          "text": "清晨，一缕阳光从窗帘的缝隙钻进来。"
+        },
+        {
+          "op": "narrate",
+          "text": "昨夜的酒气还没散透。外套歪在椅背上，两只杯子空在床头，谁也没打算收拾。"
+        },
+        {
+          "op": "narrate",
+          "text": "浴室传来哗哗的水声。",
+          "ambience": "amb-chapter00_序章-s00_酒店-PxH5yKwcuh"
+        },
+        {
+          "op": "narrate",
+          "text": "顾盈的身影透过磨砂玻璃，若隐若现。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择朦胧地睁开眼睛，摇了摇头，想尽快从宿醉中清醒过来。"
+        },
+        {
+          "op": "narrate",
+          "text": "水声停了，一阵窸窸窣窣之后，顾盈推开门走了出来。"
+        },
+        {
+          "op": "narrate",
+          "text": "白衬衫松松垮垮地罩在她身上，发梢还滴着水。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "left",
+          "text": "哟，醒这么早？",
+          "voice": "顾盈-chapter00_序章-s00_酒店-PxH5yKwcul"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+          "pos": "right",
+          "text": "哎……没办法，等下还要赶飞机。",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcum"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+          "pos": "right",
+          "text": "这不是我的衬衫嘛。",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcun"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
+          "pos": "left",
+          "text": "这儿乱七八糟的，随手抓到了这件。",
+          "voice": "顾盈-chapter00_序章-s00_酒店-PxH5yKwcuo"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-调笑-Q0nt4xSlyi",
+          "pos": "right",
+          "text": "别说，你穿着还挺好看。",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcup"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "left",
+          "text": "和不穿比呢？",
+          "voice": "顾盈-chapter00_序章-s00_酒店-PxH5yKwcuq"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "right",
+          "text": "都好看，各有各的韵味。",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcur"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "left",
+          "text": "哼，嘴可真甜呀。",
+          "voice": "顾盈-chapter00_序章-s00_酒店-PxH5yKwcus"
+        },
+        {
+          "op": "narrate",
+          "text": "顾盈对着镜子擦头发。"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-玩味-P2vQL2d9db",
+          "pos": "left",
+          "text": "没看出来，昨晚你还挺厉害的。要不加个微信？",
+          "voice": "顾盈-chapter00_序章-s00_酒店-PxH5yKwcuu"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-玩味-PHSE4iftNR",
+          "pos": "right",
+          "text": "还是别了，昨晚地动山摇的，下次我怕床受不了。",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcuv"
+        },
+        {
+          "op": "narrate",
+          "text": "顾盈耸了耸肩，没再坚持。"
+        },
+        {
+          "op": "narrate",
+          "text": "顾盈开始化妆。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+          "pos": "right",
+          "text": "这附近有咖啡店么？",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcuy"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc",
+          "pos": "left",
+          "text": "怎么，想请我喝咖啡？",
+          "voice": "顾盈-chapter00_序章-s00_酒店-PxH5yKwcuz"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-调笑-Q0nt4xSlyi",
+          "pos": "right",
+          "text": "我倒是想，可是等不及你化妆了，10点的飞机。",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcv0"
+        },
+        {
+          "op": "say",
+          "who": "顾盈",
+          "portrait": "顾盈-酒店晨离着装-慵懒-P2vQL2d9da",
+          "pos": "left",
+          "text": "街角有一家，拿铁还不错。",
+          "voice": "顾盈-chapter00_序章-s00_酒店-PxH5yKwcv1"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-赤裸上身-慵懒-PHSE4iftNQ",
+          "pos": "right",
+          "text": "谢啦。",
+          "voice": "陆择-chapter00_序章-s00_酒店-PxH5yKwcv2"
+        },
+        {
+          "op": "narrate",
+          "text": "顾盈换回自己裙子，对着镜子继续上妆。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择穿戴整齐，推门而出。"
+        },
+        {
+          "op": "narrate",
+          "text": "门在身后合上。房间里，吹风机的声音很快响了起来。"
+        }
+      ],
+      "bgm": {
+        "track": "晨离",
+        "mode": "play",
+        "loop": true
+      }
+    },
+    {
+      "id": "s01_咖啡店",
+      "scene": "街角咖啡店-点餐台",
+      "time": "清晨",
+      "lines": [
+        {
+          "op": "narrate",
+          "text": "街角的咖啡店。刚开门的清晨，店里没有顾客，咖啡机吐着蒸汽，暖黄的灯光落在空着的座位上。"
+        },
+        {
+          "op": "transition",
+          "track": "amb-chapter00_序章-s01_咖啡店-Pz3xmsRauO"
+        },
+        {
+          "op": "say",
+          "who": "小夏",
+          "portrait": "小夏-咖啡店店员工作服-职业微笑-Q0oS9EGk08",
+          "pos": "left",
+          "text": "欢迎光临，请问想喝点什么。",
+          "voice": "小夏-chapter00_序章-s01_咖啡店-PxSB6uJTm6"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+          "pos": "right",
+          "text": "来一杯拿铁，打包。",
+          "voice": "陆择-chapter00_序章-s01_咖啡店-PxSB6uJTm7"
+        },
+        {
+          "op": "say",
+          "who": "小夏",
+          "portrait": "小夏-咖啡店店员工作服-职业微笑-Q0oS9EGk08",
+          "pos": "left",
+          "text": "抱歉，我们刚开门，牛奶还没备好——美式可以么？",
+          "voice": "小夏-chapter00_序章-s01_咖啡店-PxSB6uJTm8"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-轻佻-PJajqyM6s6",
+          "pos": "right",
+          "text": "行吧，看在你这么可爱的份上。",
+          "voice": "陆择-chapter00_序章-s01_咖啡店-PxSB6uJTm9"
+        },
+        {
+          "op": "narrate",
+          "text": "小夏耳根一红，低下头去。"
+        },
+        {
+          "op": "say",
+          "who": "小夏",
+          "portrait": "小夏-咖啡店店员工作服-羞赧-Q0oSM8AMXw",
+          "pos": "left",
+          "text": "您的美式。",
+          "voice": "小夏-chapter00_序章-s01_咖啡店-PxSB6uJTmB"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-慵懒-PJajqyM6s4",
+          "pos": "right",
+          "text": "请问，机场大巴在哪儿坐？",
+          "voice": "陆择-chapter00_序章-s01_咖啡店-PxSB6uJTmC"
+        },
+        {
+          "op": "say",
+          "who": "小夏",
+          "portrait": "小夏-咖啡店店员工作服-职业微笑-Q0oS9EGk08",
+          "pos": "left",
+          "text": "就在街对面，20分钟一趟。",
+          "voice": "小夏-chapter00_序章-s01_咖啡店-PxSB6uJTmD"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择道了声谢，拎着打包杯走到门口。"
+        }
+      ],
+      "bgm": {
+        "track": "晨光小店",
+        "mode": "play",
+        "loop": true
+      }
+    },
+    {
+      "id": "s01_路口",
+      "scene": "马路-路口",
+      "time": "阴天白天",
+      "lines": [
+        {
+          "op": "narrate",
+          "text": "天突然暗了下来，接着淅淅沥沥地落起雨来。",
+          "ambience": "amb-chapter00_序章-s01_路口-Pz3xmsRauP"
+        },
+        {
+          "op": "narrate",
+          "text": "雨点砸在湿滑的沥青路面上，积水洼里晃着破碎的霓虹。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择推开咖啡店的门，一股湿冷的水汽扑面而来。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-商务休闲着装-懊恼-Q0oTbcNH1s",
+          "pos": "center",
+          "text": "什么鬼天气。",
+          "voice": "陆择-chapter00_序章-s01_路口-PxSB6uJTmJ"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择低声骂了一句，把衣领竖了起来。"
+        },
+        {
+          "op": "narrate",
+          "text": "远处一辆摩托车发出了巨大的轰鸣。",
+          "ambience": "amb-chapter00_序章-s01_路口-Pz3xmsRauQ"
+        },
+        {
+          "op": "narrate",
+          "text": "人行横道的绿灯开始倒计时。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择加快脚步小跑起来，想抢在红灯之前冲过马路。"
+        },
+        {
+          "op": "narrate",
+          "text": "摩托车轰鸣着冲了出来。"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择被重重地撞飞了出去，后脑勺磕在马路牙子上。"
+        },
+        {
+          "op": "narrate",
+          "text": "所有声音在同一瞬间被抽空。"
+        }
+      ],
+      "bgm": {
+        "track": "骤雨路口",
+        "mode": "play",
+        "loop": true
+      }
+    },
+    {
+      "id": "s02_夹缝",
+      "scene": "灵魂夹缝-夹缝空间",
+      "time": "黄昏",
+      "lines": [
+        {
+          "op": "narrate",
+          "text": "这里像一座荒废的神庙——断裂的列柱沿着石板路排向远方，尽头隐在细雾里。"
+        },
+        {
+          "op": "narrate",
+          "text": "暮光停在将暗未暗的时刻，不再往下沉。四下安静得没有风，也没有回声。"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-麻衣苦行-茫然-P2vQL2d9dd",
+          "pos": "left",
+          "text": "这……是哪？",
+          "voice": "陆择-chapter00_序章-s02_夹缝-PxSUKe2h7r"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
+          "pos": "right",
+          "text": "这是你意识里的世界",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h7s"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-麻衣苦行-茫然-P2vQL2d9dd",
+          "pos": "left",
+          "text": "你是谁",
+          "voice": "陆择-chapter00_序章-s02_夹缝-PxSUKe2h7t"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-浅笑-P2vQL2d9di",
+          "pos": "right",
+          "text": "按你们凡间的说法，算是天使吧",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h7u"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-麻衣苦行-错愕-Q0oa0CYNKS",
+          "pos": "left",
+          "text": "我……这是死了么？",
+          "voice": "陆择-chapter00_序章-s02_夹缝-PxSUKe2h7v"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
+          "pos": "right",
+          "text": "嗯，你被一辆闯红灯的摩托车撞倒，在送去医院的路上就没了呼吸",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h7w"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择瞪大了双眼，一脸不可置信地看着眼前的女孩。"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
+          "pos": "right",
+          "text": "嗯……我看看接下来的流程",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h7y"
+        },
+        {
+          "op": "narrate",
+          "text": "伊芙掏出了一张羊皮纸。"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
+          "pos": "right",
+          "text": "你要下地狱！",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h80"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-麻衣苦行-错愕-Q0oa0CYNKS",
+          "pos": "left",
+          "text": "为什么，我可没做过什么伤天害理的事",
+          "voice": "陆择-chapter00_序章-s02_夹缝-PxSUKe2h81"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-浅笑-P2vQL2d9di",
+          "pos": "right",
+          "text": "呃……这上面写着：因为伤害众多女孩感情",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h82"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-麻衣苦行-沉吟-P2vQL2d9de",
+          "pos": "left",
+          "text": "这就得下地狱啦？",
+          "voice": "陆择-chapter00_序章-s02_夹缝-PxSUKe2h83"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-温柔-P2vQL2d9dg",
+          "pos": "right",
+          "text": "以前倒是还好，但是现在审判庭换了一个姐姐。不过你还有一个机会拯救自己",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h84"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-麻衣苦行-沉吟-P2vQL2d9de",
+          "pos": "left",
+          "text": "什么机会",
+          "voice": "陆择-chapter00_序章-s02_夹缝-PxSUKe2h85"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-庄严-P2vQL2d9dh",
+          "pos": "right",
+          "text": "用你的特长去拯救6个弱者",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h86"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
+          "pos": "right",
+          "text": "你的灵魂会穿越到弱者的身上，进入他的身体，以他的身份替他生活30天。",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h87"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df",
+          "pos": "right",
+          "text": "至于什么样的人算弱者——对于你的特长来说，是那些认真对待了感情，结果却落得伤痕累累的人。",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h88"
+        },
+        {
+          "op": "say",
+          "who": "陆择",
+          "portrait": "陆择-麻衣苦行-轻佻-PRodLgg4dE",
+          "pos": "left",
+          "text": "拯救了他们，对我有什么好处",
+          "voice": "陆择-chapter00_序章-s02_夹缝-PxSUKe2h89"
+        },
+        {
+          "op": "say",
+          "who": "伊芙",
+          "portrait": "伊芙-天使灵魂引路人着装-慌张-Q0od8DNmQS",
+          "pos": "right",
+          "text": "好处是……糟糕要来不及了!",
+          "voice": "伊芙-chapter00_序章-s02_夹缝-PxSUKe2h8A"
+        },
+        {
+          "op": "narrate",
+          "text": "陆择突然眼前一花，感觉被吸入了一个巨大的漩涡。"
+        }
+      ],
+      "bgm": {
+        "track": "夹缝暮光",
+        "mode": "play",
+        "loop": true
+      }
+    }
+  ]
+}

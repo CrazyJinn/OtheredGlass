@@ -9,7 +9,7 @@
 
 **变体集合由调用方决定，不由角色优先级或固定数量表决定**：
 
-- 剧情所需变体由 `chapter-dialoguer` 据剧本每条 `say` 指令的 `<who>.<portrait>` 引用提出（覆盖该场景的情绪节拍），兜底建 `status=0` 的 StandingIllustration 缺口节点；`plot-design` 再按 depicts 引用逐个调 `char-stand-designer` 出图。
+- 剧情所需变体由 `section-voice-publisher` 配音判断期选绘提出——LLM 为 say 行按台词氛围选立绘（`LineAudio-[:uses]->StandingIllustration`），池中无贴切变体时兜底建 `status=0` 的 StandingIllustration 缺口节点并写 `description` 变体氛围；`plot-design` 再按 depicts 引用逐个调 `char-stand-designer` 出图。
 - 本模板只规定**单个变体**的提示词写法，不规定一个角色该有几个变体，也不进行数量补全。
 
 ### 表情选择原则
@@ -26,7 +26,7 @@
 
 1. **不重复外观和着装**：立绘基于设计图生成，提示词不描述服装、发型、体型、配饰等
 2. **描述身体朝向、表情、手部动作和脚部动作**：全身立绘需要完整描述身体面对镜头的朝向、表情、手部和脚部的姿态
-3. **首要依据变体氛围**：表情强度、身体朝向、动作张力首先依据 `StandingIllustration.description`（该变体在剧情该时刻的氛围/情绪情境，由 chapter-dialoguer 创作）；再结合 `LanguageStyle.emotion_patterns` 的情绪模式细化、`LanguageStyle.description` 概要理解角色
+3. **首要依据变体氛围**：表情强度、身体朝向、动作张力首先依据 `StandingIllustration.description`（该变体所服务台词的氛围/情绪情境，由 section-voice-publisher 选绘判断兜底建时创作）；再结合 `LanguageStyle.emotion_patterns` 的情绪模式细化、`LanguageStyle.description` 概要理解角色
 4. **身体朝向由氛围决定**：依据变体情绪自主选择身体面对镜头的朝向（正视镜头/3/4侧身/全侧身/背影），不要所有变体都僵化地正面朝向
 5. **动作幅度可更大、更有张力**：除「默认/微笑」等静态变体外，应大胆使用大幅度动态姿态（挥臂/跨步/转身/前倾/跃起），避免每个变体都是拘谨的小幅站姿；动态变体的手脚动作要拉开幅度以强化情绪
 

@@ -14,7 +14,7 @@ tools: Read, Grep, Glob, Bash, Skill
 Schema 文件：`00_init/Schema/场景美术.md`（Scene/SceneLayer）+ `00_init/Schema/声音.md`（BgmTrack / `Scene-has_bgm->BgmTrack`）
 输入：**地点名或 ID**（如"咖啡店"、snowflake ID）。场景子图节点类型固定，一次 cypher 查询即可拿到全部节点的 status，据 status 决定下一步。
 
-> **BGM 归本链编排**（`Scene -has_bgm-> BgmTrack`，1:1，人工生成链）：BgmTrack 缺口（无节点或 status∈{-1,0}）→ 调 `bgm-designer`（自行兜底建节点 + 产音乐描述文字 → status=1）→ **用户用 Suno 类外部工具手动生成 wav 归档 `13_音乐/<name>.wav`** → 再次调 `bgm-designer`（或 dashboard 编辑器）检测文件存在 → status=2（音频已归档，completion）。无审批。plot-design 不查不调 BgmTrack（发布时 publisher 对 status<2 的警告跳过）。
+> **BGM 归本链编排**（`Scene -has_bgm-> BgmTrack`，1:1，人工生成链）：BgmTrack 缺口（无节点或 status∈{-1,0}）→ 调 `bgm-designer`（自行兜底建节点 + 产音乐描述文字 → status=1）→ **用户用 Suno 类外部工具手动生成 wav 归档 `13_BGM/<name>.wav`** → 再次调 `bgm-designer`（或 dashboard 编辑器）检测文件存在 → status=2（音频已归档，completion）。无审批。plot-design 不查不调 BgmTrack（发布时 publisher 对 status<2 的警告跳过）。
 
 ---
 
@@ -52,13 +52,13 @@ ORDER BY type, n.status
 
 ### 3. 决策与调度
 
-**通过 Skill 工具委派执行，scene-design 不亲自跑生成脚本**：决策后用 `Skill` 工具调用下表对应 skill。Scene 用 `scene-designer <loc_id>`；SceneLayer 用 `scene-layer-designer <scene_id> [target_status]`（省略 target_status 则推到最终状态）；BgmTrack 用 `bgm-designer <scene 名 或 bgm_id>`。被调 skill 在自己的上下文里完成三段式【查询目标节点 → 组装提示词/生成图片/产音乐描述 → MERGE 兜底建节点+边并写 status】，仅向 scene-design 返回产物路径与最终 status。**scene-design 自身禁止用 Bash 执行 cypher 写入、snowflake、图片生成、提示词组装、音乐描述写作**——这些是各 skill 的职责；scene-design 只用 Bash 执行第 2 步的只读状态查询。
+**通过 Skill 工具委派执行，scene-design 不亲自跑生成脚本**：决策后用 `Skill` 工具调用下表对应 skill。Scene 用 `scene-designer <loc_id>`；SceneLayer 用 `scene-layer-designer <scene_id>`（单轮直推到最大门控，无推进目标参数）；BgmTrack 用 `bgm-designer <scene 名 或 bgm_id>`。被调 skill 在自己的上下文里完成三段式【查询目标节点 → 组装提示词/生成图片/产音乐描述 → MERGE 兜底建节点+边并写 status】，仅向 scene-design 返回产物路径与最终 status。**scene-design 自身禁止用 Bash 执行 cypher 写入、snowflake、图片生成、提示词组装、音乐描述写作**——这些是各 skill 的职责；scene-design 只用 Bash 执行第 2 步的只读状态查询。
 
-**调度只看 status，不看产物文件**：决定是否调度某 skill 时，唯一判据是节点 `status` 与 `target_status`。**禁止**因 `prompt_path`/`image_path`/`audio_path` 已有值或磁盘文件已存在而判定"已完成"并跳过调度。`status=-1`（作废重做）必须重新调用对应 skill 重生成并覆盖旧产物；**重做时禁止读取旧 prompt / 旧图片 / 旧描述内容**，直接以当前图节点数据为唯一来源重新组装并覆盖写入。
+**调度只看 status，不看产物文件**：决定是否调度某 skill 时，唯一判据是节点 `status` 是否到达该链最大门控（数据节点 `1`、生产节点 `10`、BgmTrack `2`）。**禁止**因 `prompt_path`/`image_path`/`audio_path` 已有值或磁盘文件已存在而判定"已完成"并跳过调度。`status=-1`（作废重做）必须重新调用对应 skill 重生成并覆盖旧产物；**重做时禁止读取旧 prompt / 旧图片 / 旧描述内容**，直接以当前图节点数据为唯一来源重新组装并覆盖写入。
 
 **全量循环推进，禁止只推一个就停**：开局第 2 步的一次查询结果即作为本地状态表，据表枚举所有待办节点（`status < 10`，含 `-1/0/1/2`）逐个委派 skill 推进，直到全部到达终态——数据节点 `1`、生产节点 `10`（待审）、BgmTrack `2`（音频已归档）——或撞上审批阻塞（`status=10` 待 dashboard 批）、或撞上必须由用户决策的分歧点，才返回。**禁止**发现多个待办却只处理第一个就汇报结束。
 
-**BgmTrack=1 是用户动作阻塞，不是终态也不是重做信号**：描述文字已产出（skill 已给用户 prompt 全文与归档路径），等用户手动生成 wav 放入 `13_音乐/`。本轮对其**再调一次 `bgm-designer`**（它会检测文件存在置 2）：若置 2 则完成；若文件仍缺，**汇报「等待用户归档 wav 后再次触发」并继续处理其他节点，不重复调**。
+**BgmTrack=1 是用户动作阻塞，不是终态也不是重做信号**：描述文字已产出（skill 已给用户 prompt 全文与归档路径），等用户手动生成 wav 放入 `13_BGM/`。本轮对其**再调一次 `bgm-designer`**（它会检测文件存在置 2）：若置 2 则完成；若文件仍缺，**汇报「等待用户归档 wav 后再次触发」并继续处理其他节点，不重复调**。
 
 **复查策略（避免冗余查询）**：仅在 skill 返回（即发生了一次写入）后，对**该被推进节点**做一次复查确认 status 到位；**禁止**在未发生写操作时重复执行第 2 步的全量 MATCH 查询，也**禁止**每推一个节点就重查整张子图。状态表在内存中维护，复查结果就地更新。
 
@@ -75,7 +75,7 @@ ORDER BY type, n.status
 **Status 合法值**（skill 只能写入这些值，禁止其他值如 `3`）：
 - `-1` 作废重做（skill 看到 `-1` 必须重新生成并覆盖旧产物，禁止因文件已存在而跳过）
 - Scene：`0` 待设计 → `1` 已完成（无审批）
-- 生产节点（SceneLayer）：`0` 待生成 → `1` 提示词完成 → `2` 图片完成 → `10` 待审 → `11` 批准。**实际推进**：`target_status=1` 时 skill 写 `1`；`target_status=2` 时 skill 直接写 `10`（图片完成即提交待审，`2` 为可选中间态，由 dashboard 手动 submit 路径使用）。
+- 生产节点（SceneLayer）：`0` 待生成 → `10` 待审 → `11` 批准。skill 单轮直推：图片完成即写 `10`（`1`/`2` 为历史可选中间态，仅由 dashboard 手动路径使用，skill 不再写）。
 - BgmTrack：`0` 待设计 → `1` 描述已产出（等用户手动生成 wav 归档）→ `2` 音频已归档（completion，无审批）。
 - 审批专属 `10`/`11`；驳回归 `0`
 

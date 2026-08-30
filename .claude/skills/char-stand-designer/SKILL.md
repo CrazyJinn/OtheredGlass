@@ -2,11 +2,10 @@
 name: char-stand-designer
 description: |
   推进 StandingIllustration 图节点：查询状态 → 组装提示词/生成图片 → 保存结果（MERGE 兜底建节点+边，写产物与 status）。
-  入参 stand_id——只推进指定的单个立绘变体，由 plot-design 按 depicts 引用按需触发。变体需求由 section-voice-publisher 拆分进图时据图行 portrait 引用兜底建缺口（台词.md 的 [表情] 标注），本 skill 逐个交付生成，不做角色级批量备货、不按角色优先级补全数量。
-argument-hint: <stand_id> [target_status]
+  入参 stand_id——只推进指定的单个立绘变体，由 plot-design 按 depicts 引用按需触发。变体需求由 section-voice-publisher 配音判断期选绘兜底建缺口（LLM 为 say 行按台词氛围选立绘，池中无贴切变体时经 portrait_binder apply 建 status=0 缺口节点并写 description 变体氛围），本 skill 逐个交付生成，不做角色级批量备货、不按角色优先级补全数量。
+argument-hint: <stand_id>
 arguments:
   - stand_id
-  - target_status
 allowed-tools: Read, Bash, Write, Edit
 ---
 
@@ -16,14 +15,13 @@ allowed-tools: Read, Bash, Write, Edit
 
 从 IllusDesign 拓展出不同表情、动作的单张立绘，表情和动作参考 LanguageStyle 生成。
 
-**按需单变体模式**（stand_id）：只推进指定的那一个 StandingIllustration（通常由 `section-voice-publisher` 拆分进图时兜底建的 `status=0` 缺口节点，经 `plot-design` 按 depicts 引用触发）。**变体需求来自剧本**——台词.md 的 `[表情]` 标注拆分后成为图行 portrait 引用，section-voice-publisher 据此决定该场景需要哪些变体；本 skill 逐个交付生成，**不做角色级批量备货、不按角色优先级（P0/P1/P2）补全数量**，避免为未被剧情引用的变体浪费出图 API。
+**按需单变体模式**（stand_id）：只推进指定的那一个 StandingIllustration（通常由 `section-voice-publisher` 配音判断期选绘兜底建的 `status=0` 缺口节点，经 `plot-design` 按 depicts 引用触发）。**变体需求来自剧本**——选绘 LLM 在配音判断期为 say 行按台词氛围选立绘，判定池中无贴切变体时兜底建缺口（节点带 `description` 变体氛围）；本 skill 逐个交付生成，**不做角色级批量备货、不按角色优先级（P0/P1/P2）补全数量**，避免为未被剧情引用的变体浪费出图 API。
 
 ## 参数
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | stand_id | 单个立绘变体 ID（StandingIllustration 节点 id） | 必传 |
-| target_status | 推进目标：`1`（仅提示词）或 `2`（到图片） | `2` |
 
 ## 流程（三段式：查状态 → 完成任务 → 保存结果）
 
@@ -50,7 +48,7 @@ RETURN ch.name AS char_name, ch.id AS char_id,
 ```
 
 - **前驱校验**：`illus_status = 11`（IllusDesign 已批准），否则停止并提示上游未就绪（由 `plot-design` 委派 `char-design` 推进 IllusDesign 后再来）。
-- **节点已存在**（通常由 `chapter-dialoguer` 兜底建为 `status=0`）：直接按 status 决定推进起点。`variant_label` 已在节点上；若 `eye`/`brow`/`mouth`/`head_angle`/`hand`/`foot` 标签缺失，按 `variant_label` 语义推导并在保存步补写。
+- **节点已存在**（由 `section-voice-publisher` 的选绘 apply 兜底建为 `status=0`，`description` 已含变体氛围）：直接按 status 决定推进起点。`variant_label` 已在节点上；若 `eye`/`brow`/`mouth`/`head_angle`/`hand`/`foot` 标签缺失，按 `variant_label` 与 `description` 语义推导并在保存步补写。
 - 本 skill **只处理这一个 stand**，不枚举其他变体、不补全数量。
 
 > 查不到（stand_id 不存在 / 缺上游 `expands_to` 或 `ref_style`）→ 报告并停止。
@@ -59,7 +57,7 @@ RETURN ch.name AS char_name, ch.id AS char_id,
 
 推进这一个变体：
 
-#### 推进到提示词（status → 1）
+#### 组装提示词
 
 使用 Skill 工具调用 `char-prompt-assembler`，参数 `StandingIllustration '<data_json>'`：
 
@@ -75,7 +73,7 @@ RETURN ch.name AS char_name, ch.id AS char_id,
 
 char-prompt-assembler 组装 prompt 文件到 `06_角色美术/<char_name>/<cos_name>/立绘/<variant_label>.md`（与图片同目录同名）并返回路径 `PROMPT_PATH`。
 
-#### 推进到图片（status → 2，仅 target_status=2）
+#### 生成图片
 
 使用 Skill 工具调用 `infra-image-generator`，参数 `<PROMPT_PATH> <OUTPUT_PATH> <illus_image>`（图生图，以 IllusDesign 图片为参考）：
 
@@ -96,11 +94,11 @@ MATCH (voice:LanguageStyle {id: '<voice_id>'}), (stand:StandingIllustration {id:
 MERGE (voice)-[r:ref_style]->(stand) SET r.sync = true;
 MATCH (stand:StandingIllustration {id: '<stand_id>'})
 SET stand.prompt_path = '<PROMPT_PATH>',
-    stand.image_path  = '<IMAGE_PATH>',     // 仅 target_status=2 时
-    stand.status = <1 | 10>;                // target_status=1 → 1；target_status=2 → 10（待审）
+    stand.image_path  = '<IMAGE_PATH>',
+    stand.status = 10;                      // 图片完成即待审（直写，不经 submit）
 ```
 
-**status 写入**：仅提示词 → `1`；到图片 → `10`（待审）。StandingIllustration 是终端节点，无下游。
+**status 写入**：固定 `10`（待审）。StandingIllustration 是终端节点，无下游。
 
 ## 参考文档
 

@@ -3,7 +3,7 @@
 section-voice-publisher 第一步「拆分进图」的唯一实现。把已批定稿（SecScript=11 的
 台词.md，人读 Markdown）幂等拆分为图节点：
 
-  parse_md  解析 台词.md → 行序列（scene/say/narrate/label/ending；**选择**块跳过——
+  parse_md  解析 台词.md → 行序列（say/narrate/transition/label/ending；**选择**块跳过——
             choice 及配套 jump 暂不进图，建模后续设计；解析失败抛 ValueError 带行号）
   align     md 行 vs 图已有行 difflib 对齐（签名 = op+who+text）→ 保留/更新/新建/删除
   split     经 cypher_exec.py（--stdin --multi 单事务）写图 + 产出报告 JSON
@@ -31,13 +31,41 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]          # .claude/scripts/ → 项目根
-CYPHER_EXEC = Path(__file__).resolve().parent / "cypher_exec.py"
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+def _find_repo_root(start: Path) -> Path:
+    """向上搜索项目根（含 .claude/scripts/cypher_exec.py 的目录），不依赖固定层级。"""
+    for p in (start, *start.parents):
+        if (p / ".claude" / "scripts" / "cypher_exec.py").exists():
+            return p
+    raise RuntimeError("未找到项目根（向上搜索 .claude/scripts/cypher_exec.py 失败）")
+
+
+ROOT = _find_repo_root(Path(__file__).resolve())     # 项目根
+CYPHER_EXEC = ROOT / ".claude" / "scripts" / "cypher_exec.py"
+sys.path.insert(0, str(ROOT / ".claude" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # 同目录：voice_bundler
 from snowflake_base62 import SnowflakeGenerator  # noqa: E402
+from voice_bundler import voice_master_path  # noqa: E402
 
 ORDER_STEP = 1000          # 初始间距
-SAY_DEFAULT_POS = "left"   # 新 say 行缺省立绘位（md 不写 pos）
+
+
+def _block_pos_map(md_rows_in_block: list) -> dict:
+    """块内 say 行 who（按首次说话序）→ 立绘位（md 不写 pos，块级规则值即缺省值）：
+    1 人 center（独白居中）/ 2 人先说话者 left 后说话者 right（对话分侧）/
+    ≥3 人按首话序 left/right/center（第 4+ 人兜底 center）。"""
+    whos = []
+    for m in md_rows_in_block:
+        if m.get("op") == "say" and m.get("who") and m["who"] not in whos:
+            whos.append(m["who"])
+    if not whos:
+        return {}
+    if len(whos) == 1:
+        seats = ["center"]
+    elif len(whos) == 2:
+        seats = ["left", "right"]
+    else:
+        seats = ["left", "right", "center"]
+    return {w: (seats[i] if i < len(seats) else "center") for i, w in enumerate(whos)}
 
 _GEN = SnowflakeGenerator()
 
@@ -85,19 +113,39 @@ def _run_cypher_multi(statements: list) -> None:
 
 _SCENE_RE = re.compile(r"^##\s+(\S+)\s+(.+?)\s*(?:（([^）]*)）)?\s*$")
 _NARRATE_RE = re.compile(r"^旁白\s*:\s*(.+)$")
-_SAY_RE = re.compile(r"^([^:\[\]]+?)\s*(?:\[([^\[\]]+)\])?\s*:\s*(.+)$")
+# 说话行不支持 [表情] 标注（演出层已与台词分离）：角色名排除 [ 与 ]，残留标注（陆择[微笑]:x）
+# 因 group(1) 无法跨 [ 而整行不匹配 → 落入末尾 ValueError 显式拦截
+_SAY_RE = re.compile(r"^([^:\[\]]+?)\s*:\s*(.+)$")
 _LABEL_RE = re.compile(r"^\*\*分支\s*[:：]\s*(.+?)\s*\*\*$")
 _ENDING_RE = re.compile(r"^\*\*结局\*\*\s*[:：]\s*(BE|TE|HE|NE)\s*(?:——|—)\s*(.+)$")
 _CHOICE_RE = re.compile(r"^\*\*选择\*\*\s*$")
+# 环境音行（与旁白同级别，保留字「环境音」）；必须先于 _SAY_RE 匹配，否则被说话行正则吃掉
+_AMBIENT_RE = re.compile(r"^环境音\s*[:：]\s*(.+)$")
+# 氛围型环境音：旁白行内嵌标注【环境音:<语义>】（至多一个，与旁白同出）
+_INLINE_AMBIENT_RE = re.compile(r"【环境音[:：]([^】]+)】")
 
 
-def parse_md(path) -> list:
-    """解析 台词.md → 行 dict 列表（op/who/portrait/text/kind/scene_block_id/scene_name）。
+def _strip_inline_ambient(narration: str, lineno: int, raw: str) -> tuple:
+    """旁白正文 → (纯正文, 氛围语义 or None)。至多一个内嵌标注，多个报错。"""
+    found = _INLINE_AMBIENT_RE.findall(narration)
+    if len(found) > 1:
+        raise ValueError(f"台词.md 第 {lineno} 行内嵌环境音标注多于一个：{raw!r}")
+    text = _INLINE_AMBIENT_RE.sub("", narration).strip() if found else narration
+    return text, (found[0].strip() if found else None)
 
-    `#` 节标题与空行忽略；`**选择**` 块（含其下 `- ` 选项行）整体跳过（choice 不进图）。
-    无法识别的行抛 ValueError（带行号与原文）——skill 依报错修 md。
+
+def parse_md(path) -> dict:
+    """解析 台词.md → {"rows": [...], "blocks": [{block, scene_name}, ...]}。
+
+    - 场景二级标题**不产生图行**（scene 行已去图化）：块定义进 blocks（写入
+      SecScript.scene_blocks），后续行各带 scene_block_id（行上存块归属）。
+    - 行 dict：op/who/text/kind/scene_block_id(+ambient_text：氛围型旁白)。演出层（立绘
+      选择）不在拆分期——由配音判断期选绘建 LineAudio-[:uses]->StandingIllustration 边。
+    - `#` 节标题与空行忽略；`**选择**` 块（含其下 `- ` 选项行）整体跳过（choice 不进图）。
+    - 无法识别的行抛 ValueError（带行号与原文）——skill 依报错修 md。
     """
-    rows = []
+    rows, blocks = [], []
+    cur_block = None
     in_choice = False
     text = Path(path).read_text(encoding="utf-8")
     for n, raw in enumerate(text.splitlines(), 1):
@@ -116,52 +164,93 @@ def parse_md(path) -> list:
             if not m:
                 raise ValueError(f"台词.md 第 {n} 行场景标题格式错误：{raw!r}"
                                  "（应为 ## <scene_block_id> <Scene 名>（<时段>））")
-            rows.append({"op": "scene", "scene_block_id": m.group(1),
-                         "scene_name": m.group(2).strip(), "text": None})
+            cur_block = m.group(1)
+            blocks.append({"block": cur_block, "scene_name": m.group(2).strip()})
             continue
+        if cur_block is None:
+            raise ValueError(f"台词.md 第 {n} 行出现在首个场景标题之前：{raw!r}")
         m = _NARRATE_RE.match(line)
         if m:
-            rows.append({"op": "narrate", "text": m.group(1).strip()})
+            body, amb = _strip_inline_ambient(m.group(1).strip(), n, raw)
+            row = {"op": "narrate", "text": body, "scene_block_id": cur_block}
+            if amb:
+                row["ambient_text"] = amb
+            rows.append(row)
+            continue
+        m = _AMBIENT_RE.match(line)
+        if m:
+            rows.append({"op": "transition", "text": m.group(1).strip(),
+                         "scene_block_id": cur_block})
             continue
         m = _LABEL_RE.match(line)
         if m:
-            rows.append({"op": "label", "text": m.group(1).strip()})
+            rows.append({"op": "label", "text": m.group(1).strip(),
+                         "scene_block_id": cur_block})
             continue
         m = _ENDING_RE.match(line)
         if m:
-            rows.append({"op": "ending", "kind": m.group(1), "text": m.group(2).strip()})
+            rows.append({"op": "ending", "kind": m.group(1), "text": m.group(2).strip(),
+                         "scene_block_id": cur_block})
             continue
         m = _SAY_RE.match(line)
         if m:
             rows.append({"op": "say", "who": m.group(1).strip(),
-                         "portrait": (m.group(2) or "").strip() or None,
-                         "text": m.group(3).strip()})
+                         "text": m.group(2).strip(), "scene_block_id": cur_block})
             continue
         raise ValueError(f"台词.md 第 {n} 行无法解析：{raw!r}（格式规范见 chapter-dialoguer SKILL.md）")
-    if not any(r["op"] == "scene" for r in rows):
+    if not blocks:
         raise ValueError("台词.md 缺场景二级标题（## <scene_block_id> <Scene 名>（<时段>））")
-    return rows
+    return {"rows": rows, "blocks": blocks}
 
 
 def _sig(r: dict) -> tuple:
-    """对齐签名：scene 行用块 id、ending 行用 kind+落点，其余 op+who+text。"""
+    """对齐签名：ending 用 kind+落点，narrate 含内嵌氛围语义（标注变化=氛围音变），
+    其余 op+who+text。存量 op=scene 图行（已去图化）在此签名下必然落入 delete；
+    存量 op=ambient 归一为 transition（改名兼容，防历史图行对齐断裂误置 0 重配）。"""
     op = r.get("op")
-    if op == "scene":
-        return ("scene", "", r.get("scene_block_id") or "")
+    if op == "ambient":
+        op = "transition"
     if op == "ending":
         return ("ending", "", (r.get("kind") or "") + "——" + (r.get("text") or ""))
+    if op == "narrate":
+        return ("narrate", "", (r.get("text") or "") + "⟨" + (r.get("ambient_text") or "") + "⟩")
     return (op, r.get("who") or "", r.get("text") or "")
 
 
 def _row_name(m: dict) -> str:
-    """行正文即 name（scene 行 = scene_block_id）。"""
-    if m["op"] == "scene":
-        return m.get("scene_block_id") or ""
+    """行正文即 name。"""
     return m.get("text") or ""
 
 
-def _wav_exists(who: str, voice_key: str) -> bool:
-    return bool(who and voice_key and (ROOT / "15_声音" / who / f"{voice_key}.wav").exists())
+def _wav_exists(voice_key: str) -> bool:
+    """母带是否已生成（-1 恢复判定）。路径从 key 自身解析（15_声音/<stem>/<block>/），
+    不查图不按角色目录——章改名后图上现算的 stem 会指错旧 wav 位置。"""
+    if not voice_key:
+        return False
+    try:
+        return voice_master_path(ROOT, voice_key).exists()
+    except ValueError:
+        return False
+
+
+def _purge_line_audio_files(g: dict, report: dict) -> None:
+    """删除行时清理其音频产物：母带 + 运行时副本 + Godot .import 伴生。
+    say 行按 voice_key（voices 目录），ambient 行按 ambient_track（sfx 目录）。"""
+    keys = [k for k in (g.get("voice_key"), g.get("ambient_track")) if k]
+    purged = []
+    for key in keys:
+        try:
+            master = voice_master_path(ROOT, key)
+        except ValueError:
+            continue
+        runtime_root = ROOT / "99_game" / "assets" / ("sfx" if key.startswith("amb-") else "voices")
+        for p in (master, runtime_root / f"{key}.wav", Path(str(master) + ".import"),
+                  Path(str(runtime_root / f"{key}.wav") + ".import")):
+            if p.exists():
+                p.unlink()
+                purged.append(str(p))
+    if purged:
+        report.setdefault("purged", []).extend(purged)
 
 
 # ── 对齐 ─────────────────────────────────────────────────────
@@ -264,92 +353,104 @@ def _strictly_increasing(seq: list) -> bool:
 # ── 动作生成（恢复 / 演出 diff / 字段更新 / 建删） ──────────────
 
 def _set_props(m: dict, pos) -> str:
-    """行字段全量 SET 子句（update/create 用）：status=0（say）/ 11（非 say）。"""
+    """行字段全量 SET 子句（update/create 用）。status：音频行（say 配音 / transition
+    转场音效 / 带内嵌氛围的 narrate）=0 待产；其余非音频行 =11。"""
+    has_amb = m["op"] == "narrate" and m.get("ambient_text")
     return ", ".join([
         f"l.name={_q(_row_name(m))}",
         f"l.op={_q(m['op'])}",
         f"l.who={_q(m.get('who'))}",
-        f"l.portrait={_q(m.get('portrait'))}",
         f"l.pos={_q(pos)}",
         f"l.text={_q(m.get('text'))}",
         f"l.kind={_q(m.get('kind'))}",
         f"l.scene_block_id={_q(m.get('scene_block_id'))}",
+        f"l.ambient_text={_q(m.get('ambient_text'))}",
         f"l.text_sha1={_q(text_sha1(m.get('text') or ''))}",
-        f"l.status={0 if m['op'] == 'say' else 11}",
+        f"l.status={0 if m['op'] in ('say', 'transition') or has_amb else 11}",
     ])
 
 
-def build_actions(seq: list, plan: dict, sc_id: str, scene_names: set) -> tuple:
-    """最终序列 → (cypher 语句列表, 报告 dict)。含 keep 的 -1 恢复与演出字段 diff。"""
+def build_actions(seq: list, plan: dict, sc_id: str) -> tuple:
+    """最终序列 → (cypher 语句列表, 报告 dict)。含 keep 的 -1 恢复、块归属补写与演出字段 diff。"""
     stmts = []
     report = {"counts": {"kept": 0, "created": 0, "updated": 0, "deleted": 0, "restored": 0},
               "created": [], "updated": [], "deleted": [], "restored": [], "warnings": []}
 
-    for it in plan["delete"]:  # 图有 md 无：删行（wav 留盘成孤儿，报告列出）
+    for it in plan["delete"]:  # 图有 md 无：删行 + 清理音频产物（母带/运行时副本/.import）
         g = it["graph"]
+        _purge_line_audio_files(g, report)
         stmts.append(f"MATCH (l:LineAudio {{id:{_q(g['id'])}}}) DETACH DELETE l;")
         report["deleted"].append({"id": g["id"], "op": g.get("op"),
                                   "text": (g.get("text") or "")[:30]})
 
-    pos_map = {}  # 场景块内各角色上一次 pos（新 say 行缺省沿用）
-    for item in seq:
+    pos_map = {}  # 块内 who → 规则立绘位（块级分配：对话分侧/单人居中，块切换重算）
+    prev_block = None
+    for idx, item in enumerate(seq):
         m, action, oid, order = item["md"], item["action"], item["id"], item["order"]
-        if m["op"] == "scene":
-            pos_map = {}  # pos 沿用以场景块为界
+        if m.get("scene_block_id") != prev_block:
+            prev_block = m.get("scene_block_id")
+            blk_rows = []
+            for it2 in seq[idx:]:
+                if it2["md"].get("scene_block_id") != prev_block:
+                    break
+                blk_rows.append(it2["md"])
+            pos_map = _block_pos_map(blk_rows)
         if action == "create":
-            pos = (pos_map.get(m.get("who") or "") or SAY_DEFAULT_POS) if m["op"] == "say" else None
+            pos = pos_map.get(m.get("who") or "") if m["op"] == "say" else None
             stmts.append(
                 f"MERGE (l:LineAudio {{id:{_q(oid)}}}) "
                 f"ON CREATE SET {_set_props(m, pos)} "
                 f"WITH l MATCH (sc:SecScript {{id:{_q(sc_id)}}}) "
                 f"MERGE (sc)-[r:produces]->(l) SET r.order={order}, r.sync=true;"
             )
-            if m["op"] == "scene":
-                if m.get("scene_name") in scene_names:
-                    stmts.append(
-                        f"MATCH (l:LineAudio {{id:{_q(oid)}}}), (s:Scene {{name:{_q(m['scene_name'])}}}) "
-                        f"MERGE (l)-[e:stages]->(s) SET e.sync=false;"
-                    )
-                else:
-                    report["warnings"].append(
-                        f"Scene {m.get('scene_name')!r} 不存在，scene 行 {oid} 的 stages 边未建")
-            if m["op"] == "say":
-                pos_map[m.get("who") or ""] = pos
             report["created"].append({"id": oid, "op": m["op"], "order": order,
                                       "text": (m.get("text") or m.get("scene_block_id") or "")[:30]})
         elif action == "update":  # 台词变了（stale）：沿用 id/order，全量更新，置 0 重配
             g = item["graph"]
             pos = g.get("pos")
-            if m["op"] == "say" and not pos:
-                pos = SAY_DEFAULT_POS
+            if m["op"] == "say":
+                pos = pos_map.get(m.get("who") or "") or pos
             stmts.append(f"MATCH (l:LineAudio {{id:{_q(oid)}}}) SET {_set_props(m, pos)};")
-            if m["op"] == "scene" and m.get("scene_name") in scene_names \
-                    and m.get("scene_name") != g.get("scene_name"):
-                stmts.append(
-                    f"MATCH (l:LineAudio {{id:{_q(oid)}}})-[old:stages]->() DELETE old;",
-                    f"MATCH (l:LineAudio {{id:{_q(oid)}}}), (s:Scene {{name:{_q(m['scene_name'])}}}) "
-                    f"MERGE (l)-[e:stages]->(s) SET e.sync=false;")
+            # 氛围型旁白：正文改了但 ambient_text 未变且音频已在 → 保留已产（置 10 进审），
+            # 不白白重做环境音（音频跟语义走，不跟旁白正文走）
+            if m.get("ambient_text") and m.get("ambient_text") == g.get("ambient_text") \
+                    and g.get("ambient_track") and _wav_exists(g["ambient_track"]):
+                stmts.append(f"MATCH (l:LineAudio {{id:{_q(oid)}}}) SET l.status=10, "
+                             f"l.ambient_track={_q(g['ambient_track'])};")
+                report.setdefault("reused_amb", []).append({"id": oid})
             if m["op"] == "say":
                 pos_map[m.get("who") or ""] = pos or SAY_DEFAULT_POS
             report["updated"].append({"id": oid, "op": m["op"],
                                       "text": (m.get("text") or "")[:30]})
-        else:  # keep：未变行。仅 -1 恢复与演出字段 diff，status 0/10/11 原样保留
+        else:  # keep：未变行。仅 -1 恢复、演出字段 diff（op 归一/pos）与块归属补写，status 0/10/11 原样保留
             g = item["graph"]
+            if g.get("op") == "ambient" and m["op"] == "transition":
+                # 存量 op=ambient 改名归一（幂等自愈；_sig 已归一防对齐断裂，此处落图）
+                stmts.append(f"MATCH (l:LineAudio {{id:{_q(oid)}}}) SET l.op='transition';")
+                g = {**g, "op": "transition"}
+            if g.get("scene_block_id") != m.get("scene_block_id"):
+                # scene 行去图化的存量迁移：行上补写块归属（不动 status，幂等）
+                stmts.append(f"MATCH (l:LineAudio {{id:{_q(oid)}}}) "
+                             f"SET l.scene_block_id={_q(m.get('scene_block_id'))};")
             if g.get("status") == -1:
-                if m["op"] != "say":
-                    new_status = 11
-                elif g.get("voice_key") and g.get("text_sha1") == text_sha1(m.get("text") or "") \
-                        and _wav_exists(g.get("who") or "", g.get("voice_key")):
-                    new_status = 10
+                # 非音频行恢复 11；音频行按「键在 +（say 另需 text_sha1 匹配）+ 母带 wav 在」恢复 10
+                track = g.get("ambient_track")
+                if m["op"] == "say":
+                    ok = g.get("voice_key") and g.get("text_sha1") == text_sha1(m.get("text") or "") \
+                        and _wav_exists(g.get("voice_key"))
+                    new_status = 10 if ok else 0
+                elif m["op"] == "ambient" or m.get("ambient_text"):
+                    ok = track and _wav_exists(track)
+                    new_status = 10 if ok else 0
                 else:
-                    new_status = 0
+                    new_status = 11
                 stmts.append(f"MATCH (l:LineAudio {{id:{_q(oid)}}}) SET l.status={new_status};")
                 report["restored"].append({"id": oid, "to": new_status})
-            if m["op"] == "say" and (m.get("portrait") or None) != (g.get("portrait") or None):
-                stmts.append(f"MATCH (l:LineAudio {{id:{_q(oid)}}}) "
-                             f"SET l.portrait={_q(m.get('portrait'))};")
-            if m["op"] == "say" and g.get("pos"):
-                pos_map[m.get("who") or ""] = g["pos"]
+            if m["op"] == "say":
+                want = pos_map.get(m.get("who") or "")
+                if want and g.get("pos") != want:  # 演出 diff：存量 pos 与块规则不一致 → 自愈补写
+                    stmts.append(f"MATCH (l:LineAudio {{id:{_q(oid)}}}) SET l.pos={_q(want)};")
+                    report.setdefault("pos_fixed", []).append({"id": oid, "to": want})
             report["counts"]["kept"] += 1
 
     report["counts"].update(created=len(report["created"]), updated=len(report["updated"]),
@@ -384,32 +485,29 @@ def split(section_id: str, dry_run: bool = False) -> dict:
         raise ValueError(f"SecScript.status={st}（须 11 定稿已批才能拆分进图）")
     if not script_path:
         raise ValueError("SecScript.script_path 为空")
-    md_rows = parse_md(script_path)
+    parsed = parse_md(script_path)
+    md_rows, blocks = parsed["rows"], parsed["blocks"]
 
     graph_rows = _run_cypher(
         "MATCH (sc:SecScript {id:'" + sc_id + "'})-[p:produces]->(l:LineAudio) "
-        "OPTIONAL MATCH (l)-[:stages]->(s:Scene) "
-        "RETURN l.id AS id, l.op AS op, l.who AS who, l.portrait AS portrait, l.pos AS pos, "
+        "RETURN l.id AS id, l.op AS op, l.who AS who, l.pos AS pos, "
         "l.text AS text, l.kind AS kind, l.scene_block_id AS scene_block_id, "
+        "l.ambient_text AS ambient_text, "
         "l.status AS status, l.attempts AS attempts, l.voice_key AS voice_key, "
-        "l.text_sha1 AS text_sha1, p.order AS ord, s.name AS scene_name "
+        "l.ambient_track AS ambient_track, l.text_sha1 AS text_sha1, p.order AS ord "
         "ORDER BY p.order"
     )
 
-    wanted = sorted({m["scene_name"] for m in md_rows if m["op"] == "scene"})
-    scene_names = set()
-    if wanted:
-        found = _run_cypher(
-            "MATCH (s:Scene) WHERE s.name IN [" + ",".join(_q(n) for n in wanted) + "] RETURN s.name AS name"
-        )
-        scene_names = {r["name"] for r in found}
-
     plan = align(md_rows, graph_rows)
     seq, reordered = assign_orders(md_rows, plan)
-    stmts, report = build_actions(seq, plan, sc_id, scene_names)
+    stmts, report = build_actions(seq, plan, sc_id)
+    # 块定义写入 SecScript.scene_blocks（scene 行已去图化，块元数据的图上落点）
+    stmts.append(f"MATCH (sc:SecScript {{id:{_q(sc_id)}}}) "
+                 f"SET sc.scene_blocks={_q(json.dumps(blocks, ensure_ascii=False))};")
     stmts = _order_statements(seq, sc_id, reordered) + stmts
     report.update({"section_id": section_id, "sc_id": sc_id, "script_path": script_path,
-                   "reordered": reordered, "statements": len(stmts), "dry_run": dry_run})
+                   "reordered": reordered, "statements": len(stmts), "dry_run": dry_run,
+                   "blocks": blocks})
     if stmts and not dry_run:
         _run_cypher_multi(stmts)
     return report

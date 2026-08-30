@@ -9,8 +9,9 @@
 > 子命令：`ensure-ref`（单 ref，下游配音用） / `design-candidates`（多候选流程第一步：
 > 同一 instruct × N 次采样出候选 ref 24k + candidates.json manifest） / `audition`
 > （第二步：Qwen3 Base Voice Clone 出每候选 3 情绪试听，情绪靠试听句文本语义自适应） /
-> `publish`（逐句配音：按角色 ref + tts_text 变体逐句 clone，母带 → 15_声音/<char>/；
-> 情绪由 tts_text 变体承载，emotion 不参与合成参数）。
+> `publish`（逐句配音：按角色 ref + tts_text 变体逐句 clone，母带 → 15_声音/<chapter_stem>/<scene_block_id>/；
+> 情绪由 tts_text 变体承载，emotion 不参与合成参数；clone_mode 逐句选演绎通道——
+> icl（缺省）=ref 韵律迁移 / xvec=仅说话人向量文本主导演绎，每角色按模式懒建 prompt）。
 
 前置：
   - Qwen VoiceDesign / Base 模型路径：from paths import（读 settings.json）
@@ -28,6 +29,7 @@ import torch
 import soundfile as sf
 from qwen_tts import Qwen3TTSModel
 from paths import QWEN_VOICE_DESIGN as VOICE_DESIGN_PATH, QWEN_BASE, to_abs, to_rel
+from voice_bundler import split_voice_key, normalize_clone_mode
 
 # 多候选流程默认值：每角色候选数 + 情绪试听文本（每情绪一句，语义与情绪匹配）。
 # audition_texts 固化进 candidates.json（单一源），本脚本 audition 子命令消费——
@@ -209,61 +211,87 @@ def audition(manifest_path: str, device="cuda:0") -> dict:
 
 
 def publish(tasks: dict, profiles: dict, out_dir, keys=None, device="cuda:0") -> dict:
-    """按角色批量 Qwen3 Base Voice Clone（逐句配音母带落 out_dir/<char>/<key>.wav）。
+    """按角色批量 Qwen3 Base Voice Clone（逐句配音母带落 out_dir/<stem>/<block>/<key>.wav）。
 
-    tasks: {char: [{key, text, tts_text?, emotion, ...}]}（voice_bundler tasks-from-graph 产
-           + skill 已填 emotion/tts_text）
-    profiles: {char: {ref_audio_path, ref_text, ...}}（VoiceDesign 字典；ref_text 供 clone
-           prompt 构建，须与 ref 音频逐字一致——统一长句天然满足）
+    tasks: {char: [{key, text, tts_text?, clone_mode?, emotion, ...}]}（voice_bundler
+           tasks-from-graph 产 + skill 已填 emotion/tts_text/clone_mode）
+    profiles: {char: {ref_audio_path, ref_text, ...}}（VoiceDesign 字典；ref_text 供 icl
+           prompt 构建，须与 ref 音频逐字一致——统一长句天然满足；纯 xvec 批不消费）
     keys: 可选键过滤（列表）——单句/批量重生成只跑指定句；缺省 = tasks 全部。
     ref 以 24k 原生消费（Qwen3 clone 原生采样率，无 16k 重采样副产物）。
+    每角色按 clone_mode 懒构建 prompt（同角色 icl/xvec 可混排）：
+      icl（缺省）= ICL——ref codec + ref_text 韵律迁移，音色最稳；
+      xvec = 仅说话人向量——丢 ref 韵律、文本语义主导演绎（迟疑/强情绪句；
+      demo/hesitation_demo.py 变体 C 验证平静 ref 韵律会压制文本语气）。
     emotion 不参与合成参数（Base clone 无 instruct 通道）——情绪全部由 tts_text 变体承载，
     缺 tts_text 回落 text 原文；emotion 仅随 bind-graph 写图作标注。
     返回 {produced: {char: [wav_path]}, skipped: [char], failed: [{char, key, error}]}。
     逐句 try/except：单句失败记入 failed 不炸整批（bind-graph 只 bind 成功句，失败句保持
-    status=0 下轮重挑）。
+    待配下轮重挑）；首句模式的 prompt 构建失败 → 该角色全句 failed（现状粒度），
+    追加模式构建失败降级为该句 failed。
     """
     key_set = {k.strip() for k in keys if k.strip()} if keys else None
     model = None  # 懒加载一次（全部角色 skip 时不加载）
     produced, skipped, failed = {}, [], []
     for char, items in tasks.items():
-        profile = profiles.get(char) or {}
-        ref_path = profile.get("ref_audio_path")
-        ref_text = profile.get("ref_text")
-        if not ref_path or not os.path.exists(ref_path) or not ref_text:
-            print(f"[skip] {char}: 缺 ref_audio_path/ref_text 或文件不存在（先跑 ensure-ref / 补 profiles ref_text）")
-            skipped.append(char)
-            continue
         todo = [it for it in items if key_set is None or it.get("key") in key_set]
         if not todo:
             continue
-        char_dir = os.path.join(out_dir, char)
-        os.makedirs(char_dir, exist_ok=True)
+        profile = profiles.get(char) or {}
+        ref_path = profile.get("ref_audio_path")
+        ref_text = profile.get("ref_text")
+        # xvec 只需 ref 音频（说话人向量）；icl 另需 ref_text（须与 ref 逐字一致）
+        need_icl = any(normalize_clone_mode(it.get("clone_mode")) == "icl" for it in todo)
+        if not ref_path or not os.path.exists(ref_path) or (need_icl and not ref_text):
+            print(f"[skip] {char}: 缺 ref_audio_path{'/ref_text' if need_icl else ''}"
+                  " 或文件不存在（先跑 ensure-ref / 补 profiles ref_text）")
+            skipped.append(char)
+            continue
+        prompts = {}  # {mode: prompt} 按模式懒构建——只建本批实际出现的模式
+
+        def _prompt(mode):
+            if mode not in prompts:
+                prompts[mode] = model.create_voice_clone_prompt(
+                    ref_audio=ref_path,
+                    ref_text=ref_text if mode == "icl" else None,  # xvec 忽略 ref_text
+                    x_vector_only_mode=(mode == "xvec"))
+            return prompts[mode]
+
         try:
             if model is None:
                 model = load_base_model(device=device)
-            # 每角色构建一次可复用 prompt（提取 codec code + 说话人向量），同 audition
-            prompt = model.create_voice_clone_prompt(ref_audio=ref_path, ref_text=ref_text)
+            _prompt(normalize_clone_mode(todo[0].get("clone_mode")))  # 首句模式提前构建：失败→该角色全句 failed
         except Exception as e:  # 模型加载/prompt 构建失败：该角色全部句记 failed，不炸整批
             for it in todo:
                 failed.append({"char": char, "key": it.get("key"), "error": str(e)})
             print(f"[fail] {char}: clone prompt 构建失败: {e}")
             continue
-        paths = []
+        paths, mode_n = [], {}
         for it in todo:
             try:
-                # 情绪承载唯一通道：tts_text 变体（LLM 由原文产，加语气符号引导）；缺省回落原文
+                mode = normalize_clone_mode(it.get("clone_mode"))
+                # 情绪承载唯一通道仍是 tts_text 变体（LLM 由原文产，加语气符号引导）；
+                # mode 只换演绎通道。缺省回落原文。
                 tts_input = it.get("tts_text") or it["text"]
                 wavs, sr = model.generate_voice_clone(
-                    text=tts_input, language="Chinese", voice_clone_prompt=prompt)
-                out = os.path.join(char_dir, f"{it['key']}.wav")
+                    text=tts_input, language="Chinese", voice_clone_prompt=_prompt(mode))
+                # 母带按章节整理：15_声音/<chapter_stem>/<scene_block_id>/<key>.wav
+                # （段信息从 key 自身解析，角色名不进目录）
+                t = split_voice_key(it["key"])
+                if t is None:
+                    raise ValueError(f"key 无法解析：{it['key']!r}")
+                out = os.path.join(out_dir, t[1], t[2], f"{it['key']}.wav")
+                os.makedirs(os.path.dirname(out), exist_ok=True)
                 sf.write(out, wavs[0], sr)
                 paths.append(out)
-            except Exception as e:  # 单句失败不炸整批
-                failed.append({"char": char, "key": it.get("key"), "error": str(e)})
+                mode_n[mode] = mode_n.get(mode, 0) + 1
+            except Exception as e:  # 单句失败不炸整批（含追加模式 prompt 构建失败）
+                failed.append({"char": char, "key": it.get("key"),
+                               "error": f"[{normalize_clone_mode(it.get('clone_mode'))}] {e}"})
                 print(f"[fail] {char}/{it.get('key')}: {e}")
         produced[char] = paths
-        print(f"[ok] {char}: {len(paths)} wav -> {char_dir}")
+        dist = " / ".join(f"{m} {n}" for m, n in mode_n.items()) if mode_n else "-"
+        print(f"[ok] {char}: {len(paths)} wav（{dist}，母带按 章节/场景块 归档）")
     return {"produced": produced, "skipped": skipped, "failed": failed}
 
 
@@ -294,10 +322,10 @@ def main():
 
     p_pub = sub.add_parser(
         "publish",
-        help="按角色批量 Qwen3 Base Voice Clone（逐句配音母带 → 15_声音/<char>/，消费 tasks.json + profiles.json）")
-    p_pub.add_argument("tasks", help="voice_bundler.py tasks-from-graph 产出的 tasks.json（skill 已填 emotion/tts_text）")
+        help="按角色批量 Qwen3 Base Voice Clone（逐句配音母带 → 15_声音/<chapter_stem>/<scene_block_id>/，消费 tasks.json + profiles.json）")
+    p_pub.add_argument("tasks", help="voice_bundler.py tasks-from-graph 产出的 tasks.json（skill 已填 emotion/tts_text/clone_mode）")
     p_pub.add_argument("--profiles", required=True, help="{char: VoiceDesign dict} JSON（需 ref_audio_path + ref_text）")
-    p_pub.add_argument("--out-dir", default="15_声音", help="母带根目录（写 <out-dir>/<char>/<key>.wav；运行时副本走 voice_bundler sync）")
+    p_pub.add_argument("--out-dir", default="15_声音", help="母带根目录（写 <out-dir>/<chapter_stem>/<scene_block_id>/<key>.wav，路径段从 key 解析；运行时副本由 chapter-publisher 发布时收录）")
     p_pub.add_argument("--keys", default=None, help="只生成指定 key（逗号分隔，单句/批量重生成用；缺省=全部）")
     p_pub.add_argument("--device", default="cuda:0")
     p_pub.set_defaults(_mode="publish")

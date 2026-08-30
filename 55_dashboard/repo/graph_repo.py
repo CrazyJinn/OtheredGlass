@@ -52,8 +52,8 @@ _ART_EDGES = "has_appearance|has_voice_style|has_voice_design|has_costume|produc
 _SCENE_EDGES = "has_scene|has_layer|has_bgm"
 
 # 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio；
-# Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration；LineAudio(scene行)→stages→Scene）
-_PLOT_EDGES = "has_section|has_outline|produces|contains|depicts|expands_to|stages"
+# Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration；LineAudio→uses→StandingIllustration 行级选绘边）
+_PLOT_EDGES = "has_section|has_outline|produces|contains|depicts|expands_to|uses"
 
 
 def get_character_graph(char_id):
@@ -113,14 +113,16 @@ def get_location_graph(loc_id):
 
 
 def get_chapter_graph(ch_id):
-    """取章节编排子图的全部节点与边（Chapter→has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration）。
+    """取章节编排子图的全部节点与边（Chapter→has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration；
+    LineAudio 第 4 跳、其 uses 选绘目标第 5 跳——深度须 *1..5）。
 
-    沿 has_section/contains/depicts/expands_to 边遍历；depicts 指向的 IllusDesign 及其 expands_to 立绘变体一并纳入（供立绘缺口查看）。
+    沿 has_section/contains/depicts/expands_to/uses 边遍历；depicts 指向的 IllusDesign 及其 expands_to 立绘变体
+    （供立绘缺口查看）与行级 uses 选绘目标（行绑定的立绘变体）一并纳入。
     有向遍历（->）严格沿上游→下游，避免共享 IllusDesign 反向 depicts 蔓延到其他章 Scene 造成跨章子图污染。
     """
     with _session() as s:
         ids = [ch_id] + [r["id"] for r in s.run(
-            "MATCH (ch:Chapter)-[:%s*1..4]->(n) WHERE ch.id=$id RETURN DISTINCT n.id AS id" % _PLOT_EDGES,
+            "MATCH (ch:Chapter)-[:%s*1..5]->(n) WHERE ch.id=$id RETURN DISTINCT n.id AS id" % _PLOT_EDGES,
             id=ch_id,
         )]
         nodes = [
@@ -218,21 +220,22 @@ def get_section_of_lineaudio(vo_id):
 def get_script_lines(sc_id):
     """取 SecScript 的逐句行（LineAudio，按 produces.order 升序）。
 
-    行 dict 含节点属性 + order +（op=scene 行）stages→Scene 的 name/time_of_day。
-    块归属/voice key 的 scene 段由调用方按 order 遍历遇 op=scene 行切块推导（行上不冗余存）。
+    行 dict 含节点属性 + order + portrait（= uses 选绘边目标的 variant_label，无边为 None——
+    每行至多 1 条 uses 边，无行乘积；键名沿用 portrait 使 UI 徽章零改）。
     """
     with _session() as s:
         rs = s.run(
             """
             MATCH (sc:SecScript {id:$id})-[p:produces]->(l:LineAudio)
-            OPTIONAL MATCH (l)-[:stages]->(s:Scene)
+            OPTIONAL MATCH (l)-[:uses]->(pst:StandingIllustration)
             RETURN l.id AS id, l.name AS name, l.op AS op, l.who AS who,
-                   l.portrait AS portrait, l.pos AS pos, l.text AS text,
+                   pst.variant_label AS portrait, l.pos AS pos, l.text AS text,
                    l.tts_text AS tts_text, l.scene_block_id AS scene_block_id,
-                   l.voice_key AS voice_key, l.emotion AS emotion,
+                   l.ambient_text AS ambient_text,
+                   l.voice_key AS voice_key, l.ambient_track AS ambient_track, l.emotion AS emotion,
+                   l.clone_mode AS clone_mode,
                    l.attempts AS attempts, l.text_sha1 AS text_sha1,
-                   l.status AS status, p.order AS ord,
-                   s.name AS scene_name, s.time_of_day AS scene_time
+                   l.status AS status, p.order AS ord
             ORDER BY p.order
             """,
             id=sc_id,

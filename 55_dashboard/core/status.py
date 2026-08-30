@@ -38,9 +38,11 @@ ENUM_OPTIONS = {
     "scene_type": ["dialogue", "functional", "combat", "ui"],
     "layer_type": ["background", "floor", "decor", "mask"],
     # LineAudio 逐句行：op 行类型（choice/jump 暂不进图，建模后续设计）；pos 立绘位；kind 结局类型
-    "op": ["say", "narrate", "scene", "label", "ending"],
+    "op": ["say", "narrate", "transition", "scene", "label", "ending"],
     "pos": ["left", "center", "right"],
     "kind": ["BE", "TE", "HE", "NE"],
+    # LineAudio 逐句行：clone_mode 配音演绎通道（icl=ICL ref 韵律迁移缺省 / xvec=仅说话人向量文本主导演绎）
+    "clone_mode": ["icl", "xvec"],
 }
 
 STATUS_LABEL = {

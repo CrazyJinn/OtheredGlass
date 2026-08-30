@@ -161,10 +161,29 @@ def test_get_chapter_graph_uses_plot_edges_with_has_section(monkeypatch):
     assert "has_outline" in first_cypher and "produces" in first_cypher   # 节级产物链
     assert "contains" in first_cypher and "depicts" in first_cypher
     assert "expands_to" in first_cypher          # 变体枚举走 expands_to
-    assert "*1..4" in first_cypher                # 产物链/场景链最长均 4 跳
+    assert "uses" in first_cypher                 # 行级选绘边（LineAudio 第 4 跳、目标第 5 跳）
+    assert "stages" not in first_cypher           # stages 边已废止，不得残留
+    assert "*1..5" in first_cypher                # uses 目标在第 5 跳
     assert "Chapter" in first_cypher
     assert sess.run.call_args_list[0][1]["id"] == "CH1"
     assert len(g["nodes"]) == 2
     assert g["nodes"][0]["label"] == "SecOutline"
     assert len(g["edges"]) == 4
     assert g["edges"][0]["type"] == "has_section"
+
+
+def test_get_script_lines_reads_uses_variant_as_portrait(monkeypatch):
+    """逐句行的 portrait = uses 选绘边目标的 variant_label（键名沿用，UI 徽章零改）。"""
+    rec = {"id": "L1", "name": "哟，醒这么早？", "op": "say", "who": "顾盈",
+           "portrait": "挑眉", "pos": "left", "text": "哟，醒这么早？",
+           "tts_text": None, "scene_block_id": "s00_酒店", "ambient_text": None,
+           "voice_key": "顾盈-…-L1", "ambient_track": None, "emotion": "调侃",
+           "clone_mode": None, "attempts": 1, "text_sha1": "x", "status": 11, "ord": 1000}
+    sess = _fake_session([rec])
+    monkeypatch.setattr(graph_repo, "_session", lambda: sess)
+    lines = graph_repo.get_script_lines("SC1")
+    assert lines[0]["portrait"] == "挑眉"
+    cypher = sess.run.call_args[0][0]
+    assert "OPTIONAL MATCH (l)-[:uses]->(pst:StandingIllustration)" in cypher
+    assert "pst.variant_label AS portrait" in cypher
+    assert "l.portrait" not in cypher            # 行属性 portrait 已废弃

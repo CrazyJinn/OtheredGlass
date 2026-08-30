@@ -1,7 +1,7 @@
 """声音脚本路径配置：模型权重，统一读 settings.json/env。
 
-本模块位于 .claude/scripts/voice/，被同目录的 voice_clone_runner `from paths import` 引用。
-所有脚本不硬编码 D:/。
+本模块位于 .claude/skills/section-voice-publisher/scripts/，被同目录的 voice_clone_runner
+`from paths import` 引用。所有脚本不硬编码 D:/。
 优先级：env var > settings.json（项目根，gitignore），无默认值——未配置即报错。
 
 迁机器：改 settings.json 的 voice.model_dir（或设 VOICE_MODEL_DIR 环境变量）即可，不动代码。
@@ -9,9 +9,25 @@
 import json
 import os
 
-_HERE = os.path.dirname(os.path.abspath(__file__))  # .claude/scripts/voice/
-# voice → scripts → .claude → 项目根
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(_HERE)))
+_HERE = os.path.dirname(os.path.abspath(__file__))  # .claude/skills/section-voice-publisher/scripts/
+
+
+def _find_project_root(start: str) -> str:
+    """向上搜索项目根（含 settings.json 与 .claude/scripts/cypher_exec.py 的目录），
+    不依赖固定层级——脚本再搬迁也不碎。"""
+    cur = start
+    while True:
+        if os.path.exists(os.path.join(cur, "settings.json")) and os.path.isdir(
+            os.path.join(cur, ".claude", "scripts")
+        ):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            raise RuntimeError(f"未找到项目根（从 {start} 向上搜索失败）")
+        cur = parent
+
+
+_PROJECT_ROOT = _find_project_root(_HERE)
 
 
 # 项目根（manifest / 图字段里的产物路径惯例为项目根相对，正斜杠分隔）

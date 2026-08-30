@@ -2,12 +2,11 @@
 name: char-illus-designer
 description: |
   推进 IllusDesign 图节点：查询状态 → 组装提示词/生成图片 → 保存结果（MERGE 兜底建节点+边，写产物与 status）。
-  每组 (DesignSheet, CostumeStyle) 对应一个节点，支持一次推进多个 status（0→1→2）。
+  每组 (DesignSheet, CostumeStyle) 对应一个节点，单轮直推到最大门控（图片完成即待审 10）。
   在需要生成立绘设计图或 IllusDesign 节点需推进时使用。
-argument-hint: <char_id> [target_status]
+argument-hint: <char_id>
 arguments:
   - char_id
-  - target_status
 allowed-tools: Read, Bash, Write, Edit
 ---
 
@@ -22,7 +21,6 @@ allowed-tools: Read, Bash, Write, Edit
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | char_id | 角色 ID（snowflake Base62） | 必传 |
-| target_status | 推进目标：`1`（仅提示词）或 `2`（到图片） | `2` |
 
 ## 流程（三段式：查状态 → 完成任务 → 保存结果）
 
@@ -52,7 +50,7 @@ RETURN ch.name AS char_name,
 
 对每组 (ds, cos) 推进：
 
-#### 推进到提示词（status → 1）
+#### 组装提示词
 
 使用 Skill 工具调用 `char-prompt-assembler`，参数 `IllusDesign '<data_json>'`：
 
@@ -68,7 +66,7 @@ RETURN ch.name AS char_name,
 
 在 data 中声明 `output_path = 06_角色美术/<char_name>/<cos_name>/prompt.md`；char-prompt-assembler 写入该路径并返回 `PROMPT_PATH`。
 
-#### 推进到图片（status → 2，仅 target_status=2）
+#### 生成图片
 
 使用 Skill 工具调用 `infra-image-generator`，参数 `<PROMPT_PATH> <OUTPUT_PATH> <ds_image>`（图生图，以 DesignSheet 图片为参考）：
 
@@ -89,13 +87,13 @@ MATCH (cos:CostumeStyle {id: '<cos_id>'}), (illus:IllusDesign {id: '<ILLUS_ID>'}
 MERGE (cos)-[r:outfit_for]->(illus) SET r.sync = true;
 MATCH (illus:IllusDesign {id: '<ILLUS_ID>'})
 SET illus.prompt_path = '<PROMPT_PATH>',
-    illus.image_path  = '<IMAGE_PATH>',        // 仅 target_status=2 时
+    illus.image_path  = '<IMAGE_PATH>',
     illus.adaptation_notes = '<notes>',        // 若有补充
     illus.display_scale = <scale 或 null>,     // = round(height_cm/200, 4)；height_cm 缺失则 null
-    illus.status = <1 | 10>;                   // target_status=1 → 1；target_status=2 → 10（待审）
+    illus.status = 10;                         // 图片完成即待审（直写，不经 submit）
 ```
 
-**status 写入**：仅提示词 → `1`；到图片 → `10`（待审，等待 dashboard 审批）。
+**status 写入**：固定 `10`（待审，等待 dashboard 审批）。
 
 ## 参考文档
 

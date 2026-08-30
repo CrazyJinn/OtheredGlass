@@ -46,7 +46,7 @@ ORDER BY type, status
 
 ### 3. 决策与调度
 
-**通过 Skill 工具加载并驱动生产 skill**：决策后用 `Skill` 工具调用下表对应 skill，传入 `char_id` 与 `target_status`（如 `char-design-sheet NvCkQmFPFt 2`）。Skill 工具是扁平的——加载后即由 char-design 在该 skill 的流程内继续执行其三段式【查询目标节点 → 组装提示词/生成图片 → MERGE 兜底建节点+边并写 status】，最终 status 由该 skill 的「保存结果」步统一写入。**char-design 在"分发决策"阶段**（尚未加载某生产 skill 时）**只用 Bash 执行第 2 步的只读状态查询，不亲自写 cypher 写入、不跑 snowflake、不手写提示词内容、不凭空调图片生成**；一旦 `Skill` 加载了某个生产 skill，则按其 SKILL.md 流程执行（其保存步的 cypher 写入、新建节点时的 snowflake、第 2 步对子 skill 的调用，都是该 skill 流程的一部分）。
+**通过 Skill 工具加载并驱动生产 skill**：决策后用 `Skill` 工具调用下表对应 skill，传入 `char_id`（如 `char-design-sheet NvCkQmFPFt`）——skill 单轮直推到该链最大门控，无推进目标参数。Skill 工具是扁平的——加载后即由 char-design 在该 skill 的流程内继续执行其三段式【查询目标节点 → 组装提示词/生成图片 → MERGE 兜底建节点+边并写 status】，最终 status 由该 skill 的「保存结果」步统一写入。**char-design 在"分发决策"阶段**（尚未加载某生产 skill 时）**只用 Bash 执行第 2 步的只读状态查询，不亲自写 cypher 写入、不跑 snowflake、不手写提示词内容、不凭空调图片生成**；一旦 `Skill` 加载了某个生产 skill，则按其 SKILL.md 流程执行（其保存步的 cypher 写入、新建节点时的 snowflake、第 2 步对子 skill 的调用，都是该 skill 流程的一部分）。
 
 **不绕过生产 skill 的流程框架**（这是 status 漏写的唯一根源，必须遵守）：每个待推进的生产节点，**先用 `Skill` 工具加载上表对应的生产 skill**（char-concept-designer / char-costume-designer / char-design-sheet / char-illus-designer），再按其 SKILL.md 流程执行完整三段式（查状态 → 组装/生成 → 保存结果写 status）。
 
@@ -56,7 +56,7 @@ ORDER BY type, status
 
 **char-design 的职责边界**：解析角色 → 只读查状态 → 据 status 决策 → 用 Skill 加载生产 skill 并驱动其流程 → 复查该节点 status → 汇报。char-design **不凭空手写提示词内容、不亲自直接调 OfoxAI 图片 API**——提示词与图片只能通过加载生产 skill、由其流程内的子 skill（char-prompt-assembler / infra-image-generator）产出；**不绕过生产 skill 的保存步**（status 只能由该步写入）。
 
-**调度只看 status，不看产物文件**：决定是否调度某 skill 时，唯一判据是节点 `status` 与 `target_status`。**禁止**因 `prompt_path`/`image_path` 已有值或磁盘文件已存在而判定"已完成"并跳过调度。`status=-1`（作废重做）必须重新调用对应 skill 重生成并覆盖旧产物；**重做时禁止读取旧 prompt / 旧图片内容**，直接以当前图节点数据为唯一来源重新组装并覆盖写入。
+**调度只看 status，不看产物文件**：决定是否调度某 skill 时，唯一判据是节点 `status` 是否到达该链最大门控（数据节点 `1`、生产节点 `10`）。**禁止**因 `prompt_path`/`image_path` 已有值或磁盘文件已存在而判定"已完成"并跳过调度。`status=-1`（作废重做）必须重新调用对应 skill 重生成并覆盖旧产物；**重做时禁止读取旧 prompt / 旧图片内容**，直接以当前图节点数据为唯一来源重新组装并覆盖写入。
 
 **全量循环推进，禁止只推一个就停**：开局第 2 步的一次查询结果即作为本地状态表，据表枚举所有待办节点（`status < 10`，含 `-1/0/1/2`）逐个委派 skill 推进，直到全部到达终态——数据节点 `1`、生产节点 `10`（待审）——或撞上审批阻塞（`status=10` 待 dashboard 批）、或撞上必须由用户决策的分歧点，才返回。**禁止**发现多个待办却只处理第一个就汇报结束。
 
@@ -79,12 +79,12 @@ ORDER BY type, status
 - AppearanceStyle / LanguageStyle：`0` 待设计 → `1` 已完成（无审批）
 - CostumeStyle：`0` 待设计 → `1` 已完成（无审批）
 - VoiceDesign：`0` 待设计 → `1` instruct 完成 → `10` 候选固化（生产完成**即待审，无 submit 步**；由 `candidates_path` 分两态：非空=候选待选——3 候选 ref（24k）+ 每候选 3 情绪试听（Qwen3 Base clone）已落盘 `14_声音设计/<char>/candidates/`，dashboard 审批中心逐候选试听「采用」（固化为 `<char>_ref.wav` + 删 candidates_path，status 仍 10）；空=单 ref 待审——通过 11 / 驳回 0）→ `11` 批准（char-voice-design 先合成候选与试听全部落盘成功才写图，读 LanguageStyle/Info/Event 生成 instruct + 统一长句 ref_text）。`2` 为历史兼容值（旧流程生产态），本 skill 一律不写
-- 生产节点（DesignSheet / IllusDesign）：`0` 待生成 → `1` 提示词完成 → `2` 图片完成 → `10` 待审 → `11` 批准。**实际推进**：`target_status=1` 时 skill 写 `1`；`target_status=2` 时 skill 直接写 `10`（图片完成即提交待审，`2` 为可选中间态，由 dashboard 手动 submit 路径使用）。
+- 生产节点（DesignSheet / IllusDesign）：`0` 待生成 → `10` 待审 → `11` 批准。skill 单轮直推：图片完成即写 `10`（`1`/`2` 为历史可选中间态，仅由 dashboard 手动路径使用，skill 不再写）。
 - 生产态 `0/1/2`，审批专属 `10`/`11`；驳回归 `0`
 
 **依赖顺序**：char-concept-designer → {char-costume-designer, char-voice-design} → char-design-sheet → char-illus-designer（char-voice-design 读 LanguageStyle 作生成依据，须在 char-concept-designer 之后；与 char-costume-designer 无依赖、可并列）
 
-**调度方式**：用 `Skill` 工具调用**上表 5 个生产 skill 之一**，参数 `<char_id> [target_status]`（省略 target_status 则推到最终状态；char-voice-design 支持 target_status：`1`=仅写文本设计 / `10`=多候选完整生产（3 候选 ref + 9 情绪试听 + manifest，直接待选待审），默认 10；char-concept-designer / char-costume-designer 无 target_status，直接到 1）。入口决策时 char-design **只从这 5 个生产 skill 选一个加载**，不跳过它们。`char-prompt-assembler` / `infra-image-generator` 是生产 skill 流程**内部**的子 skill——它们**不作为 char-design 的入口调度目标**，但**在已加载 char-design-sheet / char-illus-designer 并执行其第 2 步时，必须按该 skill 指示调用**（理由见上文「不绕过生产 skill 的流程框架」）。
+**调度方式**：用 `Skill` 工具调用**上表 5 个生产 skill 之一**，参数只有 `<char_id>`——每个 skill 单轮直推到该链最大门控（char-voice-design = 多候选完整生产直接 10；char-concept-designer / char-costume-designer = 1）。入口决策时 char-design **只从这 5 个生产 skill 选一个加载**，不跳过它们。`char-prompt-assembler` / `infra-image-generator` 是生产 skill 流程**内部**的子 skill——它们**不作为 char-design 的入口调度目标**，但**在已加载 char-design-sheet / char-illus-designer 并执行其第 2 步时，必须按该 skill 指示调用**（理由见上文「不绕过生产 skill 的流程框架」）。
 
 **节点由 skill 创建**：agent 不直接创建任何图节点或边；节点/边由各 skill 在「保存结果」步用 MERGE 兜底创建，status 由该步统一写入。子 skill（char-prompt-assembler / infra-image-generator）为**纯产出层**——只产 prompt/图片文件、不读写图、不写 status。
 

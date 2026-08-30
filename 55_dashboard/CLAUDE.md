@@ -79,7 +79,7 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 
 ## 剧情章节进度
 
-[page_chapter_overview.py](ui/page_chapter_overview.py) 是剧情模块唯一页面，按「章 + 节」两层展开：列出全部 `Chapter`（按 `chapter_no`），每章卡片下展示各 `Section`（按 `section_no`）的产物链状态（提纲/定稿/配音三段徽章，Section 无 status；音频段为该节 LineAudio 行状态聚合的瓶颈值，附行数）+ 编排子图（`has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio` 与 `Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration`）+ 节级 **台词.md 预览**（人读定稿格式，review 对白质量，区别于美术节点审批看图）。
+[page_chapter_overview.py](ui/page_chapter_overview.py) 是剧情模块唯一页面，按「章 + 节」两层展开：列出全部 `Chapter`（按 `chapter_no`），每章卡片下展示各 `Section`（按 `section_no`）的产物链状态（提纲/定稿/配音三段徽章，Section 无 status；音频段为该节 LineAudio 行状态聚合的瓶颈值，附行数）+ 编排子图（`has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio`、`Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration`、`LineAudio→uses→StandingIllustration`——行级选绘边，配音判断期建立）+ 节级 **台词.md 预览**（人读定稿格式，review 对白质量，区别于美术节点审批看图）。
 
 审批落点：
 - **Chapter 结构审**（`10→11`）：就地按钮（章卡片内）。
@@ -88,7 +88,7 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 
 推进入口分两级（生成 `vscode://` deeplink 唤起 `plot-design` agent，见 [launch_button.py](ui/components/launch_button.py)）：
 - 章行「推进剧情创作」= **章节全量**（structurer 分节 / 结构审 / 全量循环推进，到全章就绪即止）。**发布（chapter-publisher）由用户直接触发，不在 plot-design 职责内**。
-- 各节「推进此节」（`ch.status==11` 且该节产物链未全就绪、且无待审项时出现）= **单节聚焦**（plot-design 按产物链当前段推进该节的提纲/定稿/配音；`SecScript=11` 时推该节关联的 depicts 立绘，不碰其他节、不发布）。
+- 各节「推进此节」（`ch.status==11` 且该节产物链未全就绪、且无待审项时出现）= **单节聚焦**（plot-design 按产物链当前段推进该节的提纲/定稿/拆分选绘配音；`SecScript=11` 时推该节关联的 depicts 立绘——行级引用为 `LineAudio-[:uses]->` 选绘边，选绘在 section-voice-publisher 配音判断期完成，不碰其他节、不发布）。
 
 ## 叙事审批（写 Cypher 进库）
 

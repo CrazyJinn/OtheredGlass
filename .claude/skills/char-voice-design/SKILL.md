@@ -3,10 +3,9 @@ name: char-voice-design
 description: |
   推进 VoiceDesign 图节点（角色基线音色设计）**多候选流程**：查询状态 → 生成 instruct + 统一长句 ref_text → 先合成 3 个候选 ref（voice_clone_runner design-candidates）+ 每候选 3 个情绪试听（voice_clone_runner audition，Qwen3 Base Voice Clone，均 env/.venv-qwen）落盘验证 → 后写图（MERGE 兜底建节点+has_voice_design 边，写内容+ref_audio_path+candidates_path+status=10 候选待选）。
   依据 Character 基础属性 + LanguageStyle + Info/Event，按声线三要素（音色基底/演绎方式/情绪域）生成**简明**自然语言 instruct（1-2 句、≤60 字，措辞遵循 Qwen VoiceDesign 官方原则：简洁/具体/客观，禁比喻修辞），并做同场角色频谱避让。同一 instruct × 3 次随机采样出候选（人工在 dashboard 审批中心试听 ref+情绪试听后「采用」其一，固化为 <char>_ref.wav，status 保持 10 走二审）。怪物（enemy）跳过（无台词）。在需要设计角色基线音色、或 VoiceDesign status∈{-1,0} 需推进时使用。
-argument-hint: <char_id> [target_status]
+argument-hint: <char_id>
 arguments:
   - char_id
-  - target_status
 allowed-tools: Read, Bash, Write, Edit
 ---
 
@@ -25,7 +24,6 @@ allowed-tools: Read, Bash, Write, Edit
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | char_id | 角色节点 ID（snowflake Base62） | 必传 |
-| target_status | `10` 完整（含 ref_audio 固化，直接待审）/ `1` 仅文本设计（跳过合成） | `10` |
 
 ## 流程（三段式：查状态 → 完成任务（先产出物） → 保存结果（后写图））
 
@@ -56,7 +54,7 @@ RETURN DISTINCT other.name AS name, vd.instruct AS instruct, vd.description AS d
 
 - **目标节点判定**：
   - 若 `vd` 为空 → 生成新 snowflake id 作为 `VD_ID`（`python "${CLAUDE_SKILL_DIR}/../../scripts/snowflake_base62.py" -n 1 -q`），本次将新建；若存在 → `VD_ID = vd.id`，按 status 决定起点（`-1`/`0` 需重做）。
-  - status=1 且 target_status=1 → 已达标，直接汇报跳过；status≥2（含 10/11）→ 已生产完成，除非 `-1` 重做否则不覆盖；**status=10 且 `candidates_path` 非空 → 已在候选待选**（产物已落盘等 dashboard 采用），直接汇报跳过。
+  - status≥10 → 已生产完成（`10` 且 `candidates_path` 非空 = **已在候选待选**，产物已落盘等 dashboard 采用；`11` 已批准），除非 `-1` 重做否则直接汇报跳过；`1`（历史中间态，仅文本）→ 视为未完成，走完整流程重新产出。
 - **角色类型判断**：
 
   | 角色类型 | VoiceDesign |
@@ -74,7 +72,7 @@ RETURN DISTINCT other.name AS name, vd.instruct AS instruct, vd.description AS d
 - `ref_text`：**全角色统一通用长句**（不按角色定制、不内嵌语癖）：`上午我把书桌上的三份文件整理好，然后把水杯和钥匙放进背包，中午在城南餐厅吃了一顿面，下午再准时把报告直接交给负责人。`（54 字中性陈述、约 10~12 秒，覆盖翘舌/平舌/前后鼻音/复韵母；理由见模板 ref_text 节）。
 - `description`：1-2 句音色气质概要（含依据来源，便于回溯）。
 
-**2b. 合成候选与试听并验证落盘**（target_status=1 时跳过本步）。两步同 venv（env/.venv-qwen，两子命令分进程各自加载模型）：
+**2b. 合成候选与试听并验证落盘**。两步同 venv（env/.venv-qwen，两子命令分进程各自加载模型）：
 
 **① 重做清理**（status∈{-1,0} 重跑**必做**——两步脚本均为「文件存在即复用」，不删旧文件就不会重新合成）：
 
@@ -89,14 +87,14 @@ rm -f '14_声音设计/<角色名>/<角色名>_ref.wav'
 # 写 99_game/data/.cache/voice-candidates-<角色名>.json，内容：
 # { "<角色名>": { "instruct": "<instruct>", "ref_text": "<ref_text>", "candidates_dir": "14_声音设计/<角色名>/candidates", "count": 3 } }
 
-env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_clone_runner.py" design-candidates \
+env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../section-voice-publisher/scripts/voice_clone_runner.py" design-candidates \
   --profiles '99_game/data/.cache/voice-candidates-<角色名>.json'
 ```
 
 **③ audition**（每候选 3 情绪试听「平静/高兴/愤怒」，Qwen3 Base Voice Clone——README「Voice Design then Clone」流程：`create_voice_clone_prompt(ref, ref_text)` + `generate_voice_clone`；**无 instruct 通道，情绪靠试听句文本语义自适应**）：
 
 ```bash
-env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice_clone_runner.py" audition \
+env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../section-voice-publisher/scripts/voice_clone_runner.py" audition \
   --manifest '14_声音设计/<角色名>/candidates/candidates.json'
 ```
 
@@ -106,7 +104,7 @@ env/.venv-qwen/Scripts/python.exe "${CLAUDE_SKILL_DIR}/../../scripts/voice/voice
 
 ### 3. 保存结果（后写图，节点不存在则兜底创建）
 
-产出物就绪后才写图（status 按 target_status：默认 `10`（候选固化即待选即待审），仅文本设计写 `1`；**不写 2**）：
+产出物就绪后才写图（status 固定 `10`：候选固化即待选即待审，**不写 1 也不写 2**）：
 
 ```cypher
 MERGE (v:VoiceDesign {id: '<VD_ID>'})

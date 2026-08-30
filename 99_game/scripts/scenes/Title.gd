@@ -42,10 +42,13 @@ func _ready() -> void:
 	_apply_layout()
 
 func _apply_layout() -> void:
+	# 用 get_visible_rect()（逻辑坐标）而非 vp.size（物理像素），同 Game.gd 注释。
 	var s: Vector2 = Vector2(1536, 1024)
 	var vp: Viewport = get_viewport()
-	if vp != null and vp.size.x > 0.0:
-		s = vp.size
+	if vp != null:
+		var visible: Vector2 = vp.get_visible_rect().size
+		if visible.x > 0.0:
+			s = visible
 	_bg.size = s
 	_center.size = s
 	_log_layout("apply")
@@ -54,6 +57,6 @@ func _log_layout(tag: String) -> void:
 	var vp: Vector2 = Vector2.ZERO
 	var v: Viewport = get_viewport()
 	if v != null:
-		vp = v.size
+		vp = v.get_visible_rect().size
 	print("[Title:%s] viewport=%s | self=%s bg=%s center=%s vbox=%s" % [tag, vp, size, _bg.size, _center.size, _vbox.size])
 	print("[Title:%s]   start.global=%s | quit.global=%s" % [tag, _start.global_position, _quit.global_position])

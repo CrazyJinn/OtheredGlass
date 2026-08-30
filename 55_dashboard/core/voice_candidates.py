@@ -8,7 +8,7 @@ audition 子命令回填）位于 `14_声音设计/<char>/candidates/candidates.
 采用动作（page_approval 编排，事务顺序）：
 promote_candidate 先行（幂等 move）→ repo.update_node 写图
 （ref_audio_path + candidates_path=None 删属性）→ cleanup_candidates_dir 殿后
-（整删临时文件夹；失败仅留无害残留，voice_bundler sync 不扫此目录）。
+（整删临时文件夹；失败仅留无害残留，发布期拷贝只收 15_声音/ 母带不扫此目录）。
 
 函数均吃 project_root 参数（Path），不 import settings / streamlit——core 层可纯单测。
 """

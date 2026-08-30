@@ -9,14 +9,11 @@ import json
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from config import settings
 from core import script_lines as sl
 from repo import graph_repo
 from ui.components import launch_button
-
-_VOICES_DIR = "99_game/assets/voices"
 
 # 行级音频状态 → 徽章 markdown
 _STATE_BADGE = {
@@ -31,6 +28,14 @@ _STATE_BADGE = {
 def _abs(path):
     p = Path(path)
     return p if p.is_absolute() else settings.PROJECT_ROOT / p
+
+
+def _rel(p: Path) -> str:
+    """绝对路径 → 项目根相对（缺文件提示用，兜底返回原串）。"""
+    try:
+        return str(p.relative_to(settings.PROJECT_ROOT))
+    except ValueError:
+        return str(p)
 
 
 # ── 定稿审：台词.md 只读预览（人读格式，审文字质量）──
@@ -116,18 +121,27 @@ _STATE_EMOJI = {
 }
 
 
-def _render_sequential_player(lines, voices_dir):
-    """顺序连播器：本节全部有 wav 的 say 行串播（ended 自动接下一句，点句跳播）。
+def _render_sequential_player(lines):
+    """顺序连播器：本节全部有母带的音频行（say 配音 + ambient 环境音）按行序串播
+    （ended 自动接下一句，点句跳播）。
 
     行级通过/驳回按钮不受影响（仍在各行卡内）——本组件只是叠加的听音工具。
+    试听读母带 15_声音/（sl.master_wav_path）——运行时副本归 chapter-publisher
+    发布时按 status=11 拷贝，未批音频不进 99_game/assets。
     wav 以 base64 内嵌组件 iframe（st.audio 无跨组件连播能力），一句数十~数百 KB。
     """
     items = []
     for i, l in enumerate(lines, 1):
-        if l.get("op") != "say" or not l.get("voice_key"):
+        op = l.get("op")
+        if op == "transition" or (op == "narrate" and l.get("ambient_track")):
+            wav = sl.master_wav_path(l)
+            who = "🔊 转场音效" if op == "transition" else "🔊 氛围声景"
+        elif op == "say":
+            wav = sl.master_wav_path(l)
+            who = l.get("who", "")
+        else:
             continue
-        wav = voices_dir / f"{l['voice_key']}.wav"
-        if not wav.exists():
+        if wav is None or not wav.exists():
             continue
         try:
             b64 = base64.b64encode(wav.read_bytes()).decode()
@@ -135,18 +149,17 @@ def _render_sequential_player(lines, voices_dir):
             continue
         items.append({
             "i": i,
-            "who": l.get("who", ""),
+            "who": who,
             "text": l.get("text", ""),
             "badge": _STATE_EMOJI.get(sl.line_state(l), ""),
             "src": f"data:audio/wav;base64,{b64}",
         })
     if len(items) < 2:
         return  # 不足两句无需连播器
-    st.caption(f"🎧 顺序连播（{len(items)} 句，播完自动下一句；单句通过/驳回仍在下方各行卡）")
-    components.html(
+    st.caption(f"🎧 顺序连播（{len(items)} 条，含环境音，播完自动下一句；单句通过/驳回仍在下方各行卡）")
+    st.iframe(
         _SEQ_PLAYER_HTML.replace("__ITEMS__", json.dumps(items, ensure_ascii=False)),
         height=250,
-        scrolling=False,
     )
 
 
@@ -168,24 +181,18 @@ def render_audio_review(sec_id, sc_id, label=""):
         f"⚠️ 未配音 {c['missing']} · 🔄 作废 {c['void']}"
     )
 
-    # 顺序连播（听完整节再逐条定夺；行级通过/驳回按钮在下方各行卡不变）
-    _render_sequential_player(lines, _abs(_VOICES_DIR))
+    # 顺序连播（听完整节再逐条定夺；say + ambient 按行序；行级通过/驳回按钮在下方各行卡不变）
+    _render_sequential_player(lines)
 
     rejected_nodes = []
-    voices_dir = _abs(_VOICES_DIR)
     block = None
+    prev_block = None
     for i, l in enumerate(lines, 1):
-        op = l.get("op")
-        if op == "scene":
-            bits = [f"场景段 {l.get('scene_block_id', '')}（{l.get('scene_name', '')}）"]
-            if l.get("scene_time"):
-                bits.append(f"时段 {l['scene_time']}")
-            block = st.expander(" · ".join(bits), expanded=False)
-            continue
-        if block is None:
-            continue
+        if l.get("scene_block_id") != prev_block:  # 行上块归属变化 → 开块分组（scene 行已去图化）
+            prev_block = l.get("scene_block_id")
+            block = st.expander(f"场景段 {prev_block or '（未分块）'}", expanded=False)
         with block:
-            _render_line_card(l, i, sec_id, voices_dir, rejected_nodes)
+            _render_line_card(l, i, sec_id, rejected_nodes)
 
     # 驳回行重生成 deeplink（plot-design 单节聚焦只重配被驳回行 --nodes）
     if rejected_nodes:
@@ -202,10 +209,47 @@ def render_audio_review(sec_id, sc_id, label=""):
             st.rerun()
 
 
-def _render_line_card(l, idx, sec_id, voices_dir, rejected_nodes):
-    """单行卡：say 带徽章/原文变体对照/试听/通过驳回；结构行只读渲染。"""
+def _render_line_card(l, idx, sec_id, rejected_nodes):
+    """单行卡：音频行（say / 转场 ambient / 带氛围标注 narrate）带徽章/对照/试听/通过驳回；
+    其余结构行只读渲染。
+
+    试听读母带 15_声音/（sl.master_wav_path）。驳回行收进 rejected_nodes 为
+    {"id": 行id, "kind": "say"|"sfx"}——重生成 deeplink 按类型分流
+    （say 走 TTS 重配、sfx 走声景重做）。
+    """
     op = l.get("op")
     nid = l.get("id", "")
+    if op == "transition" or (op == "narrate" and l.get("ambient_track")):
+        state = sl.line_state(l)
+        kind_label = "🔊 转场音效" if op == "transition" else "🔊 氛围声景"
+        with st.container(border=True):
+            st.markdown(f"**{kind_label}** `#{idx}` {_STATE_BADGE.get(state, '')}：{l.get('text', '')}")
+            track = l.get("ambient_track")  # 已产音频才有通过/驳回按钮
+            wav = sl.master_wav_path(l)
+            if wav:
+                if wav.exists():
+                    st.caption(f"🎧 母带试听：{_rel(wav)}")
+                    st.audio(str(wav), format="audio/wav")
+                else:
+                    st.caption(f"⚠️ 缺母带音频：{_rel(wav)}")
+            b1, b2 = st.columns(2)
+            with b1:
+                if track and state in ("pending", "rejected") and \
+                        st.button("通过", key=f"la_ok_{nid}", type="primary"):
+                    sl.set_line_status(nid, 11)
+                    gone = sl.cleanup_after_approval(l)
+                    note = f"（已清素材 {','.join(gone)}）" if gone else ""
+                    st.toast(f"#{idx} 环境音已通过{note}", icon="✅")
+                    st.rerun()
+            with b2:
+                if track and state in ("pending", "approved") and \
+                        st.button("驳回", key=f"la_no_{nid}"):
+                    sl.set_line_status(nid, 0)
+                    st.toast(f"#{idx} 环境音已驳回（重做入口见下方）", icon="❌")
+                    st.rerun()
+            if state == "rejected":
+                rejected_nodes.append({"id": nid, "kind": "sfx"})
+        return
     if op != "say":
         if op == "narrate":
             st.markdown(f"*（旁白）{l.get('text', '')}*")
@@ -220,17 +264,20 @@ def _render_line_card(l, idx, sec_id, voices_dir, rejected_nodes):
         head = f"**{l.get('who', '')}** `{l.get('portrait') or ''}·{l.get('pos') or ''}`"
         if l.get("emotion"):
             head += f" `🎭{l['emotion']}`"
+        if l.get("clone_mode") == "xvec":
+            head += " `⚡xvec`"  # 非缺省演绎通道才显示（icl=缺省不占视觉噪音）
         head += f" `#{idx}` {_STATE_BADGE.get(state, '')}"
         st.markdown(f"{head}：{l.get('text', '')}")
         if l.get("tts_text") and l["tts_text"] != l.get("text"):
             st.caption(f"🎙️ 配音变体：{l['tts_text']}")
         key = l.get("voice_key")
         if key:
-            wav = voices_dir / f"{key}.wav"
-            if wav.exists():
+            wav = sl.master_wav_path(l)
+            if wav and wav.exists():
+                st.caption(f"🎧 母带试听：{_rel(wav)}")
                 st.audio(str(wav), format="audio/wav")
             else:
-                st.caption(f"⚠️ 缺音频文件：{key}.wav")
+                st.caption(f"⚠️ 缺母带音频：{_rel(wav) if wav else key + '.wav'}")
         b1, b2 = st.columns(2)
         has_audio = bool(key)
         with b1:
@@ -246,4 +293,4 @@ def _render_line_card(l, idx, sec_id, voices_dir, rejected_nodes):
                 st.toast(f"#{idx} 已驳回（重生成入口见下方）", icon="❌")
                 st.rerun()
         if state == "rejected":
-            rejected_nodes.append(nid)
+            rejected_nodes.append({"id": nid, "kind": "say"})

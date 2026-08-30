@@ -2,12 +2,11 @@
 name: scene-layer-designer
 description: |
   推进 SceneLayer 图节点：查询状态 → 按 scene_type 查所需图层并组装提示词/生成图片 → 保存结果（MERGE 兜底建节点+边，写产物与 status）。
-  V1 仅实现 background 层；floor/decor/mask 留 V2 TODO。支持一次推进多个 status（0→1→2）。
+  V1 仅实现 background 层；floor/decor/mask 留 V2 TODO。单轮直推到最大门控（图片完成即待审 10）。
   在需要生成场景图层或 SceneLayer 节点需推进时使用。
-argument-hint: <scene_id> [target_status]
+argument-hint: <scene_id>
 arguments:
   - scene_id
-  - target_status
 allowed-tools: Read, Bash, Write, Edit
 ---
 
@@ -22,7 +21,6 @@ allowed-tools: Read, Bash, Write, Edit
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | scene_id | 场景节点 ID（snowflake Base62） | 必传 |
-| target_status | 推进目标：`1`（仅提示词）或 `2`（到图片） | `2` |
 
 ## 流程（三段式：查状态 → 完成任务 → 保存结果）
 
@@ -61,9 +59,9 @@ RETURN l.name AS loc_name, s.id AS scene_id, s.name AS scene_name,
 
 ### 2. 完成任务
 
-按 `target_status` 与当前 status 推进每个所需图层（V1 仅 background）：
+按当前 status 单轮直推到图片完成（待审 10），逐个所需图层推进（V1 仅 background）：
 
-#### 推进到提示词（status → 1）
+#### 组装提示词
 
 使用 Skill 工具调用 `scene-prompt-assembler`，参数 `background '<data_json>'`：
 
@@ -83,7 +81,7 @@ RETURN l.name AS loc_name, s.id AS scene_id, s.name AS scene_name,
 
 scene 字段的值从步骤 1 查询的 Scene 节点属性读取。在 data 中声明 `output_path`；scene-prompt-assembler 写入该路径并返回 `PROMPT_PATH`。
 
-#### 推进到图片（status → 2，仅 target_status=2）
+#### 生成图片
 
 使用 Skill 工具调用 `infra-image-generator`，参数 `<PROMPT_PATH> <OUTPUT_PATH>`（文生图，无参考图）：
 
@@ -103,11 +101,11 @@ MERGE (s)-[r:has_layer]->(sl) SET r.sync = true;
 MATCH (sl:SceneLayer {id: '<layer_id>'})
 SET sl.name = '<scene_name>-背景',
     sl.prompt_path = '<PROMPT_PATH>',
-    sl.image_path  = '<IMAGE_PATH>',     // 仅 target_status=2 时
-    sl.status = <1 | 10>;                // target_status=1 → 1；target_status=2 → 10（待审）
+    sl.image_path  = '<IMAGE_PATH>',
+    sl.status = 10;                      // 图片完成即待审（直写，不经 submit）
 ```
 
-**status 写入**：仅提示词 → `1`；到图片 → `10`（待审，等待 dashboard 审批）。SceneLayer 是终端节点，无下游。
+**status 写入**：固定 `10`（待审，等待 dashboard 审批）。SceneLayer 是终端节点，无下游。
 
 ## 参考文档
 

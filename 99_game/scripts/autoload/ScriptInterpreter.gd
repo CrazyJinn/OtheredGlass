@@ -9,13 +9,16 @@ signal choice_presented(options: Array)
 signal ended(kind: String, title: String, cg: String)
 signal chapter_finished()
 signal scene_entered()
-signal sfx_triggered(track: String)
 
 var _file: String = ""
 var _chapter: Dictionary = {}
 var _scenes: Array = []
 var _scene_idx: int = 0
 var _line_idx: int = 0
+# 推进中标志：transition 行 await 播放期间为 true，advance() 入口忽略重入（防点击跳行）
+var _advancing: bool = false
+# 快进直通（由 Game 每帧同步：skip 激活或 Ctrl 按住）：transition 行不播不等直通
+var skipping: bool = false
 # 立绘槽状态：值为 {who, portrait} 或 null。say/show 写入，hide 清除。
 var slots: Dictionary = {"left": null, "center": null, "right": null}
 
@@ -52,6 +55,8 @@ func start(file: String, scene_id: String = "", label: String = "") -> void:
 	_run_from_current()
 
 func advance() -> void:
+	if _advancing:
+		return  # transition 音效等待中：忽略点击推进（等播完自动继续），防跳行
 	_line_idx += 1
 	_run_from_current()
 
@@ -70,12 +75,14 @@ func _enter_scene_block() -> void:
 	if blk.has("bgm"):
 		var b: Dictionary = blk["bgm"]
 		bgm_changed.emit(b.get("track", ""), b.get("mode", "play"), b.get("loop", true))
+	AudioManager.stop_ambience()  # 换段清场：上一段氛围声景停止（新段 narrate.ambience 重新起）
 	scene_entered.emit()
 
 # 从当前 line 起推进：即时指令自动递进，阻塞/终止停下
 func _run_from_current() -> void:
 	while true:
 		if _scene_idx >= len(_scenes):
+			AudioManager.stop_ambience()
 			chapter_finished.emit()
 			return
 		var blk: Dictionary = _scenes[_scene_idx]
@@ -85,6 +92,7 @@ func _run_from_current() -> void:
 			# jump/choice 用于分支跳转，直线衔接靠 scenes[] 顺序，无需每段尾显式 jump。
 			_scene_idx += 1
 			if _scene_idx >= len(_scenes):
+				AudioManager.stop_ambience()
 				chapter_finished.emit()
 				return
 			_enter_scene_block()
@@ -98,6 +106,8 @@ func _run_from_current() -> void:
 				line_ready.emit("say", line)
 				return  # 阻塞
 			"narrate":
+				if line.has("ambience") and line["ambience"] != "" and not skipping:
+					AudioManager.play_ambience(line["ambience"])  # 声景随旁白同出（一次播放不阻塞）
 				line_ready.emit("narrate", line)
 				return  # 阻塞
 			"choice":
@@ -121,8 +131,16 @@ func _run_from_current() -> void:
 				bgm_changed.emit(line.get("track", ""), line.get("mode", "play"), line.get("loop", true))
 				_line_idx += 1
 				continue
-			"sfx":
-				sfx_triggered.emit(line.get("track", ""))
+			"transition":
+				# 转场音效：播完（+0.15s 间隔）再推进下一行——与台词语音不叠播。
+				# 快进（skipping）直通：不播不等。等待期间 advance() 被 _advancing
+				# 挡住（点击不跳行）；上限 5s 防异常长文件。
+				if not skipping:
+					var dur: float = AudioManager.play_transition(line.get("track", ""))
+					if dur > 0.0 and get_tree() != null:
+						_advancing = true
+						await get_tree().create_timer(minf(dur + 0.15, 5.0)).timeout
+						_advancing = false
 				_line_idx += 1
 				continue
 			"jump":
@@ -235,6 +253,7 @@ func restore(snapshot_data: Dictionary) -> void:
 	_scenes = _chapter["scenes"]
 	_scene_idx = _find_scene_index(scene_id) if scene_id != "" else 0
 	_line_idx = line_idx
+	AudioManager.stop_ambience()  # 清旧档残留声景（恢复点之后的 narrate.ambience 会重新起）
 	# 套用当前段的视觉（scene+bgm+立绘），但不重置 line_idx
 	var blk: Dictionary = _scenes[_scene_idx]
 	bg_changed.emit(blk.get("scene", ""), blk.get("time", ""))

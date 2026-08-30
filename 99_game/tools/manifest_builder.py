@@ -106,8 +106,21 @@ def collect_scenes() -> dict:
     return scenes
 
 
+def collect_sfx() -> dict:
+    """已批环境音行 → <ambient_track>: assets/sfx/<track>.wav（图驱动收集，status=11）。
+
+    以 ambient_track 字段存在为准、不看 op——转场行（op=transition）与 narrate 内嵌
+    声景行（op=narrate + ambient_track）同样收集。"""
+    rows = _run_cypher(
+        "MATCH (l:LineAudio) WHERE l.status = 11 "
+        "AND l.ambient_track IS NOT NULL RETURN l.ambient_track AS track"
+    )
+    return {(r.get("track") or "").strip(): "assets/sfx/" + r["track"] + ".wav"
+            for r in rows if (r.get("track") or "").strip()}
+
+
 def build_manifest(manifest_path: Path) -> dict:
-    # 读现有 manifest，保留 bgm/sfx/cg（非图来源）
+    # 读现有 manifest，保留 bgm/cg（非图来源）
     existing = {}
     if manifest_path.exists():
         try:
@@ -115,14 +128,14 @@ def build_manifest(manifest_path: Path) -> dict:
         except json.JSONDecodeError:
             print(f"[warn] {manifest_path} JSON 解析失败，bgm/sfx/cg 从空重建", file=sys.stderr)
 
-    # portraits/scenes 合并：保留现有手写，图查到的覆盖/补充（向后兼容）；bgm/sfx/cg 保留现有
+    # portraits/scenes/sfx 合并：保留现有手写，图查到的覆盖/补充（向后兼容）；bgm/cg 保留现有
     portraits, scales = collect_portraits()
     return {
         "portraits": {**existing.get("portraits", {}), **portraits},
         "portrait_scales": {**existing.get("portrait_scales", {}), **scales},
         "scenes": {**existing.get("scenes", {}), **collect_scenes()},
         "bgm": existing.get("bgm", {}),
-        "sfx": existing.get("sfx", {}),
+        "sfx": {**existing.get("sfx", {}), **collect_sfx()},
         "cg": existing.get("cg", {}),
     }
 

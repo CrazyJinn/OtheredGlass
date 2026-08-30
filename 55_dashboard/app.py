@@ -13,7 +13,8 @@ import streamlit as st
 from config import settings
 from core.schema_loader import load_schema
 from repo import graph_repo
-from ui import page_overview, page_scene_overview, page_chapter_overview, page_approval, page_narrative_approval
+from ui import page_overview, page_scene_overview, page_chapter_overview, page_approval, \
+    page_narrative_approval, page_ambient_candidates
 
 st.set_page_config(page_title="他者之镜 · 美术治理后台", layout="wide")
 
@@ -35,7 +36,7 @@ st.session_state["module"] = module
 if module == "场景美术":
     _views = ["场景进度", "审批中心"]
 elif module == "剧情":
-    _views = ["章节进度", "审批中心"]
+    _views = ["章节进度", "审批中心", "环境音候选"]
 else:
     _views = ["角色进度", "审批中心", "叙事审批"]
 view = st.sidebar.radio("查看", _views, horizontal=True)
@@ -48,6 +49,8 @@ st.session_state["_last_nav"] = (module, view)
 if module == "剧情":
     if view == "审批中心":
         page_approval.render()
+    elif view == "环境音候选":
+        page_ambient_candidates.render()
     else:
         page_chapter_overview.render(SCHEMA)
 elif module == "场景美术":
