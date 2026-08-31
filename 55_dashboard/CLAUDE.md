@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 这个项目是什么
 
-`55_dashboard` 是「他者之镜」项目的人工治理后台——一个直连 Neo4j 的 Streamlit 应用，与项目里的 Claude Skills 共享**同一个 Neo4j 实例**。职责分工：
+`55_dashboard` 是「代恋」项目的人工治理后台——一个直连 Neo4j 的 Streamlit 应用，与项目里的 Claude Skills 共享**同一个 Neo4j 实例**。职责分工：
 
 - **Skills**（项目根的 `.claude/`、`06_角色美术/` 等驱动）：自动化生产——组装 prompt、调 OfoxAI 出图、推进节点 `status` 0→1→2。
 - **本后台**：人工治理——浏览进度、编辑节点属性、审批（10→11/→0）、属性变更后沿 `sync` 边级联重置下游、审批叙事建议（把 Cypher 写库）、全库 CSV 备份。
@@ -55,11 +55,13 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 
 ## status 系统（治理的核心）
 
-`status` 值统一语义：`-1` 作废重做 / `0` 待处理 / `1` 已完成 / `2` 图片完成 / `10` 待审 / `11` 批准。每个 label 的合法值、完成态、是否走审批，在 [status.py](core/status.py) 的 `NODE_STATUS` 显式定义：
+`status` 值统一语义：`-1` 作废重做 / `0` 待处理 / `1` 已完成 / `2` 图片完成 / `10` 待审 / `11` 批准（全图统一，无剧情专属值）。每个 label 的合法值、完成态、是否走审批，在 [status.py](core/status.py) 的 `NODE_STATUS` 显式定义：
 
-- 有审批（completion=2，可 submit→10→11）：`DesignSheet`/`IllusDesign`/`StandingIllustration`/`SceneLayer`
-- 无审批（completion=1）：`AppearanceStyle`/`LanguageStyle`/`CostumeStyle`/`Scene`
-- `Character`/`Location` **无 status 字段**，只作级联触发源。
+- 美术有审批（completion=2，可 submit→10→11）：`DesignSheet`/`IllusDesign`/`StandingIllustration`/`SceneLayer`
+- **VoiceDesign 生产完成直写 10（待审），无 submit 步**（completion=10）；`2` 为旧流程兼容值（存量可经编辑器 submit 迁 10）
+- 美术无审批（completion=1）：`AppearanceStyle`/`LanguageStyle`/`CostumeStyle`/`Scene`
+- **剧情产物链**：`Chapter` 章级结构段（`0→10→11`，结构审，completion=11，10 由 structurer 直写不经 submit）；节级三产物 `Section →has_outline→ SecOutline →produces→ SecScript -[:produces{order}]-> LineAudio(×N 逐句台词行)`——SecOutline（`0→1`，completion=1，无审批）、SecScript（`0→1→10→11`，定稿审 **台词.md**，completion=11，10 由 dialoguer 直写不经 submit）、LineAudio 逐句行（say 行 `0→10→11` **行级音频审**——行 status 只代表音频（文字审批已在定稿审完成），10 由 section-voice-publisher 的 bind-graph 直写；非 say 行拆分即 11）。「节完成」= SecOutline=1 ∧ SecScript=11 ∧ 该节全部行 LineAudio=11（派生判断，无节级批准按钮）
+- `Character`/`Location`/`Section` **无 status 字段**（Section 是纯编排容器），只作级联触发源。
 
 > 判断节点"有无 status"必须用 `is not None`——`status=0`（待处理）是合法 falsy，真值判断会误隐藏。
 
@@ -69,11 +71,24 @@ python -m pytest tests/test_cascade.py::test_xxx -v   # 单个用例
 
 [page_node_editor.py](ui/page_node_editor.py) 的保存后置流程是固定四步，改动顺序要谨慎：
 1. `update_node` 写属性；
-2. `approval.on_edit`：若该节点原 `status==11` → 自身回退到 `0`（审批失效）；
-3. `cascade_reset` 重置下游为 `-1`；
+2. `approval.on_edit(label, status)`：已批准（`11`）则自身回退 `0`（全通用，无 label 特例）；
+3. `cascade_reset` 重置下游为 `-1`（产物链上下游作废由这里完成：编辑已批 SecScript → LineAudio `-1`；编辑 SecOutline → SecScript/LineAudio 全 `-1`）；
 4. 弹 toast 反馈。
 
 > 注意：以代码为准，级联下游重置为 **`-1`**（设计文档 `docs/superpowers/specs/2026-06-17-dashboard-design.md` 验收标准里写成 `0` 是笔误）。
+
+## 剧情章节进度
+
+[page_chapter_overview.py](ui/page_chapter_overview.py) 是剧情模块唯一页面，按「章 + 节」两层展开：列出全部 `Chapter`（按 `chapter_no`），每章卡片下展示各 `Section`（按 `section_no`）的产物链状态（提纲/定稿/配音三段徽章，Section 无 status；音频段为该节 LineAudio 行状态聚合的瓶颈值，附行数）+ 编排子图（`has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio`、`Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration`、`LineAudio→uses→StandingIllustration`——行级选绘边，配音判断期建立）+ 节级 **台词.md 预览**（人读定稿格式，review 对白质量，区别于美术节点审批看图）。
+
+审批落点：
+- **Chapter 结构审**（`10→11`）：就地按钮（章卡片内）。
+- **SecScript 定稿审**（审 台词.md，`10→11`）：走全局「审批中心」（[page_approval.py](ui/page_approval.py)），渲染 md 全文。
+- **LineAudio 逐句音频审**（行 `10→11`）：审批中心把 status=10 的行节点**按节聚合**为一张卡（[script_lines_view.render_audio_review](ui/components/script_lines_view.py)）：试听 + 单句通过=11/驳回=0（写行节点 status，经 [core/script_lines.py](core/script_lines.py)）；「节完成」= 全部行 11（派生，无节级批准按钮）；整节驳回 = say 行全置 0。
+
+推进入口分两级（生成 `vscode://` deeplink 唤起 `plot-design` agent，见 [launch_button.py](ui/components/launch_button.py)）：
+- 章行「推进剧情创作」= **章节全量**（structurer 分节 / 结构审 / 全量循环推进，到全章就绪即止）。**发布（chapter-publisher）由用户直接触发，不在 plot-design 职责内**。
+- 各节「推进此节」（`ch.status==11` 且该节产物链未全就绪、且无待审项时出现）= **单节聚焦**（plot-design 按产物链当前段推进该节的提纲/定稿/拆分选绘配音；`SecScript=11` 时推该节关联的 depicts 立绘——行级引用为 `LineAudio-[:uses]->` 选绘边，选绘在 section-voice-publisher 配音判断期完成，不碰其他节、不发布）。
 
 ## 叙事审批（写 Cypher 进库）
 

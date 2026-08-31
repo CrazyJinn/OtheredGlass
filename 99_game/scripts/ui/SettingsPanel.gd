@@ -36,3 +36,5 @@ func _apply(key: String, v: Variant) -> void:
 		Engine.get_singleton("AudioManager").set_volume("bgm", linear_to_db(float(v)))
 	elif key == "vol_sfx" and Engine.has_singleton("AudioManager"):
 		Engine.get_singleton("AudioManager").set_volume("sfx", linear_to_db(float(v)))
+	elif key == "vol_voice" and Engine.has_singleton("AudioManager"):
+		Engine.get_singleton("AudioManager").set_volume("voice", linear_to_db(float(v)))

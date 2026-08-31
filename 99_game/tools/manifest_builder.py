@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """从 Neo4j 图生成/更新 99_game/data/manifest.json。
 
-剧本只写逻辑名，manifest 把逻辑名映射到 Godot res:// 资源路径（见 00_init/剧本.md）。
+剧本只写逻辑名，manifest 把逻辑名映射到 Godot res:// 资源路径（章 JSON 权威 schema：99_game/data/剧本.schema.json）。
 本脚本从图查：
   - status=11 的 StandingIllustration → portraits（键 = <char_name>.<variant_label>）
   - 所有 Scene                        → scenes   （键 = <Scene.name>）
@@ -22,6 +22,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+
+from portrait_key import make_key
 
 ROOT = Path(__file__).resolve().parents[2]  # 99_game/tools/ → 项目根
 CYPHER_EXEC = ROOT / ".claude" / "scripts" / "cypher_exec.py"
@@ -51,23 +53,46 @@ def _run_cypher(cypher: str) -> list:
     return json.loads(out[start:end + 1])
 
 
-def collect_portraits() -> dict:
-    """status=11 的立绘 → <char_name>.<variant_label>: assets/portraits/<...>.png"""
+def collect_portraits() -> tuple[dict, dict]:
+    """status=11 的立绘 → guid 整键: assets/portraits/<整键>.png
+
+    整键 = make_key(char, variant, stand_id, costume) = <char>-<costume_short>-<variant>-<stand_id>。
+    stand_id（图 StandingIllustration.id）全局唯一，无需冲突检测；同角色换装两套图各得各键。
+    旧二维键（如陈默.沉重）由 build_manifest 的 existing 保留，供旧章 fallback。
+    返回 (portraits, portrait_scales)：顺带带回 IllusDesign.display_scale（同一次查图，避免查两次），
+    portrait_scales = {整键: scale}，仅收录 display_scale 非 null 的立绘。
+    """
     cypher = (
         "MATCH (char:Character)-[:" + CHAR_TO_STAND_EDGES + "*1..5]->"
         "(stand:StandingIllustration {status:11}) "
-        "RETURN DISTINCT char.name AS char_name, stand.variant_label AS variant "
+        "OPTIONAL MATCH (stand)<-[:expands_to]-(illus:IllusDesign)<-[:outfit_for]-(costume:CostumeStyle) "
+        "RETURN DISTINCT char.name AS char_name, stand.id AS stand_id, "
+        "stand.variant_label AS variant, costume.name AS costume_name, "
+        "illus.display_scale AS scale "
         "ORDER BY char_name, variant"
     )
     portraits = {}
+    scales = {}
+    warned_orphan = []
     for r in _run_cypher(cypher):
         char_name = (r.get("char_name") or "").strip()
+        stand_id = (r.get("stand_id") or "").strip()
         variant = (r.get("variant") or "").strip()
-        if not char_name or not variant:
+        costume = r.get("costume_name")
+        if not char_name or not stand_id or not variant:
             continue
-        key = f"{char_name}.{variant}"
+        if not costume:
+            warned_orphan.append(f"{char_name}.{variant}({stand_id})")
+        key = make_key(char_name, variant, stand_id, costume)
         portraits[key] = f"{PORTRAIT_PREFIX}{key}.png"
-    return portraits
+        scale = r.get("scale")
+        if scale is not None:
+            scales[key] = scale
+    if warned_orphan:
+        sys.stderr.write(
+            f"[warn] {len(warned_orphan)} 张立绘缺 CostumeStyle 绑定（整键去着装段）：{warned_orphan}\n"
+        )
+    return portraits, scales
 
 
 def collect_scenes() -> dict:
@@ -81,8 +106,21 @@ def collect_scenes() -> dict:
     return scenes
 
 
+def collect_sfx() -> dict:
+    """已批环境音行 → <ambient_track>: assets/sfx/<track>.wav（图驱动收集，status=11）。
+
+    以 ambient_track 字段存在为准、不看 op——转场行（op=transition）与 narrate 内嵌
+    声景行（op=narrate + ambient_track）同样收集。"""
+    rows = _run_cypher(
+        "MATCH (l:LineAudio) WHERE l.status = 11 "
+        "AND l.ambient_track IS NOT NULL RETURN l.ambient_track AS track"
+    )
+    return {(r.get("track") or "").strip(): "assets/sfx/" + r["track"] + ".wav"
+            for r in rows if (r.get("track") or "").strip()}
+
+
 def build_manifest(manifest_path: Path) -> dict:
-    # 读现有 manifest，保留 bgm/sfx/cg（非图来源）
+    # 读现有 manifest，保留 bgm/cg（非图来源）
     existing = {}
     if manifest_path.exists():
         try:
@@ -90,12 +128,14 @@ def build_manifest(manifest_path: Path) -> dict:
         except json.JSONDecodeError:
             print(f"[warn] {manifest_path} JSON 解析失败，bgm/sfx/cg 从空重建", file=sys.stderr)
 
-    # portraits/scenes 合并：保留现有手写，图查到的覆盖/补充（向后兼容）；bgm/sfx/cg 保留现有
+    # portraits/scenes/sfx 合并：保留现有手写，图查到的覆盖/补充（向后兼容）；bgm/cg 保留现有
+    portraits, scales = collect_portraits()
     return {
-        "portraits": {**existing.get("portraits", {}), **collect_portraits()},
+        "portraits": {**existing.get("portraits", {}), **portraits},
+        "portrait_scales": {**existing.get("portrait_scales", {}), **scales},
         "scenes": {**existing.get("scenes", {}), **collect_scenes()},
         "bgm": existing.get("bgm", {}),
-        "sfx": existing.get("sfx", {}),
+        "sfx": {**existing.get("sfx", {}), **collect_sfx()},
         "cg": existing.get("cg", {}),
     }
 
@@ -113,7 +153,8 @@ def main() -> None:
     if args.dry_run:
         sys.stdout.write(text)
         print(
-            f"[dry-run] portraits={len(data['portraits'])} scenes={len(data['scenes'])} "
+            f"[dry-run] portraits={len(data['portraits'])} "
+            f"portrait_scales={len(data['portrait_scales'])} scenes={len(data['scenes'])} "
             f"bgm={len(data['bgm'])}(保留) sfx={len(data['sfx'])}(保留) cg={len(data['cg'])}(保留)",
             file=sys.stderr,
         )
@@ -122,6 +163,7 @@ def main() -> None:
     manifest_path.write_text(text, encoding="utf-8")
     print(
         f"已写入 {manifest_path}：portraits={len(data['portraits'])} "
+        f"portrait_scales={len(data['portrait_scales'])} "
         f"scenes={len(data['scenes'])} bgm={len(data['bgm'])} sfx={len(data['sfx'])} cg={len(data['cg'])}"
     )
 

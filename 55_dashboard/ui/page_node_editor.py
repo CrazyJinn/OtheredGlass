@@ -43,7 +43,7 @@ def render_editor(schema, node_id):
 
     if st.button("保存", type="primary", key=f"save_{node_id}"):
         graph_repo.update_node(node_id, props)
-        revert = approval.on_edit(node.get("status", 0))
+        revert = approval.on_edit(label, node.get("status", 0))
         if revert is not None:
             graph_repo.set_status(node_id, revert)
         affected = cascade.cascade_reset(node_id, graph_repo)

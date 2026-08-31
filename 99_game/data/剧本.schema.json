@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://otheredglass.local/schema/剧本.schema.json",
+  "$id": "https://ProxyLove.local/schema/剧本.schema.json",
   "title": "剧本章节",
-  "description": "《他者之镜》剧本章节文件格式 V1。详见 00_init/Schema/剧本.md。",
+  "description": "《代恋》剧本章节文件格式 V1。详见 .claude/skills/chapter-dialoguer/references/剧本.md。",
   "type": "object",
   "required": ["meta", "scenes"],
   "additionalProperties": false,
@@ -84,7 +84,9 @@
             "who": { "type": "string" },
             "portrait": { "type": "string" },
             "pos": { "$ref": "#/$defs/pos" },
-            "text": { "type": "string" }
+            "text": { "type": "string" },
+            "voice": { "type": "string" },
+            "emotion": { "type": "string" }
           }
         },
         {
@@ -93,7 +95,8 @@
           "additionalProperties": false,
           "properties": {
             "op": { "const": "narrate" },
-            "text": { "type": "string" }
+            "text": { "type": "string" },
+            "ambience": { "type": "string" }
           }
         },
         {
@@ -143,7 +146,7 @@
           "required": ["op", "track"],
           "additionalProperties": false,
           "properties": {
-            "op": { "const": "sfx" },
+            "op": { "const": "transition" },
             "track": { "type": "string" }
           }
         },

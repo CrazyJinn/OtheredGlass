@@ -32,9 +32,12 @@ func _ready() -> void:
 	_apply_layout()
 
 func _apply_layout() -> void:
+	# 用 get_visible_rect()（逻辑坐标）而非 vp.size（物理像素），同 Game.gd 注释。
 	var s: Vector2 = Vector2(1536, 1024)
 	var vp: Viewport = get_viewport()
-	if vp != null and vp.size.x > 0.0:
-		s = vp.size
+	if vp != null:
+		var visible: Vector2 = vp.get_visible_rect().size
+		if visible.x > 0.0:
+			s = visible
 	_bg.size = s
 	_center.size = s

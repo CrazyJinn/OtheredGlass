@@ -1,3 +1,29 @@
 settings.json
 settings.local.json
+apikey-bak.md
 __pycache__/
+
+# 生产链临时文件（voice-tasks/voice-profiles/split/ambient 候选等，skill 收尾步用后即删）
+.tmp/
+
+# 字体子集产物（subset_font.py 生成，不入 git；完整字体 LXGWWenKai-Medium.ttf 仍跟踪）
+99_game/fonts/*.full.ttf
+99_game/fonts/*.subset.ttf
+
+# voice 配音/环境音产物（可重生成，不入 git；15_声音 只留 requirements 与 sfx_raw 登记）
+99_game/assets/voices/
+99_game/assets/sfx/
+99_game/data/.cache/
+14_声音设计/
+15_声音/*
+!15_声音/requirements/
+!15_声音/sfx_raw/
+
+# 外部依赖统一收口 env/（venv + vendored 源码；不入 git，重建见各 venv 对应 requirements）
+env/
+
+# R2 部署凭证（deploy_r2.py 读，含 access key，严禁入库）
+99_game/tools/r2_config.json
+
+# Web 导出产物只落 Desktop/export（曾误导出到项目根并入库，2026-08-30 清理后防再犯）
+99_game/index.*

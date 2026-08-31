@@ -3,6 +3,7 @@
 OfoxAI Images API - 图片生成脚本
 
 支持文生图和图生图两种模式，兼容 gpt-image-2 / dall-e-3 / dall-e-2 等模型。
+请求始终携带 moderation=low（写死，不接收其他值）——叙事性提示词易被默认审核强度误拒。
 
 使用方式:
     # 文生图
@@ -90,6 +91,7 @@ def submit_task(
         data = {"prompt": prompt, "model": model, "n": str(n), "size": size, "response_format": response_format}
         if quality:
             data["quality"] = quality
+        data["moderation"] = "low"  # 写死，降低安全审核强度（叙事性提示词易被误拒）
 
         resp = requests.post(
             url,
@@ -113,6 +115,7 @@ def submit_task(
         }
         if quality:
             body["quality"] = quality
+        body["moderation"] = "low"  # 写死，降低安全审核强度（叙事性提示词易被误拒）
 
         resp = requests.post(
             url,

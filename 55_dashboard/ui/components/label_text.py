@@ -6,6 +6,7 @@ LABEL_CN = {
     "AppearanceStyle": "外貌风格",
     "LanguageStyle": "语言风格",
     "CostumeStyle": "着装",
+    "VoiceDesign": "声音设计",
     "DesignSheet": "设计图",
     "IllusDesign": "插画设计",
     "StandingIllustration": "立绘",
@@ -13,7 +14,7 @@ LABEL_CN = {
     "SceneLayer": "图层",
 }
 CHAR_ORDER = [
-    "AppearanceStyle", "LanguageStyle", "CostumeStyle",
+    "AppearanceStyle", "LanguageStyle", "CostumeStyle", "VoiceDesign",
     "DesignSheet", "IllusDesign", "StandingIllustration",
 ]
 SCENE_ORDER = ["Scene", "SceneLayer"]

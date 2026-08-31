@@ -1688,7 +1688,7 @@ from core.schema_loader import load_schema
 from repo import graph_repo
 from ui import page_overview, page_character, page_node_editor, page_approval
 
-st.set_page_config(page_title="他者之镜 · 美术治理后台", layout="wide")
+st.set_page_config(page_title="代恋 · 美术治理后台", layout="wide")
 
 # 启动加载 Schema（带启动校验）
 try:

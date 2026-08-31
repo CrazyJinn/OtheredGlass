@@ -80,3 +80,66 @@ def build_chapter_deeplink(ch_id, title=None):
 def render_chapter(ch_id, title=None, label="推进剧情创作"):
     import streamlit as st
     st.link_button(label, build_chapter_deeplink(ch_id, title))
+
+
+def build_section_deeplink(sec_id, sec_label=None):
+    """生成「推进此节」的 deeplink，调 plot-design agent 单节聚焦模式。
+
+    与章级入口互补：章级负责 structurer 分节 / 结构审 / 全章发布 / 全量推进；
+    节级只推进单节的产物链（提纲/定稿/配音）与该节关联立绘，不碰其他节、不发布。
+    """
+    name = sec_label or sec_id
+    prompt = (
+        f"使用 plot-design agent 推进小节 {name}（section id={sec_id}）的剧情创作。"
+        f"单节聚焦：按该节产物链当前进度推进提纲/定稿/拆分选绘配音，定稿已批(SecScript=11)则推进该节关联立绘"
+        f"（depicts 引用；选绘 uses 边由配音判断期建立）；"
+        f"不碰其他节、不发布。"
+    )
+    return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
+
+
+def render_section(sec_id, sec_label=None, label="推进此节"):
+    import streamlit as st
+    st.link_button(label, build_section_deeplink(sec_id, sec_label))
+
+
+def build_line_regen_deeplink(sec_id, lines):
+    """生成「重生成被驳回句音频」的 deeplink，调 plot-design agent 单节聚焦。
+
+    逐句音频审驳回后，dashboard 只标行节点 status=0，重生成走对话重推（行节点 id 寻址）。
+    按行类型分流重做通道：say 台词行 → section-voice-publisher TTS 重配；
+    环境音行（转场音效 / 氛围声景，不走 TTS）→ ambient-sfx-designer 声景重做。
+
+    lines 元素支持两种形态：纯行 id 字符串（一律按 say 行处理，向后兼容）或
+    {"id": ..., "kind": "say"|"sfx"}；两类并存时分组列出各自的通道指令。
+    """
+    say_ids, sfx_ids = [], []
+    for item in lines:
+        if isinstance(item, dict):
+            (sfx_ids if item.get("kind") == "sfx" else say_ids).append(item.get("id", ""))
+        else:
+            say_ids.append(item)
+    parts = []
+    if say_ids:
+        parts.append(
+            f"以下 say 台词行请调 section-voice-publisher 重配（voice_bundler tasks-from-graph "
+            f"--nodes 指定行，emotion/tts_text/clone_mode/选绘 stand 重新判别，portrait_binder "
+            f"apply 重建 uses 边）：{'、'.join(say_ids)}"
+        )
+    if sfx_ids:
+        parts.append(
+            f"以下环境音行（转场音效/氛围声景，不走 TTS）请调 ambient-sfx-designer 重做声景"
+            f"（ambient_tasks.py 按行 kind 分流实录/生成通道，覆盖旧 wav）：{'、'.join(sfx_ids)}"
+        )
+    prompt = (
+        f"使用 plot-design agent 推进小节（section id={sec_id}）的音频重做。"
+        f"单节聚焦：该节 LineAudio 逐句音频审驳回了以下行节点。"
+        + "".join(p + "。" for p in parts)
+        + "其余已通过行不要重做。"
+    )
+    return f"{VSCODE_HANDLER}?prompt={urllib.parse.quote(prompt)}"
+
+
+def render_regen_lines(sec_id, lines, label="重生成被驳回的音频"):
+    import streamlit as st
+    st.link_button(label, build_line_regen_deeplink(sec_id, lines))

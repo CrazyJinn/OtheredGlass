@@ -13,9 +13,10 @@ import streamlit as st
 from config import settings
 from core.schema_loader import load_schema
 from repo import graph_repo
-from ui import page_overview, page_scene_overview, page_chapter_overview, page_approval, page_narrative_approval
+from ui import page_overview, page_scene_overview, page_chapter_overview, page_approval, \
+    page_narrative_approval, page_ambient_candidates
 
-st.set_page_config(page_title="他者之镜 · 美术治理后台", layout="wide")
+st.set_page_config(page_title="代恋 · 美术治理后台", layout="wide")
 
 # 启动加载 Schema（带启动校验）
 try:
@@ -35,7 +36,7 @@ st.session_state["module"] = module
 if module == "场景美术":
     _views = ["场景进度", "审批中心"]
 elif module == "剧情":
-    _views = ["章节进度", "审批中心"]
+    _views = ["章节进度", "审批中心", "环境音候选"]
 else:
     _views = ["角色进度", "审批中心", "叙事审批"]
 view = st.sidebar.radio("查看", _views, horizontal=True)
@@ -48,6 +49,8 @@ st.session_state["_last_nav"] = (module, view)
 if module == "剧情":
     if view == "审批中心":
         page_approval.render()
+    elif view == "环境音候选":
+        page_ambient_candidates.render()
     else:
         page_chapter_overview.render(SCHEMA)
 elif module == "场景美术":
@@ -86,7 +89,7 @@ with st.sidebar:
     backup = st.session_state.get("_backup_csv")
     if backup:
         from datetime import datetime
-        fname = f"otheredglass_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        fname = f"ProxyLove_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         st.download_button("下载 CSV", data=backup, file_name=fname,
                            mime="text/csv", use_container_width=True)
         st.caption(f"已就绪：{st.session_state.get('_backup_stats', {})}")

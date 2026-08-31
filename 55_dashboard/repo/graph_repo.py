@@ -46,13 +46,14 @@ def get_nodes(label):
 
 
 # 美术生产链边类型（限定遍历范围，避免把叙事 Event/Info/其他角色拉进美术子图）
-_ART_EDGES = "has_appearance|has_voice_style|has_costume|produces|outfit_for|expands_to|ref_style"
+_ART_EDGES = "has_appearance|has_voice_style|has_voice_design|has_costume|produces|outfit_for|expands_to|ref_style"
 
-# 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图）
-_SCENE_EDGES = "has_scene|has_layer"
+# 场景美术链边类型（限定遍历范围，避免把叙事 Event/Character 拉进场景子图；has_bgm 让 BgmTrack 进场景子图）
+_SCENE_EDGES = "has_scene|has_layer|has_bgm"
 
-# 剧情编排边类型（限定章节子图遍历：Chapter→contains→Scene→depicts→StandingIllustration）
-_PLOT_EDGES = "contains|depicts"
+# 剧情编排边类型（限定章节子图遍历：Chapter→has_section→Section→has_outline→SecOutline→produces→SecScript→produces→LineAudio；
+# Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration；LineAudio→uses→StandingIllustration 行级选绘边）
+_PLOT_EDGES = "has_section|has_outline|produces|contains|depicts|expands_to|uses"
 
 
 def get_character_graph(char_id):
@@ -112,14 +113,16 @@ def get_location_graph(loc_id):
 
 
 def get_chapter_graph(ch_id):
-    """取章节编排子图的全部节点与边（Chapter→contains→Scene→depicts→StandingIllustration）。
+    """取章节编排子图的全部节点与边（Chapter→has_section→Section→contains→Scene→depicts→IllusDesign→expands_to→StandingIllustration；
+    LineAudio 第 4 跳、其 uses 选绘目标第 5 跳——深度须 *1..5）。
 
-    沿 contains/depicts 边遍历；depicts 指向的 StandingIllustration 一并纳入（供立绘缺口查看）。
-    StandingIllustration 的上游美术链（expands_to/ref_style）不在本子图，仅看其 status 是否就绪。
+    沿 has_section/contains/depicts/expands_to/uses 边遍历；depicts 指向的 IllusDesign 及其 expands_to 立绘变体
+    （供立绘缺口查看）与行级 uses 选绘目标（行绑定的立绘变体）一并纳入。
+    有向遍历（->）严格沿上游→下游，避免共享 IllusDesign 反向 depicts 蔓延到其他章 Scene 造成跨章子图污染。
     """
     with _session() as s:
         ids = [ch_id] + [r["id"] for r in s.run(
-            "MATCH (ch:Chapter)-[:%s*1..3]-(n) WHERE ch.id=$id RETURN DISTINCT n.id AS id" % _PLOT_EDGES,
+            "MATCH (ch:Chapter)-[:%s*1..5]->(n) WHERE ch.id=$id RETURN DISTINCT n.id AS id" % _PLOT_EDGES,
             id=ch_id,
         )]
         nodes = [
@@ -156,6 +159,9 @@ def get_sync_downstream(node_id):
 
 
 def update_node(node_id, props):
+    """SET n += props（剥离 id/label）。**value=None 即删除该属性**（Neo4j 不存 null，
+    `SET n += {k: null}` 会移除 k）——如 voice_candidates 采用动作用它清空 candidates_path。
+    切勿在此过滤 None，会把删属性能力堵死。"""
     clean = {k: v for k, v in props.items() if k not in ("id", "label")}
     with _session() as s:
         s.run(
@@ -177,11 +183,90 @@ def set_status_batch(node_ids, status):
 
 
 def get_pending_approvals():
+    # status=10 通用待审（Chapter 结构审 / SecScript 定稿审 / LineAudio 逐句音频审 / 美术与音色设计审批）
     with _session() as s:
         rs = s.run(
-            "MATCH (n) WHERE n.status=10 RETURN n.id AS id, labels(n)[0] AS label, n.status AS status"
+            "MATCH (n) WHERE n.status IN [10] "
+            "RETURN n.id AS id, labels(n)[0] AS label, n.status AS status"
         )
         return [{"id": r["id"], "label": r["label"], "status": r["status"]} for r in rs]
+
+
+def get_upstream_script_path(vo_id):
+    """取 LineAudio 的上游 SecScript.script_path（审批中心逐句音频审的试听数据源）。"""
+    with _session() as s:
+        rec = s.run(
+            "MATCH (sc:SecScript)-[:produces]->(:LineAudio {id:$id}) "
+            "RETURN sc.script_path AS p LIMIT 1",
+            id=vo_id,
+        ).single()
+    return rec["p"] if rec else None
+
+
+def get_section_of_lineaudio(vo_id):
+    """取 LineAudio 所属的 Section id（沿产物链回溯：Section→SecOutline→SecScript→LineAudio）。
+
+    逐句审批卡的「重生成」deeplink 需要 section id 唤起 plot-design 单节聚焦。
+    """
+    with _session() as s:
+        rec = s.run(
+            "MATCH (sec:Section)-[:has_outline]->()-[:produces]->()-[:produces]->(:LineAudio {id:$id}) "
+            "RETURN sec.id AS sid LIMIT 1",
+            id=vo_id,
+        ).single()
+    return rec["sid"] if rec else None
+
+
+def get_script_lines(sc_id):
+    """取 SecScript 的逐句行（LineAudio，按 produces.order 升序）。
+
+    行 dict 含节点属性 + order + portrait（= uses 选绘边目标的 variant_label，无边为 None——
+    每行至多 1 条 uses 边，无行乘积；键名沿用 portrait 使 UI 徽章零改）。
+    """
+    with _session() as s:
+        rs = s.run(
+            """
+            MATCH (sc:SecScript {id:$id})-[p:produces]->(l:LineAudio)
+            OPTIONAL MATCH (l)-[:uses]->(pst:StandingIllustration)
+            RETURN l.id AS id, l.name AS name, l.op AS op, l.who AS who,
+                   pst.variant_label AS portrait, l.pos AS pos, l.text AS text,
+                   l.tts_text AS tts_text, l.scene_block_id AS scene_block_id,
+                   l.ambient_text AS ambient_text,
+                   l.voice_key AS voice_key, l.ambient_track AS ambient_track, l.emotion AS emotion,
+                   l.clone_mode AS clone_mode,
+                   l.attempts AS attempts, l.text_sha1 AS text_sha1,
+                   l.status AS status, p.order AS ord
+            ORDER BY p.order
+            """,
+            id=sc_id,
+        )
+        return [dict(r) for r in rs]
+
+
+def get_script_id_of_section(sec_id):
+    """取 Section 的 SecScript id + status（行查询入口）。无 SecScript 返回 (None, None)。"""
+    with _session() as s:
+        rec = s.run(
+            "MATCH (:Section {id:$id})-[:has_outline]->()-[:produces]->(sc:SecScript) "
+            "RETURN sc.id AS sid, sc.status AS st LIMIT 1",
+            id=sec_id,
+        ).single()
+    return (rec["sid"], rec["st"]) if rec else (None, None)
+
+
+def get_script_of_line(line_id):
+    """取 LineAudio 行节点的上游 SecScript + 所属 Section（逐句审批分组用）。
+
+    返回 {"sc_id", "sc_name", "sec_id"} 或 None。
+    """
+    with _session() as s:
+        rec = s.run(
+            "MATCH (sec:Section)-[:has_outline]->()-[:produces]->(sc:SecScript)"
+            "-[:produces]->(:LineAudio {id:$id}) "
+            "RETURN sc.id AS sc_id, sc.name AS sc_name, sec.id AS sec_id LIMIT 1",
+            id=line_id,
+        ).single()
+    return dict(rec) if rec else None
 
 
 def get_upstream_character_id(node_id):

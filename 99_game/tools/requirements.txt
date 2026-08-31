@@ -1,2 +1,6 @@
 jsonschema>=4.20
 pytest>=7.0
+PyYAML>=6.0
+cryptography>=42.0
+opencv-python>=5.0
+fonttools>=4.0

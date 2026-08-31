@@ -65,3 +65,41 @@ def test_add_scene_deeplink_whitespace_desc_uses_fallback():
     prompt = _prompt_of(url)
     assert "无具体描述" in prompt
     assert "scene-designer" in prompt
+
+
+def test_line_regen_deeplink_plain_ids_route_to_tts():
+    # 纯行 id 字符串 = 旧形态，一律按 say 台词行走 TTS 重配
+    url = launch_button.build_line_regen_deeplink("sec1", ["Pz3xmsRauP", "PxSB6uJTm6"])
+    prompt = _prompt_of(url)
+    assert "section id=sec1" in prompt
+    assert "section-voice-publisher" in prompt
+    assert "tasks-from-graph" in prompt
+    assert "Pz3xmsRauP" in prompt and "PxSB6uJTm6" in prompt
+    assert "ambient-sfx-designer" not in prompt
+
+
+def test_line_regen_deeplink_sfx_kind_routes_to_ambient():
+    # 环境音行（转场音效/氛围声景）不走 TTS，应指向 ambient-sfx-designer 声景重做
+    url = launch_button.build_line_regen_deeplink(
+        "sec1", [{"id": "Pz3xmsRauP", "kind": "sfx"}]
+    )
+    prompt = _prompt_of(url)
+    assert "ambient-sfx-designer" in prompt
+    assert "Pz3xmsRauP" in prompt
+    assert "section-voice-publisher" not in prompt
+    assert "tasks-from-graph" not in prompt
+
+
+def test_line_regen_deeplink_mixed_kinds_groups_by_channel():
+    # say 与 sfx 混合驳回时分组列出，各行归各自通道
+    url = launch_button.build_line_regen_deeplink(
+        "sec1",
+        [{"id": "PxSB6uJTm6", "kind": "say"}, {"id": "Pz3xmsRauP", "kind": "sfx"}],
+    )
+    prompt = _prompt_of(url)
+    assert "section-voice-publisher" in prompt
+    assert "PxSB6uJTm6" in prompt
+    assert "ambient-sfx-designer" in prompt
+    assert "Pz3xmsRauP" in prompt
+    # 分组指令各自完整，其余行不动的要求仍在
+    assert "其余已通过行不要重做" in prompt
