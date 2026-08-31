@@ -1,4 +1,4 @@
-# 他者之镜（OtheredGlass）— Godot 工程
+# 代恋（ProxyLove）— Godot 工程
 
 2D Galgame 框架。集中式 `ScriptInterpreter` 解释器消费纯 JSON 剧本（`data/chapters/*.json`，格式见 `data/剧本.schema.json`），经 `data/manifest.json` 把逻辑名映射到资源；美术默认程序占位兜底（真图经上游 `chapter-publisher` 搬运，见「资源」）。本工程现含序章 `chapter00_序章.json`。
 

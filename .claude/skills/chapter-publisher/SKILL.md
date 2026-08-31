@@ -156,22 +156,24 @@ python .claude/skills/section-voice-publisher/scripts/voice_bundler.py list '99_
 
 把本章用到的立绘/背景逻辑名记入 `99_game/data/chapter_packs.json`，供导出工具按章把资源分组打成 `<stem>.pck`（pck 内路径与全局 manifest 一致，挂载后 `res://` 全局路径命中）。**分包粒度仍是章 stem**（运行时不感知节层）。
 
-数据源 = 合并后章 JSON 的 `meta.requires.portraits`（投影期已沿 uses 边解析为 guid 整键，最稳，与 lines 引用同源）+ 第 1 步全章背景 + 第 3 步导出的 voice 键：
+数据源 = 合并后章 JSON 的 `meta.requires.portraits`（投影期已沿 uses 边解析为 guid 整键，最稳，与 lines 引用同源）+ 第 1 步全章背景 + 第 3 步导出的 voice 键 + 章内各 scene-block 的 bgm：
 - `portraits`：guid 整键 `<char>-<costume>-<variant>-<stand_id>`（直接取合并 JSON 的 requires.portraits）
 - `scenes`：`<Scene.name>`（has_layer background）
 - `voices`：voice 键 `<char>-<stem>-<scene_id>-<line_id>`（第 3 步 `voice_bundler list` 导出的 CSV）
+- `bgm`：BGM 逻辑名 `<track>`（合并时从图 Scene-has_bgm 注入各 scene-block 的 `bgm.track`，去重；漏传则 Web 章包缺音乐）
 
 ```bash
 python 99_game/tools/chapter_packs_updater.py '<stem>' \
   --portraits '<整键1>,<整键2>' --scenes '<scene1>,<scene2>' \
-  --voices "$(cat '99_game/data/.cache/voices-<stem>.csv')"
+  --voices "$(cat '99_game/data/.cache/voices-<stem>.csv')" \
+  --bgm '<track1>,<track2>'
 ```
 
 工具幂等：覆盖该 stem 条目，保留其他章。空列表（该章无立绘/背景）也要写入，保持清单完整。
 
 ### 5. 汇报
 
-列出：发布的章 JSON 路径（`99_game/data/chapters/<stem>.json`）、合并的节数、拷贝的立绘清单（guid 整键 `<char>-<costume>-<variant>-<stand_id>`）、背景清单（`<Scene.name>`）、跳过/缺失的资源警告、manifest 更新结果、章清单更新结果（该章 portraits/scenes 条数）。
+列出：发布的章 JSON 路径（`99_game/data/chapters/<stem>.json`）、合并的节数、拷贝的立绘清单（guid 整键 `<char>-<costume>-<variant>-<stand_id>`）、背景清单（`<Scene.name>`）、BGM 清单（`bgm.track` 去重）、跳过/缺失的资源警告、manifest 更新结果、章清单更新结果（该章 portraits/scenes/bgm 条数）。
 附运行时入口提示：`GameManager.start_new_game('<stem>', '<首节首 scene-block id>')`（stem = 不含后缀的章名，如 `chapter00_序章`；首 scene-block id 取 section_no=0 节的第一个段 id）。
 
 ## Web 发布前的额外步骤（导出阶段，非本 skill）
@@ -184,7 +186,7 @@ python 99_game/tools/chapter_packs_updater.py '<stem>' \
    python 99_game/tools/encrypt_chapter.py '99_game/data/chapters/<stem>.json' '99_game/data/chapters/<stem>.json'
    ```
    ⚠️ 加密后无法再 `validate_chapter.py`（明文），故加密必须在本 skill 流程之后。
-2. **按章分包**：参考 `chapter_packs.json` + `manifest.json`，把每章资源打进 `<stem>.pck`（pck 内用全局 `assets/...` 路径），Web 预设主包不含这些资源，运行时由 ChapterPackLoader 按需下载挂载。详见 [99_game/docs](../../../99_game/docs/)。
+2. **按章分包 + Web 导出**（2026-08-30 起有完整流水线）：`python 99_game/tools/publish_web.py` 一键完成「字体子集化 → 导出 Web 主包（exclude assets/chapters/full.ttf）→ build_chapter_packs.gd 按清单产各章 `<stem>.pck` → 恢复字体」；产物上传 R2 用 `deploy_r2.py`（详见两个脚本头部注释）。分包机制：主 pck 不含任何章资源，开局/读档/跨章由 ChapterPackLoader 下载章包挂载（带进度 UI）。
 
 ## 与 section-voice-publisher 的边界
 

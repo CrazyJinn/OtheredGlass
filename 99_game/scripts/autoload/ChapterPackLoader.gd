@@ -7,7 +7,7 @@ extends Node
 ## - 桌面/Steam：所有章节资源已在主 PCK 内，ensure_chapter() 为 no-op（仅记账）。
 ## - Web：主 PCK 只含引擎 + 核心资源 + 首章；后续章节按需从 PACK_BASE_URL 下载 <stem>.pck
 ##   到 user://packs/，用 ProjectSettings.load_resource_pack 挂载。挂载后 pck 内的资源以其
-##   原始全局路径（如 assets/portraits/陈默.沉重.png）暴露，与 manifest 一致。
+##   原始全局路径（如 assets/portraits/陆择-赤裸上身-慵懒-PHSE4iftNQ.png）暴露，与 manifest 一致。
 ##
 ## 章资源清单见 data/chapter_packs.json（chapter-publisher 发布时产出）；每个章包内含该章
 ## 用到的全部资源，路径与全局 manifest 一致，故跨章复用的资源在各章包内各自存在副本。
@@ -18,6 +18,12 @@ extends Node
 
 signal pack_mounted(stem: String)
 signal pack_failed(stem: String)
+signal pack_progress(stem: String, downloaded: int, total: int)
+
+## Web 按章分包总开关。2026-08-30 回滚：false = 全量主包模式（章资源随主 pck 一起加载，
+## 开局无二次下载；用户实测分包的串行等待体感更差）。改回 true 即恢复按需下载挂载，
+## 需同时把 Web preset exclude_filter 恢复为 "assets/*,data/chapters/*,fonts/LXGWWenKai-Medium.full.ttf"。
+const WEB_PACKS_ENABLED := false
 
 ## Web 端章包来源 URL 前缀。空串 = 与页面同源（相对路径），托管时把 *.pck 放在 index.html 同目录。
 const PACK_BASE_URL := ""
@@ -25,17 +31,26 @@ const PACK_DIR := "user://packs/"
 
 var _mounted: Dictionary = {}   # stem -> true（已挂载）
 var _http: HTTPRequest = null
+var _progress_label: Label = null  # Web 下载进度层（仅 web 构建）
+var _req_result: Array = []       # [result, code, headers, body]
+var _req_done := false
 
 
 func _ready() -> void:
 	_http = HTTPRequest.new()
 	add_child(_http)
+	if OS.has_feature("web"):
+		_build_progress_ui()
 
 
 ## 进入章节前调用。幂等：已挂载直接返回。桌面端 no-op。
 ## 含 await（Web 端下载），调用方应 `await ChapterPackLoader.ensure_chapter(stem)`。
 func ensure_chapter(stem: String) -> void:
 	if _mounted.has(stem):
+		return
+	if not WEB_PACKS_ENABLED:
+		# 全量主包模式：资源随主 pck 交付，任何平台都无需下载挂载
+		_mounted[stem] = true
 		return
 	if not OS.has_feature("web"):
 		# 桌面：资源在主 PCK，无需下载挂载
@@ -66,13 +81,22 @@ func _fetch_and_mount(stem: String) -> bool:
 
 
 func _download(packed_name: String, dest_local: String) -> bool:
-	var url := "%s/%s" % [PACK_BASE_URL, packed_name] if PACK_BASE_URL != "" else packed_name
+	var url := ""
+	if PACK_BASE_URL != "":
+		url = "%s/%s" % [PACK_BASE_URL, packed_name.uri_encode()]
+	elif OS.has_feature("web"):
+		# HTTPRequest 不认裸相对路径（Invalid URL scheme ''）：取页面目录拼绝对 URL；
+		# 文件名 percent-encode——章 stem 含中文，非 ASCII 直接进请求行不可靠
+		var page_dir: String = str(JavaScriptBridge.eval(
+			"window.location.href.replace(/[^/]*$/, '')", true))
+		url = page_dir + packed_name.uri_encode()
+	else:
+		url = packed_name
 	var err := _http.request(url)
 	if err != OK:
 		push_error("ChapterPackLoader: HTTP 请求失败 %s (%d)" % [url, err])
 		return false
-	# result: [result, response_code, headers, body]
-	var result: Array = await _http.request_completed
+	var result: Array = await _wait_with_progress(packed_name)
 	var res_code: int = result[0]
 	var http_code: int = result[1]
 	var body: PackedByteArray = result[3]
@@ -86,3 +110,49 @@ func _download(packed_name: String, dest_local: String) -> bool:
 	f.store_buffer(body)
 	f.close()
 	return true
+
+
+## 等 request_completed，期间轮询已下载字节驱动进度层/信号（章包几十 MB，裸等像卡死）。
+func _wait_with_progress(packed_name: String) -> Array:
+	if _progress_label != null:
+		_progress_label.get_parent().visible = true
+	_req_done = false
+	_req_result = []
+	_http.request_completed.connect(
+		func(r: int, c: int, h: PackedStringArray, b: PackedByteArray) -> void:
+			_req_result = [r, c, h, b]
+			_req_done = true,
+		CONNECT_ONE_SHOT)
+	var last := -1
+	while not _req_done:
+		var done: int = _http.get_downloaded_bytes()
+		if done != last:
+			last = done
+			var total: int = _http.get_body_length()
+			pack_progress.emit(packed_name, done, total)
+			if _progress_label != null:
+				var pct := int(done * 100.0 / total) if total > 0 else 0
+				_progress_label.text = "正在下载章节资源… %d%%\n%.1f / %.1f MB" % [
+					pct, done / 1048576.0, total / 1048576.0]
+		await get_tree().create_timer(0.2).timeout
+	if _progress_label != null:
+		_progress_label.get_parent().visible = false
+	return _req_result
+
+
+## Web 章包下载遮罩层：半透明黑底 + 居中百分比。挂 CanvasLayer 置顶，随 loader 常驻。
+func _build_progress_ui() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 128
+	layer.visible = false
+	add_child(layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.78)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+	_progress_label = Label.new()
+	_progress_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_progress_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_progress_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_progress_label.add_theme_font_size_override("font_size", 32)
+	layer.add_child(_progress_label)

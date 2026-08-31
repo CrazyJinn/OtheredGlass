@@ -16,7 +16,7 @@ from repo import graph_repo
 from ui import page_overview, page_scene_overview, page_chapter_overview, page_approval, \
     page_narrative_approval, page_ambient_candidates
 
-st.set_page_config(page_title="他者之镜 · 美术治理后台", layout="wide")
+st.set_page_config(page_title="代恋 · 美术治理后台", layout="wide")
 
 # 启动加载 Schema（带启动校验）
 try:
@@ -89,7 +89,7 @@ with st.sidebar:
     backup = st.session_state.get("_backup_csv")
     if backup:
         from datetime import datetime
-        fname = f"otheredglass_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        fname = f"ProxyLove_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         st.download_button("下载 CSV", data=backup, file_name=fname,
                            mime="text/csv", use_container_width=True)
         st.caption(f"已就绪：{st.session_state.get('_backup_stats', {})}")

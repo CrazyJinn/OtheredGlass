@@ -1,13 +1,8 @@
 {
   "portraits": {
-    "陈默.沉重": "assets/portraits/陈默.沉重.png",
-    "陈默.释然": "assets/portraits/陈默.释然.png",
-    "陈默.疲惫": "assets/portraits/陈默.疲惫.png",
     "陆择-赤裸上身-慵懒-PHSE4iftNQ": "assets/portraits/陆择-赤裸上身-慵懒-PHSE4iftNQ.png",
     "陆择-商务休闲着装-慵懒-PJajqyM6s4": "assets/portraits/陆择-商务休闲着装-慵懒-PJajqyM6s4.png",
     "陆择-赤裸上身-玩味-PHSE4iftNR": "assets/portraits/陆择-赤裸上身-玩味-PHSE4iftNR.png",
-    "陆择-商务休闲着装-玩味-PJajqyM6s5": "assets/portraits/陆择-商务休闲着装-玩味-PJajqyM6s5.png",
-    "陆择-赤裸上身-轻佻-PHSE4iftNS": "assets/portraits/陆择-赤裸上身-轻佻-PHSE4iftNS.png",
     "陆择-商务休闲着装-轻佻-PJajqyM6s6": "assets/portraits/陆择-商务休闲着装-轻佻-PJajqyM6s6.png",
     "顾盈-酒店晨离着装-慵懒-P2vQL2d9da": "assets/portraits/顾盈-酒店晨离着装-慵懒-P2vQL2d9da.png",
     "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc": "assets/portraits/顾盈-酒店晨离着装-挑眉-P2vQL2d9dc.png",
@@ -35,10 +30,8 @@
     "陆择-商务休闲着装-慵懒-PJajqyM6s4": 0.925,
     "陆择-麻衣苦行-沉吟-P2vQL2d9de": 0.925,
     "陆择-赤裸上身-玩味-PHSE4iftNR": 0.925,
-    "陆择-商务休闲着装-玩味-PJajqyM6s5": 0.925,
     "陆择-麻衣苦行-茫然-P2vQL2d9dd": 0.925,
     "陆择-麻衣苦行-轻佻-PRodLgg4dE": 0.925,
-    "陆择-赤裸上身-轻佻-PHSE4iftNS": 0.925,
     "陆择-商务休闲着装-轻佻-PJajqyM6s6": 0.925,
     "顾盈-酒店晨离着装-慵懒-P2vQL2d9da": 0.85,
     "顾盈-酒店晨离着装-挑眉-P2vQL2d9dc": 0.85,
@@ -51,14 +44,12 @@
     "陆择-麻衣苦行-错愕-Q0oa0CYNKS": 0.925
   },
   "scenes": {
-    "长江大桥-栏杆": "assets/scenes/长江大桥-栏杆.png",
     "酒店-客房": "assets/scenes/酒店-客房.png",
     "马路-路口": "assets/scenes/马路-路口.png",
     "灵魂夹缝-夹缝空间": "assets/scenes/灵魂夹缝-夹缝空间.png",
     "街角咖啡店-点餐台": "assets/scenes/街角咖啡店-点餐台.png"
   },
   "bgm": {
-    "夜风": "assets/bgm/夜风.ogg",
     "晨离": "assets/bgm/晨离.wav",
     "骤雨路口": "assets/bgm/骤雨路口.wav",
     "晨光小店": "assets/bgm/晨光小店.wav",

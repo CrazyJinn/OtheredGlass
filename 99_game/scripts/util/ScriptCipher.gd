@@ -14,9 +14,9 @@ extends RefCounted
 const MAGIC := "OGCRYPT1"
 
 # 32 字节 AES-256 密钥（两端一致；tools/encrypt_chapter.py 同值）
-const KEY := "OtheredGlass_2024_ScriptKey_v1!!"
+const KEY := "ProxyLove_2024_ScriptKey_v1!!"
 # 16 字节 CBC IV（两端一致）
-const IV := "OtheredGlassIV01"
+const IV := "ProxyLoveIV01"
 
 
 ## 解密一段原始文件文本。明文（无 magic 头）原样返回（桌面/开发期兼容）。

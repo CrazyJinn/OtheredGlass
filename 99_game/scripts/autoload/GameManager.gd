@@ -52,9 +52,10 @@ func _apply_default_font() -> void:
 	get_tree().root.theme = t
 
 ## 起始章节配置（Game 场景 _ready 时读这两个值启动解释器）。
-## start_new_game() 可传参覆盖；默认进 chapter00_序章/酒店。
+## start_new_game() 可传参覆盖；start_scene 留空 = 章首段（scene-block id 随发布变，
+## 如 chapter00 曾从 "酒店" 变 "s00_酒店"，硬编码会漂移导致"找不到场景段"）。
 var start_chapter := "chapter00_序章"
-var start_scene := "酒店"
+var start_scene := ""
 
 func start_new_game(chapter: String = "", scene: String = "") -> void:
 	# Game 场景 _ready 时自行调 ScriptInterpreter.start，避免跨场景 call_deferred 时序问题

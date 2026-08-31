@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 这个项目是什么
 
-「他者之镜」（OtheredGlass）是一个**以 Neo4j 图数据库为唯一事实来源、由 Claude Code skills/agents 驱动的 AI 游戏生产流水线**，最终产物是一个 Godot 2D Galgame（`99_game/`）。整条链路把"世界观文字 → 叙事图 → 美术提示词 → 文生图/图生图 → 剧本 JSON → 游戏成品"自动化，人工只在关键节点审批。
+「代恋」（ProxyLove）是一个**以 Neo4j 图数据库为唯一事实来源、由 Claude Code skills/agents 驱动的 AI 游戏生产流水线**，最终产物是一个 Godot 2D Galgame（`99_game/`），Web 版托管在 Cloudflare R2。整条链路把"世界观文字 → 叙事图 → 美术提示词 → 文生图/图生图 → 剧本 JSON → 游戏成品"自动化，人工只在关键节点审批。
 
 项目级文档，动手前按需读：
 - [README.md](README.md) — **编排流程视角**：三大编排 Agent（`char-design` / `scene-design` / `plot-design`）的时序图、独立审批流程、全部 Skill 功能概述、项目文件夹结构。
@@ -49,13 +49,22 @@ echo "MATCH (n) RETURN count(n) AS c" | python .claude/scripts/cypher_exec.py --
 - **`status` 字段**跟踪节点状态，统一语义：`-1` 作废重做 / `0` 待处理 / `1` 已完成 / `2` 图片完成 / `10` 待审 / `11` 批准。规则在 [55_dashboard/core/status.py](55_dashboard/core/status.py) 的 `NODE_STATUS` 显式定义（**刻意不解析 .md**，.md 是散文式说明、格式不稳）。
 - **`sync` 边属性**：上游节点属性变更后，沿 `sync=true` 出边 BFS，把可达下游 `status` 重置为 **`-1`**（作废重做）；`sync=false` 阻断（如叙事边 `wears`、`relation`）。级联实现在 [55_dashboard/core/cascade.py](55_dashboard/core/cascade.py)。
 
-### 4. 每个 skill 内部是三段式【查状态 → 完成任务 → 保存结果】
+### 4. Web 运行时与发布（全量主包模式）
+
+Web 版当前为**全量主包**：主 pck 含全部章资源（约 39MB，含子集字体），一次加载直接进游戏。`ChapterPackLoader.WEB_PACKS_ENABLED = false` 短路了按章分包；分包全套工具保留着（`build_chapter_packs.gd` 按 chapter_packs.json 产 `<stem>.pck`、挂载测试 `test_chapter_pack_mount.gd`），重新启用需同时翻开关 + 恢复 Web preset 的 `exclude_filter`（两处由 `publish_web.py`/`deploy_r2.py` 读开关联动）。发布链固定两条命令（**必须先关 Godot 编辑器**，字体会被子集临时覆盖）：
+
+```bash
+python 99_game/tools/publish_web.py   # 字体子集化(含关键标点断言)→headless 导出→章包(按开关)→finally 恢复字体
+python 99_game/tools/deploy_r2.py     # 上传 R2：index.wasm/pck brotli+Content-Encoding:br；章包必须原样(Godot HTTPRequest 只解 gzip)
+```
+
+### 5. 每个 skill 内部是三段式【查状态 → 完成任务 → 保存结果】
 
 读各 `SKILL.md` 的 frontmatter 与流程节即可。`char-prompt-assembler` / `infra-image-generator` 是**纯产出层**——只产 prompt/图片文件，**不读写图、不写 status**；节点字段与 status 一律由调用方的生产 skill 在「保存结果」步用 MERGE 兜底统一写入。
 
 - **先产出物再写图**：凡产物由外部生成脚本产出（图片/音频/大文件），必须先落盘并校验成功，才允许在「保存结果」步写图与 status；生成失败禁止写 status（避免图与文件系统漂移）。LLM 直产文本（prompt/设计描述）随写图语句内联交付，不受此限。
 
-### 5. 编排 agent 是纯分发层，有铁律
+### 6. 编排 agent 是纯分发层，有铁律
 
 `char-design` / `scene-design` agent 的入口决策**只做**：解析角色/场景 → 只读查 status → 据 status 决策 → 用 `Skill` 工具加载生产 skill → 复查 → 汇报。**严禁**在入口决策阶段：亲自写 Cypher 写入、亲自调生成脚本、绕过生产 skill 直接调用纯产出子 skill（`char-prompt-assembler`/`infra-image-generator`）。**Skill 工具是扁平的**：加载某生产 skill 后，agent 即在该 skill 流程内继续执行其三段式，**包括按其指示调用其声明的子 skill**——这是预期行为，不是越界。真正越界 = ①未先加载生产 skill 就凭空直调子 skill；②调子 skill 产出文件后不走该生产 skill 的「保存结果」步写 status。详见 [.claude/agents/char-design.md](.claude/agents/char-design.md)。
 
@@ -72,16 +81,18 @@ echo "MATCH (n) RETURN count(n) AS c" | python .claude/scripts/cypher_exec.py --
 7. **多语句按依赖排序**：先建节点再建边；`--multi` 在单事务内顺序执行。
 8. **status 白名单**：仅 `-1/0/1/2/10/11`。
 
-## 容易踩的坑（status / 级联 / 分发）
+## 容易踩的坑（status / 级联 / 分发 / Godot 运行时）
 
 - **`status=-1` 与 `status=0` 都视为"需生成/需推进"**。查待办时**禁止**在 WHERE 加 `status >= 0` 把 `-1` 滤掉——这是最常见的失误源。调度判据**只看 status，不看产物文件是否存在**；`-1` 必须重新生成并**覆盖**旧产物，禁止因文件已存在而跳过，也禁止读旧 prompt/旧图。
 - **判断"节点有无 status"必须用 `is not None`**——`status=0`（待处理）是合法 falsy，真值判断会误隐藏。
 - **写边严格按 Schema 方向（上游→下游）**。方向写反会让 MATCH 静默返回空，进而误报"节点未创建"。例如 `IllusDesign` 是 `outfit_for`/`produces` 的**入边目标端**，不是源。
 - **级联下游重置为 `-1`**（不是 `0`；design.md 验收标准里写 `0` 是笔误，以代码为准）。
+- **root viewport 的 `size` 是物理像素，Control 布局要逻辑坐标**：手动铺满 UI 一律用 `get_viewport().get_visible_rect().size`。Web hidpi / stretch expand 下两者不同（曾致根 Control 随窗口形状 ±5~10% 错位、子层溢出裁切）。同理背景 `TextureRect` 默认 STRETCH 会无视纵横比拉变形，galgame 背景用 `STRETCH_KEEP_ASPECT_COVERED`。
+- **Web 端 `HTTPRequest` 只认绝对 URL**（裸相对路径报 `Invalid URL scheme`），且自动解压只支持 gzip 不支持 br——所以 R2 上章包类"游戏端下载"的对象不能设 `Content-Encoding: br`，只有浏览器侧加载的 index.wasm/index.pck 可以。
 
 ## 凭证（settings.json，已 gitignore）
 
-`settings.json`（项目根，已在 `.gitignore`）持有 `neo4j_password` 与 `ofox_api_key`。密码优先级：`--password` 参数 > `NEO4J_PASSWORD` 环境变量 > 向上搜索到的 `settings.json`。OfoxAI key 由 [infra-image-generator](.claude/skills/infra-image-generator/scripts/ofoxai_api.py) 从同一 `settings.json` 读。改凭证来源时要同步 [55_dashboard/config/settings.py](55_dashboard/config/settings.py)。
+`settings.json`（项目根，已在 `.gitignore`）持有 `neo4j_password`、`ofox_api_key`，以及 R2 部署凭证 `cloudflare_account_id` / `cloudflare_access_key_id` / `cloudflare_secret` / `cloudflare_bucket`（桶 `proxy-love`，token 限单桶无 ListBuckets 权限；[deploy_r2.py](99_game/tools/deploy_r2.py) 读，env `R2_*` 优先）。密码优先级：`--password` 参数 > `NEO4J_PASSWORD` 环境变量 > 向上搜索到的 `settings.json`。OfoxAI key 由 [infra-image-generator](.claude/skills/infra-image-generator/scripts/ofoxai_api.py) 从同一 `settings.json` 读。改凭证来源时要同步 [55_dashboard/config/settings.py](55_dashboard/config/settings.py)。
 
 ## ID 约定
 
@@ -104,12 +115,16 @@ bash 55_dashboard/run.sh                 # 或 Windows: 55_dashboard/run.bat
 cd 55_dashboard && python -m pytest                       # 全部（core 层纯单测，不连真实 Neo4j）
 cd 55_dashboard && python -m pytest tests/test_cascade.py::test_xxx -v   # 单用例
 
-# ── Godot 游戏（需 Godot 4.3+）──
-#   编辑器导入 99_game/project.godot，F5 从标题→「开始游戏」进 chapter01_新皮肤
+# ── Godot 游戏（需 Godot 4.3+；Godot 4.7.1 在 D:\godot\）──
+#   编辑器导入 99_game/project.godot，F5 从标题→「开始游戏」进 chapter00_序章
 cd 99_game/tools && pip install -r requirements.txt       # 数据校验（无需 Godot）
-cd 99_game/tools && python validate_chapter.py ../data/chapters/chapter01_新皮肤.json ../data/剧本.schema.json
+cd 99_game/tools && python validate_chapter.py ../data/chapters/chapter00_序章.json ../data/剧本.schema.json
 cd 99_game/tools && python -m pytest test_validate.py -v   # 预期 3 用例通过 + CLI 输出 OK
-godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit   # GUT 单测（需装 Gut 到 addons/）
+godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit   # GUT 单测（需装 Gut；依赖旧示例章的 5 个测试已删，剩 placeholder_gen/save_manager）
+
+# ── Web 发布到 R2（先关 Godot 编辑器！字体会被临时子集覆盖）──
+python 99_game/tools/publish_web.py    # 子集化→headless 导出→(按开关)章包→恢复字体；产物在 Desktop/export
+python 99_game/tools/deploy_r2.py      # brotli 上传 R2；--dry-run 只看计划
 ```
 
 无全局 lint / formatter；Python 用系统解释器（开发环境 3.14），无 `.venv`。后台测试**必须在 `55_dashboard/` 目录下跑**（`from core import ...` 依赖 cwd 在 `sys.path`）。

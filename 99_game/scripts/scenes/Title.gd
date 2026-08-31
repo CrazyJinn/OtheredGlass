@@ -18,7 +18,7 @@ func _ready() -> void:
 	_vbox.add_theme_constant_override("separation", 24)
 	_center.add_child(_vbox)
 	var title := Label.new()
-	title.text = "他者之镜"
+	title.text = "代恋"
 	title.add_theme_font_size_override("font_size", 72)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_vbox.add_child(title)

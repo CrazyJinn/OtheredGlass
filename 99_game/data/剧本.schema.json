@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://otheredglass.local/schema/剧本.schema.json",
+  "$id": "https://ProxyLove.local/schema/剧本.schema.json",
   "title": "剧本章节",
-  "description": "《他者之镜》剧本章节文件格式 V1。详见 .claude/skills/chapter-dialoguer/references/剧本.md。",
+  "description": "《代恋》剧本章节文件格式 V1。详见 .claude/skills/chapter-dialoguer/references/剧本.md。",
   "type": "object",
   "required": ["meta", "scenes"],
   "additionalProperties": false,

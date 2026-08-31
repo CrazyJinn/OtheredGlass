@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 这个项目是什么
 
-`55_dashboard` 是「他者之镜」项目的人工治理后台——一个直连 Neo4j 的 Streamlit 应用，与项目里的 Claude Skills 共享**同一个 Neo4j 实例**。职责分工：
+`55_dashboard` 是「代恋」项目的人工治理后台——一个直连 Neo4j 的 Streamlit 应用，与项目里的 Claude Skills 共享**同一个 Neo4j 实例**。职责分工：
 
 - **Skills**（项目根的 `.claude/`、`06_角色美术/` 等驱动）：自动化生产——组装 prompt、调 OfoxAI 出图、推进节点 `status` 0→1→2。
 - **本后台**：人工治理——浏览进度、编辑节点属性、审批（10→11/→0）、属性变更后沿 `sync` 边级联重置下游、审批叙事建议（把 Cypher 写库）、全库 CSV 备份。

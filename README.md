@@ -1,4 +1,4 @@
-# 他者之镜 - 三大编排 Agent 流程图
+# 代恋 - 三大编排 Agent 流程图
 
 > **本文定位**：可视化 [.claude/agents/](.claude/agents/) 下三个编排层 Agent（`char-design` / `scene-design` / `plot-design`）的执行流程，统一用**时序图**表达。
 >
@@ -391,7 +391,7 @@ sequenceDiagram
 > 目录前缀的数字是**流水线阶段编号**（创作输入 `00_` → 叙事数据 `01_` → 剧情数据 `02_` → 美术 `06_/07_` → 声音 `14_/15_` → 剧本 `25_` → 后台 `55_` → 成品 `99_`），按编号即可判断某产物在链路中的位置。`.claude/` 是 Claude Code 自动化层（skill / agent / 脚本），`env/` 是声音链隔离环境（gitignore）。
 
 ```
-他者之镜/
+代恋/
 ├── .claude/                          # Claude Code 自动化层
 │   ├── agents/                       # 编排 agent：char-design / scene-design / plot-design
 │   ├── scripts/                      # cypher_exec.py · snowflake_base62.py · voice/（Qwen3 声音链脚本）

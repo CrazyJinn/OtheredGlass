@@ -24,9 +24,9 @@ except ImportError:
     raise
 
 # 32 字节 AES-256 密钥 —— 与 99_game/scripts/util/ScriptCipher.gd 的 KEY 完全一致
-KEY = b"OtheredGlass_2024_ScriptKey_v1!!"
+KEY = b"ProxyLove_2024_ScriptKey_v1!!"
 # 16 字节 CBC IV —— 与 ScriptCipher.gd 的 IV 完全一致
-IV = b"OtheredGlassIV01"
+IV = b"ProxyLoveIV01"
 MAGIC = b"OGCRYPT1\n"
 
 

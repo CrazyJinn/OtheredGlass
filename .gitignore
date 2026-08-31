@@ -21,3 +21,9 @@ __pycache__/
 
 # 外部依赖统一收口 env/（venv + vendored 源码；不入 git，重建见各 venv 对应 requirements）
 env/
+
+# R2 部署凭证（deploy_r2.py 读，含 access key，严禁入库）
+99_game/tools/r2_config.json
+
+# Web 导出产物只落 Desktop/export（曾误导出到项目根并入库，2026-08-30 清理后防再犯）
+99_game/index.*
