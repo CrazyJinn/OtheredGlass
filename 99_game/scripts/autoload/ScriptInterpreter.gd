@@ -101,7 +101,7 @@ func _run_from_current() -> void:
 		var op: String = line["op"]
 		match op:
 			"say":
-				_set_slot(line.get("pos", "center"), line.get("who", ""), line.get("portrait", ""))
+				_set_slot(line.get("pos", "left"), line.get("who", ""), line.get("portrait", ""))
 				portrait_changed.emit(_snapshot())
 				line_ready.emit("say", line)
 				return  # 阻塞
@@ -154,7 +154,7 @@ func _run_from_current() -> void:
 func _apply_portrait(line: Dictionary) -> void:
 	var op: String = line["op"]
 	if op == "show":
-		_set_slot(line.get("pos", "center"), line.get("who", ""), line.get("portrait", ""))
+		_set_slot(line.get("pos", "left"), line.get("who", ""), line.get("portrait", ""))
 		portrait_changed.emit(_snapshot())
 	elif op == "hide":
 		_clear_slot_by_who(line.get("who", ""))

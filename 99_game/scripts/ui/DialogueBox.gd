@@ -1,5 +1,5 @@
 extends Control
-## 底部对话框：头像/名称/打字机正文/继续指示 + Auto/Skip/Log/Menu。
+## 底部对话框：名称/打字机正文/继续指示 + Auto/Skip/Log/Menu。
 
 signal finished_typing()
 signal button_auto()
@@ -10,7 +10,8 @@ signal button_menu()
 const BOX_H := 240
 const BASE_CHAR_DELAY := 0.03  # 秒/字（正常）
 const FAST_CHAR_DELAY := 0.015  # 秒/字（Ctrl 快进 2× 速）
-var _avatar := TextureRect.new()
+const COLOR_SAY := Color(1.0, 1.0, 1.0)  # 人物对白正文色（亮白）
+const COLOR_NARRATE := Color(0.66, 0.71, 0.80)  # 旁白正文色（冷银灰，与对白区分）
 var _name_lbl := Label.new()
 var _body := RichTextLabel.new()
 var _continue_lbl := Label.new()
@@ -26,20 +27,25 @@ func _ready() -> void:
 	box.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	box.offset_top = -BOX_H
 	add_child(box)
-	_avatar.custom_minimum_size = Vector2(128, 128)
-	_avatar.position = Vector2(20, 20)
-	_avatar.size = Vector2(128, 128)
-	box.add_child(_avatar)
-	_name_lbl.position = Vector2(168, 16)
+	_name_lbl.position = Vector2(60, 16)
 	_name_lbl.add_theme_font_size_override("font_size", 28)
 	box.add_child(_name_lbl)
-	_body.position = Vector2(168, 56)
-	_body.size = Vector2(1300, 150)
+	# 锚点撑满 + 负右偏移：宽度跟随 box（expand 拉伸下逻辑宽度随窗口变，禁止固定像素宽）
+	_body.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_body.offset_left = 60
+	_body.offset_right = -60
+	_body.offset_top = 56
+	_body.offset_bottom = -34
 	_body.bbcode_enabled = true
 	_body.add_theme_font_size_override("normal_font_size", 26)
 	box.add_child(_body)
 	_continue_lbl.text = "点击继续 ▼"
-	_continue_lbl.position = Vector2(1280, 200)
+	# 右下角锚点 + 向左上生长：始终贴 box 右下
+	_continue_lbl.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_continue_lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_continue_lbl.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_continue_lbl.offset_right = -60
+	_continue_lbl.offset_bottom = -12
 	_continue_lbl.visible = false
 	box.add_child(_continue_lbl)
 	_make_buttons(box)
@@ -48,7 +54,6 @@ func _ready() -> void:
 	_timer.timeout.connect(_tick)
 	# 展示控件放行鼠标穿透到 Game._unhandled_input（推进对话）；按钮保留默认 STOP
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_continue_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -59,15 +64,19 @@ func _make_buttons(box: Panel) -> void:
 	for i in names.size():
 		var b := Button.new()
 		b.text = names[i]
-		b.position = Vector2(700 + i * 130, 16)
-		b.size = Vector2(120, 36)
+		# 右上锚点整排贴右缘（i 越大越靠右），禁止固定 x 起点铺开
+		b.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		b.offset_right = -60 - (names.size() - 1 - i) * 130
+		b.offset_left = b.offset_right - 120
+		b.offset_top = 16
+		b.offset_bottom = 52
 		var sig = sigs[i]
 		b.pressed.connect(func(): sig.emit())
 		box.add_child(b)
 
-func show_line(who: String, portrait: String, text: String, is_narrate: bool) -> void:
+func show_line(who: String, text: String, is_narrate: bool) -> void:
 	_name_lbl.text = "" if is_narrate else who
-	_avatar.texture = _resolve_avatar(who)
+	_body.add_theme_color_override("default_color", COLOR_NARRATE if is_narrate else COLOR_SAY)
 	_full_text = text
 	_shown = 0
 	_body.text = ""
@@ -100,12 +109,3 @@ func _tick() -> void:
 	_body.text = _full_text.substr(0, _shown)
 	if _shown >= _full_text.length():
 		finish_typing()
-
-func _resolve_avatar(who: String) -> Texture2D:
-	# 头像无独立逻辑名，退化为占位；manifest 若提供 <who>.default 则用之
-	var man = Engine.get_singleton("Manifest") if Engine.has_singleton("Manifest") else null
-	var path: String = man.get_portrait(who + ".default") if man else ""
-	if path != "" and ResourceLoader.exists(path):
-		return load(path)
-	var pg = preload("res://scripts/util/PlaceholderGen.gd").new()
-	return pg.get_avatar_image(who)

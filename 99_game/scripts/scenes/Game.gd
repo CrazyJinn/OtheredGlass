@@ -10,12 +10,17 @@ var _backlog = preload("res://scripts/ui/Backlog.gd").new()
 var _menu = preload("res://scripts/ui/SystemMenu.gd").new()
 var _settings = preload("res://scripts/ui/SettingsPanel.gd").new()
 var _auto: bool = false
+var _auto_gap: float = AUTO_LINE_GAP  # 当前行 Auto 停留时长（line_ready 时按行类型更新）
 var _ended: bool = false  # 本轮已进结局/章节结束（防 skip 越界）
 var _auto_timer := Timer.new()
 var _ctrl_held: bool = false  # Ctrl 按住快进状态
 var _ctrl_acc: float = 0.0     # Ctrl 快进句末累加计时
 var _skip_active: bool = false  # skip 快进中（异步 while 激活）
 const CTRL_LINE_INTERVAL := 0.25  # Ctrl 快进：句末打完后自动翻页间隔（秒）
+const AUTO_LINE_GAP := 1.0   # Auto：say 行语音播完后切句的停留间隔（秒）
+const AUTO_NARRATE_BASE := 1.0       # Auto：旁白行基础停留（秒）
+const AUTO_NARRATE_PER_CHAR := 0.06  # Auto：旁白行按字数追加的阅读时间（秒/字）
+const AUTO_WAIT_POLL := 0.2  # Auto：未就绪（打字中/语音未播完）时的轮询间隔（秒）
 
 func _ready() -> void:
 	# 根 Control 默认 STOP 会吞掉穿透上来的鼠标点击，导致 _unhandled_input 收不到 advance（键盘不受影响）
@@ -90,12 +95,13 @@ func _toggle_menu() -> void:
 		_menu.open()
 
 func _on_line_ready(kind: String, payload: Dictionary) -> void:
+	_auto_gap = _auto_gap_for(kind, payload.get("text", ""))
 	if kind == "say":
-		_dialogue.show_line(payload.get("who", ""), payload.get("portrait", ""), payload.get("text", ""), false)
+		_dialogue.show_line(payload.get("who", ""), payload.get("text", ""), false)
 		_backlog.append(payload.get("who", ""), payload.get("text", ""))
 		AudioManager.play_voice(payload.get("voice", ""))
 	else:  # narrate
-		_dialogue.show_line("", "", payload.get("text", ""), true)
+		_dialogue.show_line("", payload.get("text", ""), true)
 		_backlog.append("", payload.get("text", ""))
 		AudioManager.play_voice("")  # 旁白不配音：仅停上一句对白尾音
 
@@ -167,14 +173,25 @@ func _advance() -> void:
 func _toggle_auto() -> void:
 	_auto = not _auto
 	if _auto:
-		_auto_timer.start(1.0)
+		_auto_timer.start(_auto_gap)
+
+# Auto 停留时长：say 行有语音兜底（等播完再停 AUTO_LINE_GAP）；旁白无语音，按字数给阅读时间
+func _auto_gap_for(kind: String, text: String) -> float:
+	if kind == "say":
+		return AUTO_LINE_GAP
+	return AUTO_NARRATE_BASE + text.length() * AUTO_NARRATE_PER_CHAR
 
 func _auto_advance() -> void:
 	if not _auto:
 		return
-	if not _dialogue.is_typing() and not _choice.visible and not _menu.visible:
+	# 等语音播完才切句（narrate/资源缺失时 playing=false，纯按停留时长推进）；
+	# 打字中/菜单开着同样只轮询不推进。advance 同步发 line_ready，_auto_gap 已是新行值
+	if not _dialogue.is_typing() and not AudioManager.is_voice_playing() \
+			and not _choice.visible and not _menu.visible:
 		ScriptInterpreter.advance()
-	_auto_timer.start(1.0)
+		_auto_timer.start(_auto_gap)
+	else:
+		_auto_timer.start(AUTO_WAIT_POLL)
 
 func _skip() -> void:
 	# 跳过 = 推进到下一个 scene-block 首句；遇 choice/menu/ending/章末必停。

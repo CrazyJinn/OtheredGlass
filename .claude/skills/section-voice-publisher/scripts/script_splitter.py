@@ -47,11 +47,12 @@ from snowflake_base62 import SnowflakeGenerator  # noqa: E402
 from voice_bundler import voice_master_path  # noqa: E402
 
 ORDER_STEP = 1000          # 初始间距
+SAY_DEFAULT_POS = "left"   # say 行立绘位兜底（单人块规则值；update 沿用存量时的兜底）
 
 
 def _block_pos_map(md_rows_in_block: list) -> dict:
     """块内 say 行 who（按首次说话序）→ 立绘位（md 不写 pos，块级规则值即缺省值）：
-    1 人 center（独白居中）/ 2 人先说话者 left 后说话者 right（对话分侧）/
+    1 人 left（独白靠左，与对话框正文起始位一致）/ 2 人先说话者 left 后说话者 right（对话分侧）/
     ≥3 人按首话序 left/right/center（第 4+ 人兜底 center）。"""
     whos = []
     for m in md_rows_in_block:
@@ -60,7 +61,7 @@ def _block_pos_map(md_rows_in_block: list) -> dict:
     if not whos:
         return {}
     if len(whos) == 1:
-        seats = ["center"]
+        seats = ["left"]
     elif len(whos) == 2:
         seats = ["left", "right"]
     else:
@@ -383,7 +384,7 @@ def build_actions(seq: list, plan: dict, sc_id: str) -> tuple:
         report["deleted"].append({"id": g["id"], "op": g.get("op"),
                                   "text": (g.get("text") or "")[:30]})
 
-    pos_map = {}  # 块内 who → 规则立绘位（块级分配：对话分侧/单人居中，块切换重算）
+    pos_map = {}  # 块内 who → 规则立绘位（块级分配：对话分侧/单人靠左，块切换重算）
     prev_block = None
     for idx, item in enumerate(seq):
         m, action, oid, order = item["md"], item["action"], item["id"], item["order"]

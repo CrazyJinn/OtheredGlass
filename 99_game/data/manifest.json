@@ -19,7 +19,9 @@
     "小夏-咖啡店店员工作服-职业微笑-Q0oS9EGk08": "assets/portraits/小夏-咖啡店店员工作服-职业微笑-Q0oS9EGk08.png",
     "陆择-商务休闲着装-懊恼-Q0oTbcNH1s": "assets/portraits/陆择-商务休闲着装-懊恼-Q0oTbcNH1s.png",
     "陆择-赤裸上身-调笑-Q0nt4xSlyi": "assets/portraits/陆择-赤裸上身-调笑-Q0nt4xSlyi.png",
-    "陆择-麻衣苦行-错愕-Q0oa0CYNKS": "assets/portraits/陆择-麻衣苦行-错愕-Q0oa0CYNKS.png"
+    "陆择-麻衣苦行-错愕-Q0oa0CYNKS": "assets/portraits/陆择-麻衣苦行-错愕-Q0oa0CYNKS.png",
+    "陆择-商务休闲着装-玩味-PJajqyM6s5": "assets/portraits/陆择-商务休闲着装-玩味-PJajqyM6s5.png",
+    "陆择-赤裸上身-轻佻-PHSE4iftNS": "assets/portraits/陆择-赤裸上身-轻佻-PHSE4iftNS.png"
   },
   "portrait_scales": {
     "伊芙-天使灵魂引路人着装-平静-P2vQL2d9df": 0.825,
@@ -41,13 +43,16 @@
     "小夏-咖啡店店员工作服-职业微笑-Q0oS9EGk08": 0.825,
     "陆择-商务休闲着装-懊恼-Q0oTbcNH1s": 0.925,
     "陆择-赤裸上身-调笑-Q0nt4xSlyi": 0.925,
-    "陆择-麻衣苦行-错愕-Q0oa0CYNKS": 0.925
+    "陆择-麻衣苦行-错愕-Q0oa0CYNKS": 0.925,
+    "陆择-商务休闲着装-玩味-PJajqyM6s5": 0.925,
+    "陆择-赤裸上身-轻佻-PHSE4iftNS": 0.925
   },
   "scenes": {
     "酒店-客房": "assets/scenes/酒店-客房.png",
     "马路-路口": "assets/scenes/马路-路口.png",
     "灵魂夹缝-夹缝空间": "assets/scenes/灵魂夹缝-夹缝空间.png",
-    "街角咖啡店-点餐台": "assets/scenes/街角咖啡店-点餐台.png"
+    "街角咖啡店-点餐台": "assets/scenes/街角咖啡店-点餐台.png",
+    "长江大桥-栏杆": "assets/scenes/长江大桥-栏杆.png"
   },
   "bgm": {
     "晨离": "assets/bgm/晨离.wav",
