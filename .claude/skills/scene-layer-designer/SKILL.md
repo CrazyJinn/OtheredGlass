@@ -70,8 +70,8 @@ RETURN l.name AS loc_name, s.id AS scene_id, s.name AS scene_name,
   "scene": {
     "scene_type": "<scene_type>", "name": "<scene_name>",
     "time_of_day": "...", "weather": "...", "atmosphere": "...",
-    "composition": "...", "lighting": "...", "camp": "...",
-    "color_direction": "...", "art_element": "..."
+    "composition": "...", "lighting": "...",
+    "color_direction": "..."
   },
   "location": {"name": "<loc_name>"},
   "node": {"id": "<layer_id>"},

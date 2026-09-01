@@ -252,7 +252,7 @@ def test_say_create_gets_default_pos_and_status_zero():
     seq, _ = sp.assign_orders(md, plan)
     stmts, report = sp.build_actions(seq, plan, "SC")
     create_stmt = [s for s in stmts if "MERGE (l:LineAudio" in s and "l.op='say'" in s][0]
-    assert "l.status=0" in create_stmt and "l.pos='center'" in create_stmt  # 单人块居中
+    assert "l.status=0" in create_stmt and "l.pos='left'" in create_stmt  # 单人块靠左
     assert any("r.order=1000" in s for s in stmts)
 
 
@@ -298,13 +298,13 @@ def test_keep_pos_diff_self_heals():
     seq, _ = sp.assign_orders(md, plan)
     stmts, report = sp.build_actions(seq, plan, "SC")
     assert not any("SET l.pos=" in s and "'a'" in s for s in stmts)     # 规则 left 与存量 left 一致 → 不写
-    # 反例：单人块规则 center，存量 left → 补写 center
-    g2 = dict(_g("say", "独白", who="A", order=1000, nid="b", status=11), pos="left")
+    # 反例：单人块规则 left，存量 center → 补写 left
+    g2 = dict(_g("say", "独白", who="A", order=1000, nid="b", status=11), pos="center")
     md2 = [{"op": "say", "who": "A", "text": "独白", "scene_block_id": "s0"}]
     plan2 = sp.align(md2, [g2])
     seq2, _ = sp.assign_orders(md2, plan2)
     stmts2, _ = sp.build_actions(seq2, plan2, "SC")
-    assert any("SET l.pos='center'" in s and "'b'" in s for s in stmts2)
+    assert any("SET l.pos='left'" in s and "'b'" in s for s in stmts2)
 
 
 def test_legacy_ambient_graph_row_aligns_as_keep():

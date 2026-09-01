@@ -85,6 +85,10 @@ func play_voice(key: String) -> void:
 func stop_voice() -> void:
 	_voice_player.stop()
 
+## 当前句语音是否仍在播（Auto 模式据此等播完再切句；narrate/资源缺失恒 false）。
+func is_voice_playing() -> bool:
+	return _voice_player.playing
+
 func set_volume(channel: String, value_db: float) -> void:
 	match channel:
 		"bgm":

@@ -38,7 +38,7 @@
   "style": {
     "background": "纯白背景,格子之间用1px细线隔开",
     "camera": "俯视角",
-    "rendering": "油画风格,手绘质感"
+    "rendering": "[风格词：读 00_init/美术风格.md「提示词硬约束」风格收尾串，取其中风格描述部分]"
   },
   "order": ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
   "elements": {
@@ -76,7 +76,7 @@
   "style": {
     "background": "纯白背景",
     "camera": "俯视角",
-    "rendering": "油画风格,手绘质感"
+    "rendering": "[风格词：读 00_init/美术风格.md「提示词硬约束」风格收尾串，取其中风格描述部分]"
   },
   "elements": {
     "count": 1,

@@ -39,8 +39,6 @@
   },
   "Scene": {
     "time_of_day": { "label": "时段", "multi": false, "options": ["清晨", "白天", "黄昏", "夜晚"] },
-    "weather": { "label": "天气", "multi": false, "options": ["晴", "阴", "雨", "雪", "雾"] },
-    "camp": { "label": "阵营", "multi": false, "options": ["骑士团", "秘术协会", "教会", "废土", "变异森林", "灰雪地", "无"] },
-    "art_element": { "label": "风格元素", "multi": true, "options": ["粗犷", "厚重", "蒸汽朋克", "做旧处理", "黑暗氛围"] }
+    "weather": { "label": "天气", "multi": false, "options": ["晴", "阴", "雨", "雪", "雾"] }
   }
 }
